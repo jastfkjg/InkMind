@@ -63,4 +63,4 @@ InkMind/
 
 ## 许可证
 
-按你的项目需要自行补充。
+本项目以 [GNU General Public License v3.0](LICENSE)（GPL-3.0）发布。
