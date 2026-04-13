@@ -1,0 +1,244 @@
+:root {
+  --bg: #f6f2ea;
+  --bg-deep: #ebe4d8;
+  --ink: #1c1917;
+  --muted: #57534e;
+  --accent: #7c2d12;
+  --accent-soft: #c2410c;
+  --card: #fffcf7;
+  --border: #d6cfc3;
+  --radius: 12px;
+  --font-ui: "Source Sans 3", system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", "DM Serif Display", Georgia, serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--bg);
+  background-image: radial-gradient(ellipse 120% 80% at 50% -20%, #fff8f0 0%, transparent 55%),
+    linear-gradient(180deg, #f0e9df 0%, var(--bg) 35%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent-soft);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.app-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 0 rgba(28, 25, 23, 0.04);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #9a3412;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--ink);
+}
+.btn-ghost:hover {
+  background: var(--bg-deep);
+}
+
+.btn-danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+.btn-danger:hover {
+  background: #fee2e2;
+}
+
+.input,
+.textarea,
+select {
+  width: 100%;
+  font: inherit;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink);
+}
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+}
+
+.form-error {
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.tab {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.9rem;
+  color: var(--muted);
+  background: transparent;
+}
+.tab:hover {
+  background: var(--bg-deep);
+  color: var(--ink);
+}
+.tab.active {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.grid-2 {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 800px) {
+  .grid-2 {
+    grid-template-columns: 260px 1fr;
+    align-items: start;
+  }
+}
+
+.chapter-list {
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+.chapter-item {
+  width: 100%;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+.chapter-item:hover {
+  background: var(--bg-deep);
+}
+.chapter-item.active {
+  border-color: var(--border);
+  background: var(--card);
+  font-weight: 600;
+}
+
+.editor-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  margin-bottom: 0.75rem;
+  border: none;
+  background: transparent;
+  width: 100%;
+  color: var(--ink);
+}
+.editor-body {
+  min-height: 360px;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  line-height: 1.85;
+}
+
+.stack-sm > * + * {
+  margin-top: 0.5rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+}

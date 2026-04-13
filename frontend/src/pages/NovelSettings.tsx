@@ -1,0 +1,99 @@
+import { useEffect, useState } from "react";
+import { useOutletContext, useParams } from "react-router-dom";
+import { apiErrorMessage, updateNovel } from "@/api/client";
+import type { Novel } from "@/types";
+
+type Ctx = { novel: Novel | null; setNovel: React.Dispatch<React.SetStateAction<Novel | null>> };
+
+export default function NovelSettings() {
+  const { novelId } = useParams();
+  const id = Number(novelId);
+  const { novel, setNovel } = useOutletContext<Ctx>();
+  const [title, setTitle] = useState("");
+  const [outline, setOutline] = useState("");
+  const [genre, setGenre] = useState("");
+  const [writingStyle, setWritingStyle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (!novel) return;
+    setTitle(novel.title);
+    setOutline(novel.outline);
+    setGenre(novel.genre);
+    setWritingStyle(novel.writing_style);
+  }, [novel]);
+
+  async function onSave(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    setMsg("");
+    setSaving(true);
+    try {
+      const n = await updateNovel(id, { title, outline, genre, writing_style: writingStyle });
+      setNovel(n);
+      setMsg("已保存");
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!novel) {
+    return <p className="muted">加载作品信息…</p>;
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 720 }}>
+      <h2 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>大纲与风格</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        在动笔前整理全书大纲、类型与文风，生成章节时模型会参考这些信息。
+      </p>
+      <form onSubmit={onSave}>
+        <div className="field">
+          <label htmlFor="title">标题</label>
+          <input id="title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="genre">类型</label>
+          <input
+            id="genre"
+            className="input"
+            placeholder="例如：科幻、武侠、言情…"
+            value={genre}
+            onChange={(e) => setGenre(e.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="ws">写作风格</label>
+          <textarea
+            id="ws"
+            className="textarea"
+            placeholder="例如：第三人称、细腻心理描写、节奏偏慢…"
+            value={writingStyle}
+            onChange={(e) => setWritingStyle(e.target.value)}
+            rows={4}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="outline">全书大纲</label>
+          <textarea
+            id="outline"
+            className="textarea"
+            placeholder="主线、卷结构、关键转折…"
+            value={outline}
+            onChange={(e) => setOutline(e.target.value)}
+            rows={10}
+          />
+        </div>
+        {err ? <p className="form-error">{err}</p> : null}
+        {msg ? <p className="muted">{msg}</p> : null}
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? "保存中…" : "保存设定"}
+        </button>
+      </form>
+    </div>
+  );
+}
