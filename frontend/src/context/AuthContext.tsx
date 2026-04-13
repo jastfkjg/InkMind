@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@/types";
-import { authLogin, authMe, authRegister, clearToken, getToken, setToken } from "@/api/client";
+import { authLogin, authMe, authRegister, clearToken, getToken, patchAuthMe, setToken } from "@/api/client";
 
 type AuthState = {
   user: User | null;
@@ -16,6 +16,7 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
+  updatePreferredLlm: (preferred_llm_provider: string | null) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -59,9 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updatePreferredLlm = useCallback(async (preferred_llm_provider: string | null) => {
+    const u = await patchAuthMe({ preferred_llm_provider });
+    setUser(u);
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
-    [user, loading, login, register, logout]
+    () => ({ user, loading, login, register, logout, updatePreferredLlm }),
+    [user, loading, login, register, logout, updatePreferredLlm]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

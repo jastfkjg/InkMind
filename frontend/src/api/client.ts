@@ -62,6 +62,11 @@ export async function authMe() {
   return data;
 }
 
+export async function patchAuthMe(payload: { preferred_llm_provider?: string | null }) {
+  const { data } = await api.patch<User>("/auth/me", payload);
+  return data;
+}
+
 export async function fetchNovels() {
   const { data } = await api.get<Novel[]>("/novels");
   return data;
@@ -122,6 +127,21 @@ export async function generateChapter(
     summary,
     chapter_id: chapterId ?? null,
     llm_provider: llmProvider || null,
+  });
+  return data;
+}
+
+export async function reviseChapter(
+  novelId: number,
+  chapterId: number,
+  instruction: string,
+  llmProvider?: string | null,
+  mode: "rewrite" | "append" = "rewrite"
+) {
+  const { data } = await api.post<Chapter>(`/novels/${novelId}/chapters/${chapterId}/revise`, {
+    instruction,
+    llm_provider: llmProvider || null,
+    mode,
   });
   return data;
 }

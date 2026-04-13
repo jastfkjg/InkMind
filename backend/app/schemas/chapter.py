@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -28,6 +29,18 @@ class ChapterOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ChapterReviseIn(BaseModel):
+    instruction: str = Field(..., min_length=1, description="对当前章节的修改说明")
+    llm_provider: str | None = Field(
+        default=None,
+        description="留空则使用用户偏好或全局默认",
+    )
+    mode: Literal["rewrite", "append"] = Field(
+        default="rewrite",
+        description="rewrite=整体改写正文；append=仅在文末追加新内容",
+    )
 
 
 class ChapterGenerateIn(BaseModel):

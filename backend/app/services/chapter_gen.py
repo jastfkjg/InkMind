@@ -54,11 +54,15 @@ def build_generation_prompt(
             )
     prev_block = "\n\n".join(prev_snippets[-6:]) if prev_snippets else "（尚无其他章节正文）"
 
-    system = """你是一位专业中文小说作者与编辑。请根据用户给出的作品设定、人物与关系、已有章节语境，以及用户输入的本章概要，先写出本章总览(500字以内）。
+    system = """你是一位专业中文小说作者。请根据作品设定、人物与关系、已有章节语境与本章概要，写出本章正文。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 保持人物性格与关系前后一致。
-3. 只输出小说正文，不要加标题、前言、总结或元评论。"""
+3. 只输出小说叙事正文；不要写章节标题、章节号、副标题或「本章」「第一节」等结构标签；正文第一行不要重复标题。"""
+
+    title_hint = ""
+    if target_chapter and (target_chapter.title or "").strip():
+        title_hint = f"\n【当前章节标题（仅供参考，不要写入正文）】{target_chapter.title.strip()}"
 
     user = f"""【作品标题】{novel.title}
 【类型】{novel.genre or '未指定'}
@@ -77,9 +81,8 @@ def build_generation_prompt(
 
 【本章任务】
 本章概要：{chapter_summary}
+{title_hint}
 
-{f"【当前章节标题】{target_chapter.title}" if target_chapter and target_chapter.title else ""}
-
-请直接写出本章完整正文。"""
+请直接写出本章完整正文（不要包含章节标题行）。"""
 
     return system, user

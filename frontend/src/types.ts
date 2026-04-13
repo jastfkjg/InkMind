@@ -2,6 +2,7 @@ export type User = {
   id: number;
   email: string;
   display_name: string | null;
+  preferred_llm_provider?: string | null;
 };
 
 export type Novel = {

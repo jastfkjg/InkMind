@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import UserMenu from "@/components/UserMenu";
 import { apiErrorMessage, fetchNovel } from "@/api/client";
 import type { Novel } from "@/types";
 
@@ -40,6 +41,7 @@ export default function NovelLayout() {
             {novel?.title || "加载中…"}
           </div>
         </div>
+        <UserMenu />
       </header>
 
       {err ? <p className="form-error">{err}</p> : null}

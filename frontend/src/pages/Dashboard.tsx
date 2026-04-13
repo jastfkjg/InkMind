@@ -6,11 +6,12 @@ import {
   deleteNovel,
   fetchNovels,
 } from "@/api/client";
+import UserMenu from "@/components/UserMenu";
 import { useAuth } from "@/context/AuthContext";
 import type { Novel } from "@/types";
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [novels, setNovels] = useState<Novel[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -63,13 +64,11 @@ export default function Dashboard() {
             {user?.display_name || user?.email}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <button type="button" className="btn btn-primary" disabled={creating} onClick={onCreate}>
             {creating ? "创建中…" : "新建作品"}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={logout}>
-            退出
-          </button>
+          <UserMenu />
         </div>
       </header>
 

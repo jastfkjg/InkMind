@@ -36,3 +36,12 @@ def get_llm(provider: str | None) -> LLMProvider:
             raise ValueError("未配置 DEEPSEEK_API_KEY")
         return DeepSeekLLM()
     raise ValueError(f"不支持的模型提供方: {name}")
+
+
+def resolve_llm_for_user(user: object | None, explicit_provider: str | None) -> LLMProvider:
+    """请求体中的 llm_provider 优先，否则使用用户偏好，再否则 settings.default_llm_provider。"""
+    name = (explicit_provider or "").strip() or None
+    if not name and user is not None:
+        pref = getattr(user, "preferred_llm_provider", None)
+        name = (pref or "").strip() or None
+    return get_llm(name)

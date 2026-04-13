@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import CurrentUser
 from app.models import User
-from app.schemas.auth import Token, UserCreate, UserLogin, UserOut
+from app.schemas.auth import Token, UserCreate, UserLogin, UserOut, UserUpdate
+from app.llm.providers import list_available_providers
 from app.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,6 +30,28 @@ def register(body: UserCreate, db: Session = Depends(get_db)) -> Token:
 
 @router.get("/me", response_model=UserOut)
 def me(user: CurrentUser) -> User:
+    return user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_me(body: UserUpdate, user: CurrentUser, db: Session = Depends(get_db)) -> User:
+    data = body.model_dump(exclude_unset=True)
+    if "preferred_llm_provider" in data:
+        v = data["preferred_llm_provider"]
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            user.preferred_llm_provider = None
+        else:
+            avail = list_available_providers()
+            low = str(v).strip().lower()
+            if low not in avail:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"该模型未配置或不可用。当前可用: {', '.join(avail) or '无'}",
+                )
+            user.preferred_llm_provider = low
+    db.add(user)
+    db.commit()
+    db.refresh(user)
     return user
 
 

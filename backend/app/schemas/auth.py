@@ -16,8 +16,13 @@ class UserOut(BaseModel):
     id: int
     email: str
     display_name: str | None
+    preferred_llm_provider: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    preferred_llm_provider: str | None = None
 
 
 class Token(BaseModel):
