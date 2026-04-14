@@ -7,11 +7,23 @@ import {
   fetchChapters,
   fetchLlmProviders,
   generateChapter,
+  novelAiChat,
+  novelAiNaming,
   reviseChapter,
   updateChapter,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import type { Chapter } from "@/types";
+
+type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask";
+
+const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
+  { key: "generate", line2: "生成" },
+  { key: "rewrite", line2: "改写" },
+  { key: "append", line2: "追加" },
+  { key: "naming", line2: "起名" },
+  { key: "ask", line2: "提问" },
+];
 
 export default function NovelWrite() {
   const { novelId } = useParams();
@@ -22,14 +34,27 @@ export default function NovelWrite() {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [content, setContent] = useState("");
-  const [reviseHint, setReviseHint] = useState("");
-  const [aiMode, setAiMode] = useState<"rewrite" | "append">("rewrite");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [rightTool, setRightTool] = useState<AiTool | null>(null);
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 900 : false
+  );
+
+  const [rewriteInstr, setRewriteInstr] = useState("");
+  const [appendInstr, setAppendInstr] = useState("");
+  const [namingCategory, setNamingCategory] = useState<"character" | "item" | "skill" | "other">("character");
+  const [namingDesc, setNamingDesc] = useState("");
+  const [namingHint, setNamingHint] = useState("");
+  const [namingResult, setNamingResult] = useState("");
+  const [askHistory, setAskHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [askInput, setAskInput] = useState("");
+
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [revising, setRevising] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
   activeIdRef.current = activeId;
 
@@ -40,6 +65,12 @@ export default function NovelWrite() {
   }, [id]);
 
   const preferredLlm = user?.preferred_llm_provider ?? null;
+
+  useEffect(() => {
+    const onResize = () => setNarrow(window.innerWidth < 900);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +100,11 @@ export default function NovelWrite() {
   }, [id]);
 
   useEffect(() => {
+    setAskHistory([]);
+    setAskInput("");
+  }, [id]);
+
+  useEffect(() => {
     const ch = chapters.find((c) => c.id === activeId);
     if (!ch) {
       if (activeId === null) {
@@ -83,7 +119,22 @@ export default function NovelWrite() {
     setContent(ch.content);
   }, [activeId, chapters]);
 
+  useEffect(() => {
+    drawerEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [askHistory, rightTool]);
+
   const hasBody = (content || "").trim().length > 0;
+  const hasLlm = llmOptions.length > 0;
+
+  function needsChapter(tool: AiTool): boolean {
+    return tool === "generate" || tool === "rewrite" || tool === "append";
+  }
+
+  function canOpenTool(tool: AiTool): boolean {
+    if (!hasLlm) return false;
+    if (needsChapter(tool)) return activeId !== null;
+    return true;
+  }
 
   function scheduleMergeAsyncSummary() {
     window.setTimeout(async () => {
@@ -100,6 +151,12 @@ export default function NovelWrite() {
         /* ignore */
       }
     }, 2800);
+  }
+
+  function toggleTool(t: AiTool) {
+    if (!canOpenTool(t)) return;
+    setRightTool((prev) => (prev === t ? null : t));
+    setErr("");
   }
 
   async function onSaveChapter() {
@@ -135,7 +192,7 @@ export default function NovelWrite() {
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(ch.content);
-      setReviseHint("");
+      if (narrow) setSidebarOpen(false);
     } catch (e) {
       setErr(apiErrorMessage(e));
     }
@@ -149,7 +206,6 @@ export default function NovelWrite() {
       await deleteChapter(id, activeId);
       const full = await loadChapters();
       setChapters(full);
-      setReviseHint("");
       if (full.length > 0) {
         const n = full[0];
         setActiveId(n.id);
@@ -167,59 +223,128 @@ export default function NovelWrite() {
     }
   }
 
-  /** 根据当前「摘要」生成正文：无正文时写入本章，有正文时覆盖 */
-  async function onGenerateFromSummary() {
+  async function onGenerate() {
     const s = summary.trim();
     if (!s) {
-      setErr("请先填写本章摘要");
+      setErr("请填写本章概要");
       return;
     }
     if (!activeId) return;
     if (hasBody) {
-      const ok = window.confirm("将根据当前摘要重新生成正文并覆盖现有内容，是否继续？");
+      const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，是否继续？");
       if (!ok) return;
     }
-    setGenerating(true);
+    setBusy(true);
     setErr("");
     try {
-      const ch = await generateChapter(id, s, activeId, preferredLlm);
+      const ch = await generateChapter(id, s, {
+        chapterId: activeId,
+        title: title.trim() || null,
+      });
       const full = await loadChapters();
       setChapters(full);
       setActiveId(ch.id);
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(ch.content);
-      setReviseHint("");
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
-      setGenerating(false);
+      setBusy(false);
     }
   }
 
-  async function onAiAssistant() {
-    if (!activeId || !reviseHint.trim()) {
-      setErr("请填写说明");
+  async function onRunRewrite() {
+    if (!activeId || !rewriteInstr.trim()) {
+      setErr("请填写改写说明");
       return;
     }
-    if (aiMode === "rewrite" && !hasBody) {
-      setErr("整体修改需要已有正文；可先「生成」正文，或切换到「增加」");
+    if (!hasBody) {
+      setErr("改写需要已有正文");
       return;
     }
-    setRevising(true);
+    setBusy(true);
     setErr("");
     try {
-      const ch = await reviseChapter(id, activeId, reviseHint.trim(), preferredLlm, aiMode);
+      const ch = await reviseChapter(id, activeId, rewriteInstr.trim(), preferredLlm, "rewrite");
       const full = await loadChapters();
       setChapters(full);
-      setSummary(ch.summary);
       setContent(ch.content);
-      setReviseHint("");
+      setSummary(ch.summary);
+      setRewriteInstr("");
       scheduleMergeAsyncSummary();
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
-      setRevising(false);
+      setBusy(false);
+    }
+  }
+
+  async function onRunAppend() {
+    if (!activeId || !appendInstr.trim()) {
+      setErr("请填写要追加的内容说明");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      const ch = await reviseChapter(id, activeId, appendInstr.trim(), preferredLlm, "append");
+      const full = await loadChapters();
+      setChapters(full);
+      setContent(ch.content);
+      setSummary(ch.summary);
+      setAppendInstr("");
+      scheduleMergeAsyncSummary();
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onRunNaming() {
+    const d = namingDesc.trim();
+    if (!d) {
+      setErr("请说明要命名的对象");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    try {
+      const { text } = await novelAiNaming(id, {
+        category: namingCategory,
+        description: d,
+        hint: namingHint || null,
+      });
+      setNamingResult(text);
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAskSend() {
+    const q = askInput.trim();
+    if (!q) return;
+    setBusy(true);
+    setErr("");
+    setAskInput("");
+    try {
+      const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
+      const { reply } = await novelAiChat(id, {
+        message: q,
+        history: prior,
+      });
+      setAskHistory((h) => [
+        ...h,
+        { role: "user", content: q },
+        { role: "assistant", content: reply },
+      ]);
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -227,160 +352,296 @@ export default function NovelWrite() {
     return <p className="muted">加载章节…</p>;
   }
 
-  const genLabel = hasBody ? "生成并覆盖" : "生成";
-  const genHint = hasBody
-    ? "根据上方摘要重新生成正文，将覆盖当前正文。"
-    : "根据上方摘要生成本章正文。";
+  const drawerOpen =
+    rightTool && hasLlm && (activeId !== null || rightTool === "ask" || rightTool === "naming");
 
   return (
-    <div className="grid-2">
-      <div className="card" style={{ padding: "1rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-          <strong>章节</strong>
-          <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={onAddChapter}>
-            新建章节
+    <div className="write-shell">
+      {err ? <p className="form-error write-err-banner">{err}</p> : null}
+
+      {narrow && sidebarOpen ? (
+        <button
+          type="button"
+          className="write-sidebar-backdrop"
+          aria-label="关闭章节列表"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+
+      <div className={`write-workspace${sidebarOpen ? " write-workspace--sidebar-open" : ""}`}>
+        <div className="write-sidenav-toggle">
+          <button
+            type="button"
+            className="write-icon-btn"
+            title={sidebarOpen ? "关闭边栏" : "打开边栏"}
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((v) => !v)}
+          >
+            <span className="write-icon-hamburger" aria-hidden>
+              <span />
+              <span />
+              <span />
+            </span>
           </button>
         </div>
-        <div className="chapter-list stack-sm">
-          {chapters.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>
-              暂无章节，点击「新建章节」。
-            </p>
-          ) : (
-            chapters.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`chapter-item${c.id === activeId ? " active" : ""}`}
-                onClick={() => {
-                  setActiveId(c.id);
-                  setReviseHint("");
-                }}
-              >
-                {c.title?.trim() || `章节 #${c.id}`}
+
+        <aside className={`write-left-sidebar${sidebarOpen ? " is-open" : ""}`}>
+          <div className="write-left-inner card">
+            <div className="write-left-head">
+              <strong>章节</strong>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={onAddChapter}>
+                新建
               </button>
-            ))
-          )}
+            </div>
+            <div className="chapter-list stack-sm">
+              {chapters.length === 0 ? (
+                <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>
+                  暂无章节
+                </p>
+              ) : (
+                chapters.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`chapter-item${c.id === activeId ? " active" : ""}`}
+                    onClick={() => {
+                      setActiveId(c.id);
+                      if (narrow) setSidebarOpen(false);
+                    }}
+                  >
+                    {c.title?.trim() || `章节 #${c.id}`}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </aside>
+
+        <div className="write-main write-main--with-rail">
+          <div className="card write-editor-card">
+            {activeId ? (
+              <>
+                <input
+                  className="editor-title editor-title--compact"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="章节标题"
+                />
+                <div className="field write-body-field">
+                  <textarea
+                    className="textarea editor-body"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="正文内容"
+                  />
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+                  <button type="button" className="btn btn-primary" disabled={saving} onClick={onSaveChapter}>
+                    {saving ? "保存中…" : "保存本章"}
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={onDeleteChapter}>
+                    删除本章
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                请打开左侧边栏并选择章节，或新建一章。
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      <div>
-        {err ? <p className="form-error">{err}</p> : null}
+      <nav className="write-ai-rail" aria-label="AI 功能">
+        {RAIL_ITEMS.map(({ key, line2 }) => (
+          <button
+            key={key}
+            type="button"
+            className={`write-rail-btn${rightTool === key ? " active" : ""}`}
+            disabled={!canOpenTool(key)}
+            title={
+              !hasLlm
+                ? "未配置 LLM"
+                : needsChapter(key) && !activeId
+                  ? "请先选择章节"
+                  : `AI${line2}`
+            }
+            onClick={() => toggleTool(key)}
+          >
+            <span className="write-rail-stack">
+              <span className="write-rail-ai">AI</span>
+              <span className="write-rail-name">{line2}</span>
+            </span>
+          </button>
+        ))}
+      </nav>
 
-        <div className="card">
-          {activeId ? (
-            <>
-              <input
-                className="editor-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="章节标题"
-              />
-              <div className="field">
-                <label>摘要</label>
-                <p className="hint" style={{ marginTop: 0 }}>
-                  若修改了正文，摘要在后台由模型生成，约数秒后自动刷新。可在改摘要后用下方按钮重新生成正文。
-                </p>
-                <textarea className="textarea" rows={4} value={summary} onChange={(e) => setSummary(e.target.value)} />
-              </div>
-
-              {llmOptions.length > 0 ? (
-                <div className="field" style={{ marginBottom: "1.25rem" }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={generating}
-                    onClick={onGenerateFromSummary}
-                  >
-                    {generating ? "生成中…" : genLabel}
-                  </button>
-                  <p className="hint" style={{ marginTop: "0.35rem", marginBottom: 0 }}>
-                    {genHint}
-                  </p>
+      {drawerOpen && rightTool ? (
+        <div className="write-ai-drawer">
+          <div className="write-ai-drawer-head">
+            <span>
+              {rightTool === "generate" && "AI 生成"}
+              {rightTool === "rewrite" && "AI 改写"}
+              {rightTool === "append" && "AI 追加"}
+              {rightTool === "naming" && "AI 起名"}
+              {rightTool === "ask" && "AI 提问"}
+            </span>
+            <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
+              关闭
+            </button>
+          </div>
+          <div className="write-ai-drawer-body">
+            {rightTool === "generate" && activeId ? (
+              <div className="write-ai-section">
+                <p className="hint">概要 + 可选章节标题；标题留空则由模型拟定。将写入本章并覆盖正文。</p>
+                <div className="field">
+                  <label>本章概要</label>
+                  <textarea
+                    className="textarea"
+                    rows={5}
+                    value={summary}
+                    onChange={(e) => setSummary(e.target.value)}
+                    placeholder="本章要写的情节与要点…"
+                  />
                 </div>
-              ) : (
-                <p className="form-error" style={{ marginBottom: "1rem" }}>
-                  未配置 LLM，无法根据摘要生成正文。
-                </p>
-              )}
-
-              <div className="field">
-                <label>正文</label>
-                <textarea
-                  className="textarea editor-body"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="在此写作或粘贴内容…"
-                />
+                <div className="field">
+                  <label>章节标题（可选）</label>
+                  <input
+                    className="input"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="若留空，由 AI 拟定章节标题"
+                  />
+                </div>
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
+                  {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成正文与标题"}
+                </button>
               </div>
+            ) : null}
 
-              {activeId && llmOptions.length > 0 ? (
-                <div className="field" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-                  <label style={{ fontSize: "1.05rem", fontFamily: "var(--font-serif)" }}>AI助手</label>
-                  <div className="ai-mode-row" style={{ marginBottom: "0.65rem" }}>
-                    <label className="ai-mode-option">
-                      <input
-                        type="radio"
-                        name="aiMode"
-                        checked={aiMode === "rewrite"}
-                        onChange={() => setAiMode("rewrite")}
-                      />
-                      修改（整体改写）
-                    </label>
-                    <label className="ai-mode-option">
-                      <input
-                        type="radio"
-                        name="aiMode"
-                        checked={aiMode === "append"}
-                        onChange={() => setAiMode("append")}
-                      />
-                      增加（仅追加内容）
-                    </label>
-                  </div>
+            {rightTool === "rewrite" && activeId ? (
+              <div className="write-ai-section">
+                <p className="hint">说明希望如何修改正文，将整体替换为模型输出。</p>
+                <textarea
+                  className="textarea"
+                  rows={5}
+                  value={rewriteInstr}
+                  onChange={(e) => setRewriteInstr(e.target.value)}
+                  placeholder="例如：加强对话节奏、删去重复描写…"
+                />
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunRewrite}>
+                  {busy ? "处理中…" : "应用改写"}
+                </button>
+              </div>
+            ) : null}
+
+            {rightTool === "append" && activeId ? (
+              <div className="write-ai-section">
+                <p className="hint">说明要在文末追加的内容，不会重复已有段落。</p>
+                <textarea
+                  className="textarea"
+                  rows={5}
+                  value={appendInstr}
+                  onChange={(e) => setAppendInstr(e.target.value)}
+                  placeholder="例如：接一段回忆、补一场对话…"
+                />
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunAppend}>
+                  {busy ? "处理中…" : "应用追加"}
+                </button>
+              </div>
+            ) : null}
+
+            {rightTool === "naming" ? (
+              <div className="write-ai-section">
+                <p className="hint">为人物、物品、功法等请求备选名称（非章节标题）。</p>
+                <div className="field">
+                  <label>类别</label>
+                  <select
+                    className="input"
+                    value={namingCategory}
+                    onChange={(e) =>
+                      setNamingCategory(e.target.value as typeof namingCategory)
+                    }
+                  >
+                    <option value="character">人物 / 角色</option>
+                    <option value="item">物品 / 器物</option>
+                    <option value="skill">功法 / 招式</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>要命名的对象</label>
                   <textarea
                     className="textarea"
                     rows={3}
-                    value={reviseHint}
-                    onChange={(e) => setReviseHint(e.target.value)}
-                    placeholder={
-                      aiMode === "rewrite"
-                        ? "例如：加强对话节奏、删去重复描写…"
-                        : "例如：接一段主角回忆、补一场对话…（将接在正文末尾）"
-                    }
+                    value={namingDesc}
+                    onChange={(e) => setNamingDesc(e.target.value)}
+                    placeholder="例如：擅长用毒的黑市药师；上古飞剑；火系入门功法…"
                   />
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    style={{ marginTop: "0.5rem" }}
-                    disabled={revising}
-                    onClick={onAiAssistant}
-                  >
-                    {revising ? "处理中…" : aiMode === "rewrite" ? "应用修改" : "应用追加"}
+                </div>
+                <div className="field">
+                  <label>补充（可选）</label>
+                  <textarea
+                    className="textarea textarea-compact"
+                    rows={2}
+                    value={namingHint}
+                    onChange={(e) => setNamingHint(e.target.value)}
+                    placeholder="字数、风格、避讳…"
+                  />
+                </div>
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunNaming}>
+                  {busy ? "生成中…" : "生成备选名"}
+                </button>
+                {namingResult ? (
+                  <pre className="write-ai-naming-out">{namingResult}</pre>
+                ) : null}
+              </div>
+            ) : null}
+
+            {rightTool === "ask" ? (
+              <div className="write-ai-chat">
+                <div className="write-ai-messages">
+                  {askHistory.length === 0 ? (
+                    <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
+                      围绕本书设定提问，例如结构、人物、节奏等。
+                    </p>
+                  ) : (
+                    askHistory.map((m, i) => (
+                      <div
+                        key={i}
+                        className={`write-ai-bubble${m.role === "user" ? " write-ai-bubble--user" : ""}`}
+                      >
+                        {m.content}
+                      </div>
+                    ))
+                  )}
+                  <div ref={drawerEndRef} />
+                </div>
+                <div className="write-ai-chat-input">
+                  <textarea
+                    className="textarea textarea-compact"
+                    rows={2}
+                    value={askInput}
+                    onChange={(e) => setAskInput(e.target.value)}
+                    placeholder="输入问题…"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        onAskSend();
+                      }
+                    }}
+                  />
+                  <button type="button" className="btn btn-primary" disabled={busy || !askInput.trim()} onClick={onAskSend}>
+                    发送
                   </button>
                 </div>
-              ) : null}
-              {activeId && llmOptions.length === 0 ? (
-                <p className="muted" style={{ marginTop: "0.5rem" }}>
-                  未配置 LLM 时无法使用 AI 助手。
-                </p>
-              ) : null}
-
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem" }}>
-                <button type="button" className="btn btn-primary" disabled={saving} onClick={onSaveChapter}>
-                  {saving ? "保存中…" : "保存本章"}
-                </button>
-                <button type="button" className="btn btn-danger" onClick={onDeleteChapter}>
-                  删除本章
-                </button>
               </div>
-            </>
-          ) : (
-            <p className="muted" style={{ margin: 0 }}>
-              请选择左侧章节，或新建一章。
-            </p>
-          )}
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

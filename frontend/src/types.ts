@@ -9,7 +9,7 @@ export type Novel = {
   id: number;
   user_id: number;
   title: string;
-  outline: string;
+  background: string;
   genre: string;
   writing_style: string;
   created_at: string;
@@ -33,16 +33,6 @@ export type Character = {
   name: string;
   profile: string;
   notes: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type Relationship = {
-  id: number;
-  novel_id: number;
-  character_a_id: number;
-  character_b_id: number;
-  description: string;
   created_at: string;
   updated_at: string;
 };

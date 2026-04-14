@@ -17,12 +17,25 @@ def _migrate_sqlite() -> None:
         tables = insp.get_table_names()
         if "users" not in tables:
             return
-        cols = {c["name"] for c in insp.get_columns("users")}
-        if "preferred_llm_provider" not in cols:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            cols_users = {c["name"] for c in insp.get_columns("users")}
+            if "preferred_llm_provider" not in cols_users:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN preferred_llm_provider VARCHAR(128)")
                 )
+            if "novels" in tables:
+                ncols = {c["name"] for c in insp.get_columns("novels")}
+                if "outline" in ncols and "background" not in ncols:
+                    conn.execute(text("ALTER TABLE novels RENAME COLUMN outline TO background"))
+            if "characters" in tables:
+                cols = {c["name"] for c in insp.get_columns("characters")}
+                if "relationships" in cols:
+                    try:
+                        conn.execute(text("ALTER TABLE characters DROP COLUMN relationships"))
+                    except Exception:
+                        pass
+            if "character_relationships" in tables:
+                conn.execute(text("DROP TABLE IF EXISTS character_relationships"))
     except Exception:
         pass
 

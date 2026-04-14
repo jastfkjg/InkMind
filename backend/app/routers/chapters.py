@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -16,13 +15,13 @@ from app.schemas.chapter import (
     ChapterGenerateIn,
     ChapterOut,
     ChapterReviseIn,
+    ChapterSuggestTitleIn,
+    ChapterSuggestTitleOut,
     ChapterUpdate,
 )
-from app.services.chapter_gen import build_generation_prompt
+from app.services.chapter_gen import build_generation_prompt, parse_chapter_generation_json
 from app.services.chapter_llm import append_chapter_body, revise_chapter_body, suggest_chapter_title
 from app.services.chapter_tasks import regenerate_chapter_summary_task
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/novels/{novel_id}/chapters", tags=["chapters"])
 
@@ -52,12 +51,6 @@ def generate_chapter(
 ) -> Chapter:
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
-    provider = (body.llm_provider or "").lower().strip() or None
-    if provider and provider not in available:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"该模型未配置或不可用。当前可用: {', '.join(available) or '无'}",
-        )
     if not available:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -70,48 +63,79 @@ def generate_chapter(
         if target is None or target.novel_id != novel_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
 
-    system, user_msg = build_generation_prompt(db, novel, body.summary.strip(), target)
+    req_title = (body.title or "").strip()
+    fixed_title = req_title or None
+    need_model_title = fixed_title is None
+
+    system, user_msg = build_generation_prompt(
+        db, novel, body.summary.strip(), target, fixed_title=fixed_title
+    )
     try:
-        llm = resolve_llm_for_user(user, body.llm_provider)
-        text = llm.complete(system, user_msg)
+        llm = resolve_llm_for_user(user, None)
+        raw = llm.complete(system, user_msg)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except LLMRequestError as e:
         raise _llm_http_exc(e) from e
+
+    gen_title, body_text = parse_chapter_generation_json(raw, need_title=need_model_title)
 
     if target is None:
         max_order = db.scalar(
             select(func.max(Chapter.sort_order)).where(Chapter.novel_id == novel_id)
         )
         next_order = (max_order or 0) + 1
+        title_out = fixed_title if fixed_title is not None else gen_title
         ch = Chapter(
             novel_id=novel_id,
-            title="",
+            title=title_out,
             summary=body.summary.strip(),
-            content=text,
+            content=body_text,
             sort_order=next_order,
         )
         db.add(ch)
     else:
         target.summary = body.summary.strip()
-        target.content = text
+        target.content = body_text
+        if fixed_title is not None:
+            target.title = fixed_title
+        else:
+            if gen_title:
+                target.title = gen_title
         ch = target
         db.add(ch)
 
     db.commit()
     db.refresh(ch)
 
-    if not (ch.title or "").strip():
-        try:
-            llm_title = resolve_llm_for_user(user, body.llm_provider)
-            ch.title = suggest_chapter_title(llm_title, novel, body.summary.strip(), text)
-            db.add(ch)
-            db.commit()
-            db.refresh(ch)
-        except Exception:
-            logger.exception("suggest chapter title failed chapter_id=%s", ch.id)
-
     return ch
+
+
+@router.post("/{chapter_id}/suggest-title", response_model=ChapterSuggestTitleOut)
+def suggest_title_for_chapter(
+    novel_id: int,
+    chapter_id: int,
+    body: ChapterSuggestTitleIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ChapterSuggestTitleOut:
+    novel = _get_owned_novel(db, user.id, novel_id)
+    if not list_available_providers():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    try:
+        llm = resolve_llm_for_user(user, None)
+        title = suggest_chapter_title(llm, novel, ch, body.hint or "")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except LLMRequestError as e:
+        raise _llm_http_exc(e) from e
+    return ChapterSuggestTitleOut(title=title)
 
 
 @router.post("/{chapter_id}/revise", response_model=ChapterOut)

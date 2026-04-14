@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Chapter, Character, Novel, Relationship, User } from "@/types";
+import type { Chapter, Character, Novel, User } from "@/types";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
@@ -72,7 +72,7 @@ export async function fetchNovels() {
   return data;
 }
 
-export async function createNovel(payload: Partial<Pick<Novel, "title" | "outline" | "genre" | "writing_style">>) {
+export async function createNovel(payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style">>) {
   const { data } = await api.post<Novel>("/novels", payload);
   return data;
 }
@@ -84,7 +84,7 @@ export async function fetchNovel(id: number) {
 
 export async function updateNovel(
   id: number,
-  payload: Partial<Pick<Novel, "title" | "outline" | "genre" | "writing_style">>) {
+  payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style">>) {
   const { data } = await api.patch<Novel>(`/novels/${id}`, payload);
   return data;
 }
@@ -120,13 +120,12 @@ export async function deleteChapter(novelId: number, chapterId: number) {
 export async function generateChapter(
   novelId: number,
   summary: string,
-  chapterId?: number | null,
-  llmProvider?: string | null
+  options?: { chapterId?: number | null; title?: string | null }
 ) {
   const { data } = await api.post<Chapter>(`/novels/${novelId}/chapters/generate`, {
     summary,
-    chapter_id: chapterId ?? null,
-    llm_provider: llmProvider || null,
+    chapter_id: options?.chapterId ?? null,
+    title: options?.title?.trim() ? options.title.trim() : null,
   });
   return data;
 }
@@ -143,6 +142,26 @@ export async function reviseChapter(
     llm_provider: llmProvider || null,
     mode,
   });
+  return data;
+}
+
+export async function novelAiNaming(
+  novelId: number,
+  payload: { category: "character" | "item" | "skill" | "other"; description: string; hint?: string | null }
+) {
+  const { data } = await api.post<{ text: string }>(`/novels/${novelId}/ai-naming`, {
+    category: payload.category,
+    description: payload.description,
+    hint: payload.hint?.trim() || null,
+  });
+  return data;
+}
+
+export async function novelAiChat(
+  novelId: number,
+  payload: { message: string; history: { role: string; content: string }[] }
+) {
+  const { data } = await api.post<{ reply: string }>(`/novels/${novelId}/ai-chat`, payload);
   return data;
 }
 
@@ -170,36 +189,6 @@ export async function updateCharacter(
 
 export async function deleteCharacter(novelId: number, characterId: number) {
   await api.delete(`/novels/${novelId}/characters/${characterId}`);
-}
-
-export async function fetchRelationships(novelId: number) {
-  const { data } = await api.get<Relationship[]>(`/novels/${novelId}/relationships`);
-  return data;
-}
-
-export async function createRelationship(
-  novelId: number,
-  character_a_id: number,
-  character_b_id: number,
-  description: string
-) {
-  const { data } = await api.post<Relationship>(`/novels/${novelId}/relationships`, {
-    character_a_id,
-    character_b_id,
-    description,
-  });
-  return data;
-}
-
-export async function updateRelationship(novelId: number, relId: number, description: string) {
-  const { data } = await api.patch<Relationship>(`/novels/${novelId}/relationships/${relId}`, {
-    description,
-  });
-  return data;
-}
-
-export async function deleteRelationship(novelId: number, relId: number) {
-  await api.delete(`/novels/${novelId}/relationships/${relId}`);
 }
 
 export async function fetchLlmProviders() {

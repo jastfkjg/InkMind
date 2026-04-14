@@ -25,25 +25,3 @@ class CharacterOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class RelationshipCreate(BaseModel):
-    character_a_id: int
-    character_b_id: int
-    description: str = ""
-
-
-class RelationshipUpdate(BaseModel):
-    description: str | None = None
-
-
-class RelationshipOut(BaseModel):
-    id: int
-    novel_id: int
-    character_a_id: int
-    character_b_id: int
-    description: str
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}

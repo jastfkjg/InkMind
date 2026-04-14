@@ -43,13 +43,21 @@ class ChapterReviseIn(BaseModel):
     )
 
 
+class ChapterSuggestTitleIn(BaseModel):
+    hint: str | None = Field(default=None, description="对标题方向的补充说明，可空")
+
+
+class ChapterSuggestTitleOut(BaseModel):
+    title: str
+
+
 class ChapterGenerateIn(BaseModel):
     summary: str = Field(..., min_length=1, description="本章概要，用于生成正文")
     chapter_id: int | None = Field(
         default=None,
         description="若提供则写入该章节；否则新建一章",
     )
-    llm_provider: str | None = Field(
+    title: str | None = Field(
         default=None,
-        description="openai / anthropic / qwen / deepseek，留空则使用 DEFAULT_LLM_PROVIDER",
+        description="若填写则固定为该章节标题，仅生成正文；留空则模型同时返回标题与正文（JSON）",
     )

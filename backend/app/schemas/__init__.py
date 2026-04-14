@@ -11,9 +11,6 @@ from app.schemas.character import (
     CharacterCreate,
     CharacterOut,
     CharacterUpdate,
-    RelationshipCreate,
-    RelationshipOut,
-    RelationshipUpdate,
 )
 
 __all__ = [
@@ -32,7 +29,4 @@ __all__ = [
     "CharacterCreate",
     "CharacterOut",
     "CharacterUpdate",
-    "RelationshipCreate",
-    "RelationshipOut",
-    "RelationshipUpdate",
 ]

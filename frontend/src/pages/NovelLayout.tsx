@@ -31,35 +31,31 @@ export default function NovelLayout() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div>
-          <button type="button" className="btn btn-ghost" style={{ marginBottom: "0.35rem" }} onClick={() => nav("/")}>
-            ← 作品列表
+    <div className="app-shell app-shell--novel">
+      <header className="novel-bar">
+        <div className="novel-bar__row">
+          <button type="button" className="btn btn-ghost novel-bar__back" onClick={() => nav("/")}>
+            ← 返回
           </button>
-          <div className="brand" style={{ fontSize: "1.25rem" }}>
-            {novel?.title || "加载中…"}
-          </div>
+          <nav className="tabs novel-tabs" aria-label="作品导航">
+            <NavLink
+              to={`/novels/${id}/settings`}
+              className={({ isActive }) => `tab${isActive ? " active" : ""}`}
+            >
+              设定
+            </NavLink>
+            <NavLink to={`/novels/${id}/write`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
+              写作
+            </NavLink>
+            <NavLink to={`/novels/${id}/people`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
+              人物
+            </NavLink>
+          </nav>
         </div>
         <UserMenu />
       </header>
 
-      {err ? <p className="form-error">{err}</p> : null}
-
-      <nav className="tabs">
-        <NavLink
-          to={`/novels/${id}/settings`}
-          className={({ isActive }) => `tab${isActive ? " active" : ""}`}
-        >
-          写作前设定
-        </NavLink>
-        <NavLink to={`/novels/${id}/write`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
-          写作
-        </NavLink>
-        <NavLink to={`/novels/${id}/people`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
-          人物与关系
-        </NavLink>
-      </nav>
+      {err ? <p className="form-error novel-bar__err">{err}</p> : null}
 
       <Outlet context={{ novel, setNovel }} />
     </div>

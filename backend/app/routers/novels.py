@@ -5,10 +5,21 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
+from app.llm.llm_errors import LLMRequestError
+from app.llm.providers import list_available_providers, resolve_llm_for_user
 from app.models import Novel
+from app.schemas.ai import NovelAiChatIn, NovelAiChatOut, NovelNamingIn, NovelNamingOut
 from app.schemas.novel import NovelCreate, NovelOut, NovelUpdate
+from app.services.novel_ai import novel_naming_suggest, novel_writing_chat
 
 router = APIRouter(prefix="/novels", tags=["novels"])
+
+
+def _novel_ai_llm_http_exc(e: LLMRequestError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_502_BAD_GATEWAY,
+        detail=f"模型接口错误: {e.message}",
+    )
 
 
 @router.get("", response_model=list[NovelOut])
@@ -25,7 +36,7 @@ def create_novel(
     n = Novel(
         user_id=user.id,
         title=body.title,
-        outline=body.outline,
+        background=body.background,
         genre=body.genre,
         writing_style=body.writing_style,
     )
@@ -40,6 +51,52 @@ def _get_owned_novel(db: Session, user_id: int, novel_id: int) -> Novel:
     if n is None or n.user_id != user_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="作品不存在")
     return n
+
+
+@router.post("/{novel_id}/ai-chat", response_model=NovelAiChatOut)
+def novel_ai_chat(
+    novel_id: int,
+    body: NovelAiChatIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> NovelAiChatOut:
+    novel = _get_owned_novel(db, user.id, novel_id)
+    if not list_available_providers():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    try:
+        llm = resolve_llm_for_user(user, None)
+        reply = novel_writing_chat(llm, novel, body.message, body.history)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except LLMRequestError as e:
+        raise _novel_ai_llm_http_exc(e) from e
+    return NovelAiChatOut(reply=reply)
+
+
+@router.post("/{novel_id}/ai-naming", response_model=NovelNamingOut)
+def novel_ai_naming(
+    novel_id: int,
+    body: NovelNamingIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> NovelNamingOut:
+    novel = _get_owned_novel(db, user.id, novel_id)
+    if not list_available_providers():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    try:
+        llm = resolve_llm_for_user(user, None)
+        text = novel_naming_suggest(llm, novel, body)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except LLMRequestError as e:
+        raise _novel_ai_llm_http_exc(e) from e
+    return NovelNamingOut(text=text)
 
 
 @router.get("/{novel_id}", response_model=NovelOut)

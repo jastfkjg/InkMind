@@ -6,7 +6,6 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     DateTime,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,7 +31,7 @@ class Novel(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(512), default="未命名作品")
-    outline: Mapped[str] = mapped_column(Text, default="")
+    background: Mapped[str] = mapped_column(Text, default="")
     genre: Mapped[str] = mapped_column(String(128), default="")
     writing_style: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -49,9 +48,6 @@ class Novel(Base):
     )
     characters: Mapped[list["Character"]] = relationship(
         "Character", back_populates="novel", cascade="all, delete-orphan"
-    )
-    relationships: Mapped[list["CharacterRelationship"]] = relationship(
-        "CharacterRelationship", back_populates="novel", cascade="all, delete-orphan"
     )
 
 
@@ -86,20 +82,3 @@ class Character(Base):
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="characters")
-
-
-class CharacterRelationship(Base):
-    __tablename__ = "character_relationships"
-    __table_args__ = (UniqueConstraint("novel_id", "character_a_id", "character_b_id", name="uq_rel_pair"),)
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    novel_id: Mapped[int] = mapped_column(ForeignKey("novels.id", ondelete="CASCADE"))
-    character_a_id: Mapped[int] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"))
-    character_b_id: Mapped[int] = mapped_column(ForeignKey("characters.id", ondelete="CASCADE"))
-    description: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
-
-    novel: Mapped["Novel"] = relationship("Novel", back_populates="relationships")
