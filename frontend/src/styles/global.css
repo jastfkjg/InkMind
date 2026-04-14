@@ -295,6 +295,19 @@ select {
   min-height: calc(100vh - 7.25rem);
 }
 
+/* 人物新建/编辑：占满可用宽度，保留右侧 AI 浮条占位 */
+.write-shell.write-shell--form {
+  min-height: auto;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.write-shell.write-shell--form .people-form-card {
+  max-width: none;
+  width: 100%;
+}
+
 .write-err-banner {
   margin-bottom: 0.5rem;
 }
@@ -559,6 +572,10 @@ select {
 @media (min-width: 900px) {
   .write-shell {
     margin-left: -0.5rem;
+  }
+  .write-shell.write-shell--form {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 

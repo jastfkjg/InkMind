@@ -4,6 +4,8 @@ import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import NovelLayout from "@/pages/NovelLayout";
 import NovelPeople from "@/pages/NovelPeople";
+import NovelPeopleForm from "@/pages/NovelPeopleForm";
+import PeopleLayout from "@/pages/PeopleLayout";
 import NovelSettings from "@/pages/NovelSettings";
 import NovelWrite from "@/pages/NovelWrite";
 import Register from "@/pages/Register";
@@ -48,7 +50,11 @@ export default function App() {
         <Route index element={<Navigate to="write" replace />} />
         <Route path="settings" element={<NovelSettings />} />
         <Route path="write" element={<NovelWrite />} />
-        <Route path="people" element={<NovelPeople />} />
+        <Route path="people" element={<PeopleLayout />}>
+          <Route index element={<NovelPeople />} />
+          <Route path="new" element={<NovelPeopleForm />} />
+          <Route path=":characterId/edit" element={<NovelPeopleForm />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

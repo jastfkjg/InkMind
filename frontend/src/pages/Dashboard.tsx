@@ -59,7 +59,7 @@ export default function Dashboard() {
     <div className="app-shell">
       <header className="top-bar top-bar--dashboard">
         <div>
-          <div className="brand brand--list">书名</div>
+          <div className="brand brand--list">InkMind</div>
           <p className="muted" style={{ margin: "0.25rem 0 0" }}>
             {user?.display_name || user?.email}
           </p>

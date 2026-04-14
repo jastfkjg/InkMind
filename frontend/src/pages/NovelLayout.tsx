@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import UserMenu from "@/components/UserMenu";
 import { apiErrorMessage, fetchNovel } from "@/api/client";
@@ -8,6 +8,8 @@ export default function NovelLayout() {
   const { novelId } = useParams();
   const id = Number(novelId);
   const nav = useNavigate();
+  const loc = useLocation();
+  const peopleTabActive = loc.pathname.startsWith(`/novels/${id}/people`);
   const [novel, setNovel] = useState<Novel | null>(null);
   const [err, setErr] = useState("");
 
@@ -47,7 +49,10 @@ export default function NovelLayout() {
             <NavLink to={`/novels/${id}/write`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
               写作
             </NavLink>
-            <NavLink to={`/novels/${id}/people`} className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
+            <NavLink
+              to={`/novels/${id}/people`}
+              className={() => `tab${peopleTabActive ? " active" : ""}`}
+            >
               人物
             </NavLink>
           </nav>
