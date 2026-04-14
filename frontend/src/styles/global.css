@@ -1026,3 +1026,144 @@ select {
   cursor: pointer;
   color: var(--ink);
 }
+
+/* —— 作品列表 · 导出弹窗 —— */
+.export-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(28, 25, 23, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.export-modal-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: min(100%, 460px);
+  max-height: min(88vh, 640px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 56px rgba(28, 25, 23, 0.14);
+}
+
+.export-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.export-modal-body {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.export-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.1rem 1rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.export-modal-fieldset {
+  border: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+}
+
+.export-modal-fieldset legend {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+  padding: 0;
+}
+
+.export-modal-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+}
+
+.export-modal-radio input {
+  accent-color: var(--accent-soft);
+}
+
+.export-modal-chapters {
+  margin-top: 0.5rem;
+}
+
+.export-modal-chapter-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.export-modal-chapter-list {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 4px);
+  background: var(--bg-deep);
+}
+
+.export-modal-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+}
+
+.export-modal-check input {
+  margin-top: 0.2rem;
+  accent-color: var(--accent-soft);
+  flex-shrink: 0;
+}
+
+/* 作品列表：操作图标（写作 / 导出 / 删除）统一尺寸 */
+.dashboard-novel-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dashboard-icon-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.35rem;
+  min-width: 2.35rem;
+  padding: 0.4rem 0.5rem !important;
+  line-height: 1 !important;
+  font-size: 0.85rem;
+}
+
+.dashboard-icon-btn svg {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}

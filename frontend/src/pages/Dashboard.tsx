@@ -6,9 +6,11 @@ import {
   deleteNovel,
   fetchNovels,
 } from "@/api/client";
+import ExportNovelModal from "@/components/ExportNovelModal";
 import UserMenu from "@/components/UserMenu";
 import { useAuth } from "@/context/AuthContext";
 import type { Novel } from "@/types";
+import { isNovelSetupComplete, novelPrimaryHref } from "@/utils/novelSetup";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -16,6 +18,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [creating, setCreating] = useState(false);
+  const [exportNovel, setExportNovel] = useState<Novel | null>(null);
 
   async function load() {
     setErr("");
@@ -82,47 +85,73 @@ export default function Dashboard() {
         </div>
       ) : (
         <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {novels.map((n) => (
-            <li key={n.id} className="card" style={{ marginBottom: "0.75rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
-                <div>
-                  <Link
-                    to={`/novels/${n.id}/write`}
-                    style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontWeight: 600 }}
-                  >
-                    {n.title || "未命名"}
-                  </Link>
-                  <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
-                    {n.genre ? `类型：${n.genre}` : "未设置类型"}
-                    {" · "}
-                    更新 {new Date(n.updated_at).toLocaleString()}
-                  </p>
+          {novels.map((n) => {
+            const entry = novelPrimaryHref(n);
+            const ready = isNovelSetupComplete(n);
+            return (
+              <li key={n.id} className="card" style={{ marginBottom: "0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+                  <div>
+                    <Link
+                      to={entry}
+                      style={{ fontFamily: "var(--font-serif)", fontSize: "1.15rem", fontWeight: 600 }}
+                    >
+                      {n.title || "未命名"}
+                    </Link>
+                    <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
+                      {n.genre ? `类型：${n.genre}` : "未设置类型"}
+                      {" · "}
+                      更新 {new Date(n.updated_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="dashboard-novel-actions">
+                    <Link
+                      to={entry}
+                      className="btn btn-ghost dashboard-icon-btn"
+                      aria-label={ready ? `打开《${n.title || "未命名"}》写作` : `完善《${n.title || "未命名"}》设定`}
+                      title={ready ? "写作" : "作品设定"}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden>
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+                      </svg>
+                    </Link>
+                    <button
+                      type="button"
+                      className="btn btn-ghost dashboard-icon-btn"
+                      aria-label={`导出《${n.title || "未命名"}》`}
+                      title="导出"
+                      onClick={() => setExportNovel(n)}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden>
+                        <path d="M12 3v12" />
+                        <path d="M7 10l5 5 5-5" />
+                        <path d="M5 21h14" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger dashboard-icon-btn"
+                      aria-label={`删除《${n.title || "未命名"}》`}
+                      title="删除"
+                      onClick={() => onDelete(n.id, n.title)}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden>
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                  <Link
-                    to={`/novels/${n.id}/settings`}
-                    className="btn btn-ghost"
-                    style={{ fontSize: "0.85rem" }}
-                  >
-                    设定
-                  </Link>
-                  <Link to={`/novels/${n.id}/write`} className="btn btn-ghost" style={{ fontSize: "0.85rem" }}>
-                    写作
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    style={{ fontSize: "0.85rem" }}
-                    onClick={() => onDelete(n.id, n.title)}
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
+
+      {exportNovel ? <ExportNovelModal novel={exportNovel} onClose={() => setExportNovel(null)} /> : null}
     </div>
   );
 }

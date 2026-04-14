@@ -48,9 +48,6 @@ export default function NovelSettings() {
   return (
     <div className="card" style={{ maxWidth: 720 }}>
       <h2 style={{ fontFamily: "var(--font-serif)", marginTop: 0 }}>作品设定</h2>
-      <p className="muted" style={{ marginTop: 0 }}>
-        类型与文风会参与章节生成；「背景」仅提供世界观与时代等简要信息，避免长篇大纲干扰单章创作。
-      </p>
       <form onSubmit={onSave}>
         <div className="field">
           <label htmlFor="title">作品名称</label>

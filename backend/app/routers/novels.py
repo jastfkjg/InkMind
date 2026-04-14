@@ -1,7 +1,9 @@
+import logging
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,7 +17,9 @@ from app.schemas.ai import (
     NovelChapterSummaryInspireIn,
     NovelNamingIn,
 )
+from app.schemas.export import NovelExportPdfIn
 from app.schemas.novel import NovelCreate, NovelOut, NovelUpdate
+from app.services.novel_export_pdf import build_novel_pdf_bytes, safe_export_pdf_stem
 from app.services.novel_ai import (
     novel_chapter_summary_inspire_messages,
     novel_naming_messages,
@@ -23,6 +27,8 @@ from app.services.novel_ai import (
 )
 
 router = APIRouter(prefix="/novels", tags=["novels"])
+
+log = logging.getLogger(__name__)
 
 _STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
@@ -175,6 +181,49 @@ def novel_ai_chapter_summary_inspire_ep(
             yield ndjson_line({"error": str(e) or "请求失败"})
 
     return StreamingResponse(gen(), media_type="application/x-ndjson", headers=_STREAM_HEADERS)
+
+
+@router.post("/{novel_id}/export/pdf")
+def export_novel_pdf(
+    novel_id: int,
+    body: NovelExportPdfIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    """服务端将正文写成 PDF：优先本机或 fpdf2 自带字体，否则用核心字体（中文可能显示为 ?）。"""
+    novel = _get_owned_novel(db, user.id, novel_id)
+    rows = (
+        db.query(Chapter)
+        .filter(Chapter.novel_id == novel_id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .all()
+    )
+    want = body.chapter_ids
+    if want:
+        allow = {c.id for c in rows}
+        missing = [i for i in want if i not in allow]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的章节 id: {missing}",
+            )
+        id_set = set(want)
+        chapters = [c for c in rows if c.id in id_set]
+    else:
+        chapters = list(rows)
+    try:
+        raw = build_novel_pdf_bytes(novel, chapters)
+    except Exception as e:
+        log.exception("novel pdf export failed novel_id=%s", novel_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF 生成失败：{e!s}",
+        ) from e
+    stem = safe_export_pdf_stem(novel.title)
+    fname = f"{stem}.pdf"
+    ascii_name = fname.encode("ascii", "replace").decode()
+    cd = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(fname)}'
+    return Response(content=raw, media_type="application/pdf", headers={"Content-Disposition": cd})
 
 
 @router.get("/{novel_id}", response_model=NovelOut)

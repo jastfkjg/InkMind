@@ -331,3 +331,42 @@ export async function fetchLlmProviders() {
   const { data } = await api.get<{ available: string[]; default: string }>("/meta/llm-providers");
   return data;
 }
+
+async function detailFromBlob(blob: Blob): Promise<string> {
+  const t = await blob.text();
+  try {
+    const j = JSON.parse(t) as { detail?: string | string[] };
+    const d = j.detail;
+    if (typeof d === "string") return d;
+    if (Array.isArray(d)) return d.map((x) => String(x)).join("; ");
+  } catch {
+    /* ignore */
+  }
+  return t || "请求失败";
+}
+
+/** 服务端生成 PDF（含中文）。chapter_ids 为 null 表示全书。 */
+export async function exportNovelPdfBlob(novelId: number, chapterIds: number[] | null): Promise<Blob> {
+  try {
+    const { data, headers } = await api.post<Blob>(
+      `/novels/${novelId}/export/pdf`,
+      { chapter_ids: chapterIds },
+      { responseType: "blob" }
+    );
+    const ct = (headers["content-type"] || "").toLowerCase();
+    if (ct.includes("application/json")) {
+      throw new Error(await detailFromBlob(data));
+    }
+    const head = await data.slice(0, 5).arrayBuffer();
+    const sig = new TextDecoder().decode(head);
+    if (!sig.startsWith("%PDF")) {
+      throw new Error(await detailFromBlob(data));
+    }
+    return data;
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+      throw new Error(await detailFromBlob(e.response.data));
+    }
+    throw e;
+  }
+}
