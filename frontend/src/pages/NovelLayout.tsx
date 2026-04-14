@@ -10,6 +10,7 @@ export default function NovelLayout() {
   const nav = useNavigate();
   const loc = useLocation();
   const peopleTabActive = loc.pathname.startsWith(`/novels/${id}/people`);
+  const memosTabActive = loc.pathname.startsWith(`/novels/${id}/memos`);
   const [novel, setNovel] = useState<Novel | null>(null);
   const [err, setErr] = useState("");
 
@@ -54,6 +55,12 @@ export default function NovelLayout() {
               className={() => `tab${peopleTabActive ? " active" : ""}`}
             >
               人物
+            </NavLink>
+            <NavLink
+              to={`/novels/${id}/memos`}
+              className={() => `tab${memosTabActive ? " active" : ""}`}
+            >
+              备忘
             </NavLink>
           </nav>
         </div>

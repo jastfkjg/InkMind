@@ -6,6 +6,9 @@ import NovelLayout from "@/pages/NovelLayout";
 import NovelPeople from "@/pages/NovelPeople";
 import NovelPeopleForm from "@/pages/NovelPeopleForm";
 import PeopleLayout from "@/pages/PeopleLayout";
+import MemosLayout from "@/pages/MemosLayout";
+import NovelMemos from "@/pages/NovelMemos";
+import NovelMemoForm from "@/pages/NovelMemoForm";
 import NovelSettings from "@/pages/NovelSettings";
 import NovelWrite from "@/pages/NovelWrite";
 import Register from "@/pages/Register";
@@ -54,6 +57,11 @@ export default function App() {
           <Route index element={<NovelPeople />} />
           <Route path="new" element={<NovelPeopleForm />} />
           <Route path=":characterId/edit" element={<NovelPeopleForm />} />
+        </Route>
+        <Route path="memos" element={<MemosLayout />}>
+          <Route index element={<NovelMemos />} />
+          <Route path="new" element={<NovelMemoForm />} />
+          <Route path=":memoId/edit" element={<NovelMemoForm />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

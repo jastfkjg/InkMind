@@ -49,6 +49,9 @@ class Novel(Base):
     characters: Mapped[list["Character"]] = relationship(
         "Character", back_populates="novel", cascade="all, delete-orphan"
     )
+    memos: Mapped[list["NovelMemo"]] = relationship(
+        "NovelMemo", back_populates="novel", cascade="all, delete-orphan"
+    )
 
 
 class Chapter(Base):
@@ -82,3 +85,18 @@ class Character(Base):
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="characters")
+
+
+class NovelMemo(Base):
+    __tablename__ = "novel_memos"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    novel_id: Mapped[int] = mapped_column(ForeignKey("novels.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(512), default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    novel: Mapped["Novel"] = relationship("Novel", back_populates="memos")

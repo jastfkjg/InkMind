@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Chapter, Character, Novel, User } from "@/types";
+import type { Chapter, Character, Memo, Novel, User } from "@/types";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
@@ -189,6 +189,32 @@ export async function updateCharacter(
 
 export async function deleteCharacter(novelId: number, characterId: number) {
   await api.delete(`/novels/${novelId}/characters/${characterId}`);
+}
+
+export async function fetchMemos(novelId: number) {
+  const { data } = await api.get<Memo[]>(`/novels/${novelId}/memos`);
+  return data;
+}
+
+export async function createMemo(novelId: number, payload: Partial<Pick<Memo, "title" | "body">>) {
+  const { data } = await api.post<Memo>(`/novels/${novelId}/memos`, {
+    title: payload.title ?? "",
+    body: payload.body ?? "",
+  });
+  return data;
+}
+
+export async function updateMemo(
+  novelId: number,
+  memoId: number,
+  payload: Partial<Pick<Memo, "title" | "body">>
+) {
+  const { data } = await api.patch<Memo>(`/novels/${novelId}/memos/${memoId}`, payload);
+  return data;
+}
+
+export async function deleteMemo(novelId: number, memoId: number) {
+  await api.delete(`/novels/${novelId}/memos/${memoId}`);
 }
 
 export async function fetchLlmProviders() {
