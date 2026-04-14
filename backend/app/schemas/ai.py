@@ -26,3 +26,11 @@ class NovelAiChatIn(BaseModel):
 
 class NovelAiChatOut(BaseModel):
     reply: str
+
+
+class NovelChapterSummaryInspireIn(BaseModel):
+    chapter_id: int | None = Field(default=None, description="当前章节 id；不提供则按「承接全书最后一章」理解")
+
+
+class NovelChapterSummaryInspireOut(BaseModel):
+    summary: str = Field(..., description="2～4 句本章概要草案")

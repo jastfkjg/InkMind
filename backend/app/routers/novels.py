@@ -1,25 +1,30 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
 from app.llm.llm_errors import LLMRequestError
+from app.llm.ndjson_stream import ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
-from app.models import Novel
-from app.schemas.ai import NovelAiChatIn, NovelAiChatOut, NovelNamingIn, NovelNamingOut
+from app.models import Chapter, Novel
+from app.schemas.ai import (
+    NovelAiChatIn,
+    NovelChapterSummaryInspireIn,
+    NovelNamingIn,
+)
 from app.schemas.novel import NovelCreate, NovelOut, NovelUpdate
-from app.services.novel_ai import novel_naming_suggest, novel_writing_chat
+from app.services.novel_ai import (
+    novel_chapter_summary_inspire_messages,
+    novel_naming_messages,
+    novel_writing_chat_messages,
+)
 
 router = APIRouter(prefix="/novels", tags=["novels"])
 
-
-def _novel_ai_llm_http_exc(e: LLMRequestError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_502_BAD_GATEWAY,
-        detail=f"模型接口错误: {e.message}",
-    )
+_STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 @router.get("", response_model=list[NovelOut])
@@ -53,50 +58,123 @@ def _get_owned_novel(db: Session, user_id: int, novel_id: int) -> Novel:
     return n
 
 
-@router.post("/{novel_id}/ai-chat", response_model=NovelAiChatOut)
+@router.post("/{novel_id}/ai-chat")
 def novel_ai_chat(
     novel_id: int,
     body: NovelAiChatIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-) -> NovelAiChatOut:
+):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置任何 LLM API Key",
         )
-    try:
-        llm = resolve_llm_for_user(user, None)
-        reply = novel_writing_chat(llm, novel, body.message, body.history)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except LLMRequestError as e:
-        raise _novel_ai_llm_http_exc(e) from e
-    return NovelAiChatOut(reply=reply)
+    system, user_msg = novel_writing_chat_messages(novel, body.message, body.history)
+
+    def gen():
+        try:
+            llm = resolve_llm_for_user(user, None)
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+            return
+        buf: list[str] = []
+        try:
+            for part in llm.stream_complete(system, user_msg):
+                buf.append(part)
+                yield ndjson_line({"t": part})
+            yield ndjson_line({"reply": "".join(buf).strip()})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "请求失败"})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers=_STREAM_HEADERS)
 
 
-@router.post("/{novel_id}/ai-naming", response_model=NovelNamingOut)
+@router.post("/{novel_id}/ai-naming")
 def novel_ai_naming(
     novel_id: int,
     body: NovelNamingIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-) -> NovelNamingOut:
+):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置任何 LLM API Key",
         )
-    try:
-        llm = resolve_llm_for_user(user, None)
-        text = novel_naming_suggest(llm, novel, body)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    except LLMRequestError as e:
-        raise _novel_ai_llm_http_exc(e) from e
-    return NovelNamingOut(text=text)
+    system, user_msg = novel_naming_messages(novel, body)
+
+    def gen():
+        try:
+            llm = resolve_llm_for_user(user, None)
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+            return
+        buf: list[str] = []
+        try:
+            for part in llm.stream_complete(system, user_msg):
+                buf.append(part)
+                yield ndjson_line({"t": part})
+            yield ndjson_line({"text": "".join(buf).strip()})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "请求失败"})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers=_STREAM_HEADERS)
+
+
+@router.post("/{novel_id}/ai-chapter-summary-inspire")
+def novel_ai_chapter_summary_inspire_ep(
+    novel_id: int,
+    body: NovelChapterSummaryInspireIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    novel = _get_owned_novel(db, user.id, novel_id)
+    if not list_available_providers():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    chapters = (
+        db.query(Chapter)
+        .filter(Chapter.novel_id == novel_id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .all()
+    )
+    previous: list[Chapter]
+    if body.chapter_id is not None:
+        idx = next((i for i, c in enumerate(chapters) if c.id == body.chapter_id), None)
+        if idx is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+        previous = chapters[:idx]
+    else:
+        previous = chapters
+    system, user_msg = novel_chapter_summary_inspire_messages(novel, previous)
+
+    def gen():
+        try:
+            llm = resolve_llm_for_user(user, None)
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+            return
+        buf: list[str] = []
+        try:
+            for part in llm.stream_complete(system, user_msg):
+                buf.append(part)
+                yield ndjson_line({"t": part})
+            yield ndjson_line({"summary": "".join(buf).strip()})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "请求失败"})
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson", headers=_STREAM_HEADERS)
 
 
 @router.get("/{novel_id}", response_model=NovelOut)

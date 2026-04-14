@@ -8,12 +8,14 @@ import {
   fetchLlmProviders,
   generateChapter,
   novelAiChat,
+  novelAiChapterSummaryInspire,
   novelAiNaming,
   reviseChapter,
   updateChapter,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import type { Chapter } from "@/types";
+import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 
 type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask";
 
@@ -24,6 +26,91 @@ const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
   { key: "naming", line2: "起名" },
   { key: "ask", line2: "提问" },
 ];
+
+const WRITE_BODY_FONT_KEY = "inkmind_write_body_font";
+
+type WriteBodyFontId = "noto" | "song" | "kai" | "fang" | "hei" | "mono";
+
+const WRITE_BODY_FONTS: { id: WriteBodyFontId; label: string }[] = [
+  { id: "noto", label: "思源宋体（默认）" },
+  { id: "song", label: "宋体" },
+  { id: "kai", label: "楷体" },
+  { id: "fang", label: "仿宋" },
+  { id: "hei", label: "黑体" },
+  { id: "mono", label: "等宽" },
+];
+
+/** Sample each option in the menu with its own font. */
+const WRITE_FONT_PREVIEW: Record<WriteBodyFontId, string> = {
+  noto: 'var(--font-serif), "Noto Serif SC", Georgia, serif',
+  song: '"Songti SC", "SimSun", "Noto Serif SC", serif',
+  kai: '"Kaiti SC", "KaiTi", "STKaiti", serif',
+  fang: '"STFangsong", "FangSong", "SimFang", "Noto Serif SC", serif',
+  hei: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif',
+  mono: 'ui-monospace, "Cascadia Code", "Sarasa Mono SC", "Noto Sans Mono CJK SC", monospace',
+};
+
+function readStoredBodyFont(): WriteBodyFontId {
+  try {
+    const v = localStorage.getItem(WRITE_BODY_FONT_KEY);
+    if (v && WRITE_BODY_FONTS.some((x) => x.id === v)) {
+      return v as WriteBodyFontId;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "noto";
+}
+
+/** 正文字号分档（不展示像素，仅内部映射） */
+type WriteBodyFontSizeId = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
+
+const WRITE_BODY_FONT_SIZES: { id: WriteBodyFontSizeId; label: string; px: number }[] = [
+  { id: "xs", label: "极小", px: 14 },
+  { id: "sm", label: "小", px: 16 },
+  { id: "md", label: "标准", px: 17 },
+  { id: "lg", label: "大", px: 19 },
+  { id: "xl", label: "较大", px: 21 },
+  { id: "xxl", label: "特大", px: 24 },
+];
+
+const WRITE_BODY_FONT_SIZE_KEY = "inkmind_write_body_font_size";
+const LEGACY_BODY_FONT_SIZE_PX_KEY = "inkmind_write_body_font_size_px";
+
+function nearestFontSizeId(px: number): WriteBodyFontSizeId {
+  let best = WRITE_BODY_FONT_SIZES[0];
+  let d = Math.abs(px - best.px);
+  for (const p of WRITE_BODY_FONT_SIZES) {
+    const dd = Math.abs(px - p.px);
+    if (dd < d) {
+      d = dd;
+      best = p;
+    }
+  }
+  return best.id;
+}
+
+function readStoredBodyFontSizeId(): WriteBodyFontSizeId {
+  try {
+    const v = localStorage.getItem(WRITE_BODY_FONT_SIZE_KEY);
+    if (v && WRITE_BODY_FONT_SIZES.some((x) => x.id === v)) {
+      return v as WriteBodyFontSizeId;
+    }
+    const legacy = localStorage.getItem(LEGACY_BODY_FONT_SIZE_PX_KEY);
+    if (legacy) {
+      const n = parseInt(legacy, 10);
+      if (Number.isFinite(n)) {
+        const id = nearestFontSizeId(Math.min(24, Math.max(14, n)));
+        localStorage.setItem(WRITE_BODY_FONT_SIZE_KEY, id);
+        localStorage.removeItem(LEGACY_BODY_FONT_SIZE_PX_KEY);
+        return id;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return "md";
+}
 
 export default function NovelWrite() {
   const { novelId } = useParams();
@@ -39,6 +126,16 @@ export default function NovelWrite() {
   const [narrow, setNarrow] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 900 : false
   );
+  const [bodyFontId, setBodyFontId] = useState<WriteBodyFontId>(() =>
+    typeof window !== "undefined" ? readStoredBodyFont() : "noto"
+  );
+  const [bodyFontSizeId, setBodyFontSizeId] = useState<WriteBodyFontSizeId>(() =>
+    typeof window !== "undefined" ? readStoredBodyFontSizeId() : "md"
+  );
+  const [fontMenuOpen, setFontMenuOpen] = useState(false);
+  const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
+  const sidebarToolsRef = useRef<HTMLDivElement | null>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [rewriteInstr, setRewriteInstr] = useState("");
   const [appendInstr, setAppendInstr] = useState("");
@@ -52,6 +149,8 @@ export default function NovelWrite() {
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [summaryInspireBusy, setSummaryInspireBusy] = useState(false);
+  const [genStreamPreview, setGenStreamPreview] = useState("");
   const [err, setErr] = useState("");
   const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
@@ -71,11 +170,55 @@ export default function NovelWrite() {
 
   const preferredLlm = user?.preferred_llm_provider ?? null;
 
+  const bodyFontSizePx = WRITE_BODY_FONT_SIZES.find((x) => x.id === bodyFontSizeId)?.px ?? 17;
+  const bodyFontSizeIndex = (() => {
+    const i = WRITE_BODY_FONT_SIZES.findIndex((x) => x.id === bodyFontSizeId);
+    return i >= 0 ? i : 2;
+  })();
+
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < 900);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WRITE_BODY_FONT_KEY, bodyFontId);
+    } catch {
+      /* ignore */
+    }
+  }, [bodyFontId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WRITE_BODY_FONT_SIZE_KEY, bodyFontSizeId);
+    } catch {
+      /* ignore */
+    }
+  }, [bodyFontSizeId]);
+
+  useEffect(() => {
+    if (!fontMenuOpen && !sizeMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (sidebarToolsRef.current && !sidebarToolsRef.current.contains(e.target as Node)) {
+        setFontMenuOpen(false);
+        setSizeMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFontMenuOpen(false);
+        setSizeMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [fontMenuOpen, sizeMenuOpen]);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -145,7 +288,7 @@ export default function NovelWrite() {
     lastLoadedChapterIdRef.current = activeId;
     setTitle(ch.title);
     setSummary(ch.summary);
-    setContent(ch.content);
+    setContent(normalizeBodyParagraphIndent(ch.content));
   }, [activeId, chapters]);
 
   useEffect(() => {
@@ -229,6 +372,25 @@ export default function NovelWrite() {
     setErr("");
   }
 
+  function handleBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const insert = "\n\u3000\u3000";
+    const next = content.slice(0, start) + insert + content.slice(end);
+    setContent(next);
+    const pos = start + insert.length;
+    window.setTimeout(() => {
+      const ta = bodyTextareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
   async function onAddChapter() {
     const nid = id;
     setErr("");
@@ -283,6 +445,30 @@ export default function NovelWrite() {
     }
   }
 
+  async function onSummaryInspire() {
+    const nid = id;
+    if (!activeId || !hasLlm) return;
+    setSummaryInspireBusy(true);
+    setErr("");
+    let acc = "";
+    try {
+      await novelAiChapterSummaryInspire(
+        nid,
+        { chapter_id: activeId },
+        (t) => {
+          acc += t;
+          if (novelIdRef.current === nid) setSummary(acc);
+        }
+      );
+    } catch (e) {
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
+    } finally {
+      setSummaryInspireBusy(false);
+    }
+  }
+
   async function onGenerate() {
     const nid = id;
     const s = summary.trim();
@@ -297,10 +483,14 @@ export default function NovelWrite() {
     }
     setBusy(true);
     setErr("");
+    setGenStreamPreview("");
     try {
       const ch = await generateChapter(nid, s, {
         chapterId: activeId,
         title: title.trim() || null,
+        onToken: (t) => {
+          if (novelIdRef.current === nid) setGenStreamPreview((p) => p + t);
+        },
       });
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
@@ -310,12 +500,13 @@ export default function NovelWrite() {
       lastLoadedChapterIdRef.current = null;
       setTitle(ch.title);
       setSummary(ch.summary);
-      setContent(ch.content);
+      setContent(normalizeBodyParagraphIndent(ch.content));
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
       }
     } finally {
+      setGenStreamPreview("");
       setBusy(false);
     }
   }
@@ -332,18 +523,31 @@ export default function NovelWrite() {
     }
     setBusy(true);
     setErr("");
+    const savedBody = content;
     try {
-      const ch = await reviseChapter(nid, activeId, rewriteInstr.trim(), preferredLlm, "rewrite");
+      let acc = "";
+      const ch = await reviseChapter(
+        nid,
+        activeId,
+        rewriteInstr.trim(),
+        preferredLlm,
+        "rewrite",
+        (t) => {
+          acc += t;
+          if (novelIdRef.current === nid) setContent(acc);
+        }
+      );
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
       if (novelIdRef.current !== nid) return;
       setChapters(full);
-      setContent(ch.content);
+      setContent(normalizeBodyParagraphIndent(ch.content));
       setSummary(ch.summary);
       setRewriteInstr("");
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
+        setContent(savedBody);
       }
     } finally {
       setBusy(false);
@@ -358,18 +562,34 @@ export default function NovelWrite() {
     }
     setBusy(true);
     setErr("");
+    const savedAppendBody = content;
     try {
-      const ch = await reviseChapter(nid, activeId, appendInstr.trim(), preferredLlm, "append");
+      const before = savedAppendBody.trimEnd();
+      let addition = "";
+      const ch = await reviseChapter(
+        nid,
+        activeId,
+        appendInstr.trim(),
+        preferredLlm,
+        "append",
+        (t) => {
+          addition += t;
+          if (novelIdRef.current === nid) {
+            setContent(before + (addition ? "\n\n" + addition : ""));
+          }
+        }
+      );
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
       if (novelIdRef.current !== nid) return;
       setChapters(full);
-      setContent(ch.content);
+      setContent(normalizeBodyParagraphIndent(ch.content));
       setSummary(ch.summary);
       setAppendInstr("");
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
+        setContent(savedAppendBody);
       }
     } finally {
       setBusy(false);
@@ -385,11 +605,16 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     try {
-      const { text } = await novelAiNaming(id, {
-        category: namingCategory,
-        description: d,
-        hint: namingHint || null,
-      });
+      setNamingResult("");
+      const { text } = await novelAiNaming(
+        id,
+        {
+          category: namingCategory,
+          description: d,
+          hint: namingHint || null,
+        },
+        (t) => setNamingResult((prev) => prev + t)
+      );
       setNamingResult(text);
     } catch (e) {
       setErr(apiErrorMessage(e));
@@ -404,19 +629,38 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     setAskInput("");
+    const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
+    setAskHistory((h) => [...h, { role: "user", content: q }, { role: "assistant", content: "" }]);
+    let acc = "";
     try {
-      const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
-      const { reply } = await novelAiChat(id, {
-        message: q,
-        history: prior,
-      });
-      setAskHistory((h) => [
-        ...h,
-        { role: "user", content: q },
-        { role: "assistant", content: reply },
-      ]);
+      await novelAiChat(
+        id,
+        {
+          message: q,
+          history: prior,
+        },
+        (t) => {
+          acc += t;
+          setAskHistory((h) => {
+            const copy = [...h];
+            const last = copy[copy.length - 1];
+            if (last?.role === "assistant") {
+              copy[copy.length - 1] = { role: "assistant", content: acc };
+            }
+            return copy;
+          });
+        }
+      );
     } catch (e) {
       setErr(apiErrorMessage(e));
+      setAskHistory((h) => {
+        if (h.length < 2) return h;
+        const copy = [...h];
+        copy.pop();
+        copy.pop();
+        return copy;
+      });
+      setAskInput(q);
     } finally {
       setBusy(false);
     }
@@ -457,6 +701,111 @@ export default function NovelWrite() {
               <span />
             </span>
           </button>
+          <div className="write-sidenav-tools" ref={sidebarToolsRef}>
+            <div className="write-font-picker">
+              <button
+                type="button"
+                className="write-icon-btn write-font-btn"
+                title="正文字体"
+                aria-expanded={fontMenuOpen}
+                aria-haspopup="listbox"
+                aria-label="正文字体"
+                onClick={() => {
+                  setSizeMenuOpen(false);
+                  setFontMenuOpen((v) => !v);
+                }}
+              >
+                Aa
+              </button>
+              {fontMenuOpen ? (
+                <ul className="write-font-menu" role="listbox" aria-label="选择正文字体">
+                  {WRITE_BODY_FONTS.map((f) => (
+                    <li key={f.id} role="presentation">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={bodyFontId === f.id}
+                        className={`write-font-option${bodyFontId === f.id ? " is-active" : ""}`}
+                        style={{ fontFamily: WRITE_FONT_PREVIEW[f.id] }}
+                        onClick={() => {
+                          setBodyFontId(f.id);
+                          setFontMenuOpen(false);
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <div className="write-size-picker">
+              <button
+                type="button"
+                className="write-icon-btn write-size-menu-btn"
+                title="正文字号"
+                aria-expanded={sizeMenuOpen}
+                aria-haspopup="dialog"
+                aria-label="正文字号"
+                onClick={() => {
+                  setFontMenuOpen(false);
+                  setSizeMenuOpen((v) => !v);
+                }}
+              >
+                <span className="write-size-icon" aria-hidden>
+                  <span className="write-size-icon-lg">A</span>
+                  <span className="write-size-icon-sm">a</span>
+                </span>
+              </button>
+              {sizeMenuOpen ? (
+                <div className="write-size-popover" role="dialog" aria-label="调整正文字号">
+                  <div className="write-size-slider-row">
+                    <span className="write-size-slider-a write-size-slider-a--min" aria-hidden>
+                      A
+                    </span>
+                    <div className="write-size-slider-shell">
+                      <div className="write-size-slider-track-bg" aria-hidden />
+                      <div className="write-size-slider-ticks" aria-hidden>
+                        {WRITE_BODY_FONT_SIZES.map((_, i) => {
+                          const last = WRITE_BODY_FONT_SIZES.length - 1;
+                          if (i === 0 || i === last) return null;
+                          return (
+                            <span
+                              key={i}
+                              className="write-size-slider-tick"
+                              style={{ left: `${(i / last) * 100}%` }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <input
+                        type="range"
+                        className="write-size-range"
+                        min={0}
+                        max={WRITE_BODY_FONT_SIZES.length - 1}
+                        step={1}
+                        value={bodyFontSizeIndex}
+                        aria-valuemin={0}
+                        aria-valuemax={WRITE_BODY_FONT_SIZES.length - 1}
+                        aria-valuenow={bodyFontSizeIndex}
+                        aria-valuetext={
+                          WRITE_BODY_FONT_SIZES.find((x) => x.id === bodyFontSizeId)?.label ?? "标准"
+                        }
+                        onChange={(e) => {
+                          const i = Number(e.target.value);
+                          const row = WRITE_BODY_FONT_SIZES[i];
+                          if (row) setBodyFontSizeId(row.id);
+                        }}
+                      />
+                    </div>
+                    <span className="write-size-slider-a write-size-slider-a--max" aria-hidden>
+                      A
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         <aside className={`write-left-sidebar${sidebarOpen ? " is-open" : ""}`}>
@@ -515,14 +864,17 @@ export default function NovelWrite() {
                   className="editor-title editor-title--compact"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="章节标题"
+                  placeholder="标题"
                 />
                 <div className="field write-body-field">
                   <textarea
-                    className="textarea editor-body"
+                    ref={bodyTextareaRef}
+                    className={`textarea editor-body editor-body--${bodyFontId}`}
+                    style={{ fontSize: `${bodyFontSizePx}px` }}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder="正文内容"
+                    onKeyDown={handleBodyKeyDown}
+                    //placeholder="正文内容"
                   />
                 </div>
               </>
@@ -576,10 +928,40 @@ export default function NovelWrite() {
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">概要 + 可选章节标题；标题留空则由模型拟定。将写入本章并覆盖正文。</p>
+                <p className="hint">AI根据输入概要生成正文内容</p>
                 <div className="field">
-                  <label>本章概要</label>
+                  <div className="write-ai-field-label">
+                    <label htmlFor="write-ai-chapter-summary">本章概要</label>
+                    <button
+                      type="button"
+                      className="write-summary-inspire-btn"
+                      title="根据本书设定与此前各章概要，生成本章概要灵感（2～4 句）"
+                      aria-label="概要灵感"
+                      disabled={!hasLlm || summaryInspireBusy}
+                      onClick={() => void onSummaryInspire()}
+                    >
+                      {summaryInspireBusy ? (
+                        <span className="write-summary-inspire-btn__busy" aria-hidden />
+                      ) : (
+                        <svg
+                          className="write-summary-inspire-btn__icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          aria-hidden
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9.663 17h4.673M12 3v1m6.364 6.364l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                   <textarea
+                    id="write-ai-chapter-summary"
                     className="textarea"
                     rows={5}
                     value={summary}
@@ -597,8 +979,13 @@ export default function NovelWrite() {
                   />
                 </div>
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
-                  {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成正文与标题"}
+                  {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
                 </button>
+                {busy && genStreamPreview ? (
+                  <pre className="write-ai-stream-preview muted" style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap" }}>
+                    {genStreamPreview}
+                  </pre>
+                ) : null}
               </div>
             ) : null}
 
@@ -613,7 +1000,7 @@ export default function NovelWrite() {
                   placeholder="例如：加强对话节奏、删去重复描写…"
                 />
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunRewrite}>
-                  {busy ? "处理中…" : "应用改写"}
+                  {busy ? "处理中…" : "改写"}
                 </button>
               </div>
             ) : null}
@@ -629,7 +1016,7 @@ export default function NovelWrite() {
                   placeholder="例如：接一段回忆、补一场对话…"
                 />
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunAppend}>
-                  {busy ? "处理中…" : "应用追加"}
+                  {busy ? "处理中…" : "追加"}
                 </button>
               </div>
             ) : null}

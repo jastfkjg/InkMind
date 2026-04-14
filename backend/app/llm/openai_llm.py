@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 from openai import APIConnectionError, APIError, APITimeoutError, OpenAI, RateLimitError
 
 from app.config import settings
@@ -24,28 +26,31 @@ class OpenAICompatibleLLM(LLMProvider):
         self._model = model
         self._send_temperature = send_temperature
 
-    def complete(self, system: str, user: str) -> str:
+    def stream_complete(self, system: str, user: str) -> Iterator[str]:
         payload: dict = {
             "model": self._model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            "stream": True,
         }
         if self._send_temperature:
             payload["temperature"] = 0.85
         try:
-            r = self._client.chat.completions.create(**payload)
+            stream = self._client.chat.completions.create(**payload)
         except (APIError, APIConnectionError, APITimeoutError, RateLimitError) as e:
             raise wrap_openai_error(e) from e
         except Exception as e:
             raise LLMRequestError(str(e) or "OpenAI 兼容接口请求失败") from e
 
-        choice = r.choices[0]
-        content = choice.message.content
-        if not content:
-            return ""
-        return content.strip()
+        for chunk in stream:
+            choice = chunk.choices[0] if chunk.choices else None
+            if not choice:
+                continue
+            delta = choice.delta.content
+            if delta:
+                yield delta
 
 
 class OpenAILLM(OpenAICompatibleLLM):

@@ -65,11 +65,16 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
     setBusy(true);
     setErr("");
     try {
-      const { text } = await novelAiNaming(novelId, {
-        category: namingCategory,
-        description: d,
-        hint: namingHint || null,
-      });
+      setNamingResult("");
+      const { text } = await novelAiNaming(
+        novelId,
+        {
+          category: namingCategory,
+          description: d,
+          hint: namingHint || null,
+        },
+        (t) => setNamingResult((prev) => prev + t)
+      );
       setNamingResult(text);
     } catch (e) {
       setErr(apiErrorMessage(e));
@@ -84,19 +89,38 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
     setBusy(true);
     setErr("");
     setAskInput("");
+    const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
+    setAskHistory((h) => [...h, { role: "user", content: q }, { role: "assistant", content: "" }]);
+    let acc = "";
     try {
-      const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
-      const { reply } = await novelAiChat(novelId, {
-        message: q,
-        history: prior,
-      });
-      setAskHistory((h) => [
-        ...h,
-        { role: "user", content: q },
-        { role: "assistant", content: reply },
-      ]);
+      await novelAiChat(
+        novelId,
+        {
+          message: q,
+          history: prior,
+        },
+        (t) => {
+          acc += t;
+          setAskHistory((h) => {
+            const copy = [...h];
+            const last = copy[copy.length - 1];
+            if (last?.role === "assistant") {
+              copy[copy.length - 1] = { role: "assistant", content: acc };
+            }
+            return copy;
+          });
+        }
+      );
     } catch (e) {
       setErr(apiErrorMessage(e));
+      setAskHistory((h) => {
+        if (h.length < 2) return h;
+        const copy = [...h];
+        copy.pop();
+        copy.pop();
+        return copy;
+      });
+      setAskInput(q);
     } finally {
       setBusy(false);
     }

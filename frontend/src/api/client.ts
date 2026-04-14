@@ -7,6 +7,83 @@ const baseURL =
 
 export const api = axios.create({ baseURL });
 
+export type NdjsonAiResult = {
+  chapter?: Chapter;
+  title?: string;
+  reply?: string;
+  text?: string;
+  summary?: string;
+};
+
+/** POST NDJSON 流：每行一个 JSON，含 token 片段 `t` 与最终字段（chapter / reply / text / summary / title）。 */
+export async function postNdjsonAi(
+  path: string,
+  body: unknown,
+  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+): Promise<NdjsonAiResult> {
+  const token = getToken();
+  const url = `${baseURL}${path.startsWith("/") ? path : `/${path}`}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    try {
+      const j = JSON.parse(text) as { detail?: string | string[] };
+      const d = j.detail;
+      if (typeof d === "string") throw new Error(d);
+      if (Array.isArray(d)) throw new Error(d.map((x) => String(x)).join("; "));
+    } catch (e) {
+      if (e instanceof Error && !(e instanceof SyntaxError)) throw e;
+    }
+    throw new Error(text || res.statusText || `HTTP ${res.status}`);
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("无响应流");
+  const dec = new TextDecoder();
+  let buffer = "";
+  const out: NdjsonAiResult = {};
+  const onToken = options?.onToken;
+  const applyObj = (obj: Record<string, unknown>) => {
+    if (typeof obj.t === "string") onToken?.(obj.t);
+    if ("error" in obj && obj.error != null) throw new Error(String(obj.error));
+    if ("chapter" in obj) out.chapter = obj.chapter as Chapter;
+    if ("title" in obj && typeof obj.title === "string") out.title = obj.title;
+    if ("reply" in obj && typeof obj.reply === "string") out.reply = obj.reply;
+    if ("text" in obj && typeof obj.text === "string") out.text = obj.text;
+    if ("summary" in obj && typeof obj.summary === "string") out.summary = obj.summary;
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (value) buffer += dec.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, nl).trim();
+      buffer = buffer.slice(nl + 1);
+      if (!line) continue;
+      applyObj(JSON.parse(line) as Record<string, unknown>);
+    }
+    if (done) break;
+  }
+  const tail = buffer.trim();
+  if (tail) {
+    try {
+      applyObj(JSON.parse(tail) as Record<string, unknown>);
+    } catch (e) {
+      if (e instanceof SyntaxError) {
+        /* incomplete line — ignore */
+      } else throw e;
+    }
+  }
+  return out;
+}
+
 const TOKEN_KEY = "inkmind_token";
 
 export function getToken(): string | null {
@@ -120,14 +197,19 @@ export async function deleteChapter(novelId: number, chapterId: number) {
 export async function generateChapter(
   novelId: number,
   summary: string,
-  options?: { chapterId?: number | null; title?: string | null }
+  options?: { chapterId?: number | null; title?: string | null; onToken?: (chunk: string) => void }
 ) {
-  const { data } = await api.post<Chapter>(`/novels/${novelId}/chapters/generate`, {
-    summary,
-    chapter_id: options?.chapterId ?? null,
-    title: options?.title?.trim() ? options.title.trim() : null,
-  });
-  return data;
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/chapters/generate`,
+    {
+      summary,
+      chapter_id: options?.chapterId ?? null,
+      title: options?.title?.trim() ? options.title.trim() : null,
+    },
+    { onToken: options?.onToken }
+  );
+  if (!r.chapter) throw new Error("未收到章节数据");
+  return r.chapter;
 }
 
 export async function reviseChapter(
@@ -135,34 +217,62 @@ export async function reviseChapter(
   chapterId: number,
   instruction: string,
   llmProvider?: string | null,
-  mode: "rewrite" | "append" = "rewrite"
+  mode: "rewrite" | "append" = "rewrite",
+  onToken?: (chunk: string) => void
 ) {
-  const { data } = await api.post<Chapter>(`/novels/${novelId}/chapters/${chapterId}/revise`, {
-    instruction,
-    llm_provider: llmProvider || null,
-    mode,
-  });
-  return data;
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/chapters/${chapterId}/revise`,
+    {
+      instruction,
+      llm_provider: llmProvider || null,
+      mode,
+    },
+    { onToken }
+  );
+  if (!r.chapter) throw new Error("未收到章节数据");
+  return r.chapter;
 }
 
 export async function novelAiNaming(
   novelId: number,
-  payload: { category: "character" | "item" | "skill" | "other"; description: string; hint?: string | null }
+  payload: { category: "character" | "item" | "skill" | "other"; description: string; hint?: string | null },
+  onToken?: (chunk: string) => void
 ) {
-  const { data } = await api.post<{ text: string }>(`/novels/${novelId}/ai-naming`, {
-    category: payload.category,
-    description: payload.description,
-    hint: payload.hint?.trim() || null,
-  });
-  return data;
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/ai-naming`,
+    {
+      category: payload.category,
+      description: payload.description,
+      hint: payload.hint?.trim() || null,
+    },
+    { onToken }
+  );
+  const text = r.text ?? "";
+  return { text };
 }
 
 export async function novelAiChat(
   novelId: number,
-  payload: { message: string; history: { role: string; content: string }[] }
+  payload: { message: string; history: { role: string; content: string }[] },
+  onToken?: (chunk: string) => void
 ) {
-  const { data } = await api.post<{ reply: string }>(`/novels/${novelId}/ai-chat`, payload);
-  return data;
+  const r = await postNdjsonAi(`/novels/${novelId}/ai-chat`, payload, { onToken });
+  const reply = r.reply ?? "";
+  return { reply };
+}
+
+export async function novelAiChapterSummaryInspire(
+  novelId: number,
+  payload: { chapter_id: number | null },
+  onToken?: (chunk: string) => void
+) {
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/ai-chapter-summary-inspire`,
+    payload,
+    { onToken }
+  );
+  const summary = r.summary ?? "";
+  return { summary };
 }
 
 export async function fetchCharacters(novelId: number) {
