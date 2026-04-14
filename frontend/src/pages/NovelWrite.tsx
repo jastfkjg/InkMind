@@ -51,12 +51,17 @@ export default function NovelWrite() {
 
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
   activeIdRef.current = activeId;
+  const novelIdRef = useRef(id);
+  novelIdRef.current = id;
+  const lastLoadedChapterIdRef = useRef<number | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorSnapshotRef = useRef({ title: "", summary: "", content: "" });
+  editorSnapshotRef.current = { title, summary, content };
 
   const loadChapters = useCallback(async () => {
     const list = await fetchChapters(id);
@@ -73,30 +78,48 @@ export default function NovelWrite() {
   }, []);
 
   useEffect(() => {
+    if (!Number.isFinite(id)) return;
+
+    lastLoadedChapterIdRef.current = null;
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
+    setLoading(true);
+    setErr("");
+    setChapters([]);
+    setActiveId(null);
+    setTitle("");
+    setSummary("");
+    setContent("");
+
+    let cancelled = false;
     (async () => {
-      setErr("");
       try {
         const [list, meta] = await Promise.all([fetchChapters(id), fetchLlmProviders()]);
+        if (cancelled || novelIdRef.current !== id) return;
         setChapters(list);
         setLlmOptions(meta.available);
         if (list.length > 0) {
-          const first = list[0];
-          setActiveId(first.id);
-          setTitle(first.title);
-          setSummary(first.summary);
-          setContent(first.content);
+          setActiveId(list[0].id);
         } else {
           setActiveId(null);
-          setTitle("");
-          setSummary("");
-          setContent("");
         }
       } catch (e) {
-        setErr(apiErrorMessage(e));
+        if (!cancelled && novelIdRef.current === id) {
+          setErr(apiErrorMessage(e));
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled && novelIdRef.current === id) {
+          setLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -105,15 +128,21 @@ export default function NovelWrite() {
   }, [id]);
 
   useEffect(() => {
-    const ch = chapters.find((c) => c.id === activeId);
-    if (!ch) {
-      if (activeId === null) {
-        setTitle("");
-        setSummary("");
-        setContent("");
-      }
+    if (activeId === null) {
+      lastLoadedChapterIdRef.current = null;
+      setTitle("");
+      setSummary("");
+      setContent("");
       return;
     }
+    if (lastLoadedChapterIdRef.current === activeId) {
+      return;
+    }
+    const ch = chapters.find((c) => c.id === activeId);
+    if (!ch) {
+      return;
+    }
+    lastLoadedChapterIdRef.current = activeId;
     setTitle(ch.title);
     setSummary(ch.summary);
     setContent(ch.content);
@@ -136,22 +165,63 @@ export default function NovelWrite() {
     return true;
   }
 
-  function scheduleMergeAsyncSummary() {
-    window.setTimeout(async () => {
-      try {
-        const list = await fetchChapters(id);
-        const aid = activeIdRef.current;
-        setChapters(list);
-        const u = aid ? list.find((x) => x.id === aid) : undefined;
-        if (u) {
-          setSummary(u.summary);
-          setTitle(u.title);
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 2800);
+  async function flushSave(): Promise<void> {
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const aid = activeIdRef.current;
+    if (aid === null) return;
+    const { title: t, summary: s, content: c } = editorSnapshotRef.current;
+    const before = chapters.find((x) => x.id === aid);
+    if (!before) return;
+    if (before.title === t && before.summary === s && before.content === c) return;
+    const ch = await updateChapter(id, aid, { title: t, summary: s, content: c });
+    setChapters((prev) => prev.map((x) => (x.id === ch.id ? ch : x)));
   }
+
+  async function selectChapter(cid: number) {
+    if (cid === activeId) return;
+    setErr("");
+    try {
+      await flushSave();
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+      return;
+    }
+    setActiveId(cid);
+    if (narrow) setSidebarOpen(false);
+  }
+
+  useEffect(() => {
+    if (activeId === null) return;
+    const snap = chapters.find((c) => c.id === activeId);
+    if (!snap) return;
+    if (snap.title === title && snap.summary === summary && snap.content === content) return;
+    if (debounceTimerRef.current !== null) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    const scheduledForId = activeId;
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      if (activeIdRef.current !== scheduledForId) return;
+      void (async () => {
+        try {
+          const ch = await updateChapter(id, scheduledForId, { title, summary, content });
+          setChapters((prev) => prev.map((c) => (c.id === ch.id ? ch : c)));
+        } catch (e) {
+          setErr(apiErrorMessage(e));
+        }
+      })();
+    }, 850);
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [title, summary, content, activeId, id, chapters]);
 
   function toggleTool(t: AiTool) {
     if (!canOpenTool(t)) return;
@@ -159,71 +229,62 @@ export default function NovelWrite() {
     setErr("");
   }
 
-  async function onSaveChapter() {
-    if (!activeId) return;
-    setSaving(true);
-    setErr("");
-    const before = chapters.find((c) => c.id === activeId);
-    const contentChanged =
-      before !== undefined && (before.content || "").trim() !== (content || "").trim();
-    try {
-      const ch = await updateChapter(id, activeId, { title, summary, content });
-      setChapters((prev) => prev.map((c) => (c.id === ch.id ? ch : c)));
-      setSummary(ch.summary);
-      if (contentChanged) {
-        scheduleMergeAsyncSummary();
-      }
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function onAddChapter() {
+    const nid = id;
     setErr("");
     try {
+      await flushSave();
+      if (novelIdRef.current !== nid) return;
       const list = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       const nextOrder = list.length ? Math.max(...list.map((c) => c.sort_order)) + 1 : 0;
-      const ch = await createChapter(id, { title: "", sort_order: nextOrder });
+      const ch = await createChapter(nid, { title: "", sort_order: nextOrder });
+      if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       setChapters(full);
       setActiveId(ch.id);
-      setTitle(ch.title);
-      setSummary(ch.summary);
-      setContent(ch.content);
+      lastLoadedChapterIdRef.current = null;
       if (narrow) setSidebarOpen(false);
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
     }
   }
 
-  async function onDeleteChapter() {
-    if (!activeId) return;
-    if (!window.confirm("确定删除本章？")) return;
+  async function onDeleteChapterById(cid: number) {
+    const nid = id;
+    if (!window.confirm("确定删除该章节？")) return;
     setErr("");
     try {
-      await deleteChapter(id, activeId);
+      await flushSave();
+      if (novelIdRef.current !== nid) return;
+      await deleteChapter(nid, cid);
+      if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       setChapters(full);
-      if (full.length > 0) {
-        const n = full[0];
-        setActiveId(n.id);
-        setTitle(n.title);
-        setSummary(n.summary);
-        setContent(n.content);
-      } else {
-        setActiveId(null);
-        setTitle("");
-        setSummary("");
-        setContent("");
+      lastLoadedChapterIdRef.current = null;
+      if (cid === activeId) {
+        if (full.length > 0) {
+          setActiveId(full[0].id);
+        } else {
+          setActiveId(null);
+          setTitle("");
+          setSummary("");
+          setContent("");
+        }
       }
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
     }
   }
 
   async function onGenerate() {
+    const nid = id;
     const s = summary.trim();
     if (!s) {
       setErr("请填写本章概要");
@@ -237,24 +298,30 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     try {
-      const ch = await generateChapter(id, s, {
+      const ch = await generateChapter(nid, s, {
         chapterId: activeId,
         title: title.trim() || null,
       });
+      if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       setChapters(full);
       setActiveId(ch.id);
+      lastLoadedChapterIdRef.current = null;
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(ch.content);
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function onRunRewrite() {
+    const nid = id;
     if (!activeId || !rewriteInstr.trim()) {
       setErr("请填写改写说明");
       return;
@@ -266,21 +333,25 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     try {
-      const ch = await reviseChapter(id, activeId, rewriteInstr.trim(), preferredLlm, "rewrite");
+      const ch = await reviseChapter(nid, activeId, rewriteInstr.trim(), preferredLlm, "rewrite");
+      if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       setChapters(full);
       setContent(ch.content);
       setSummary(ch.summary);
       setRewriteInstr("");
-      scheduleMergeAsyncSummary();
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function onRunAppend() {
+    const nid = id;
     if (!activeId || !appendInstr.trim()) {
       setErr("请填写要追加的内容说明");
       return;
@@ -288,15 +359,18 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     try {
-      const ch = await reviseChapter(id, activeId, appendInstr.trim(), preferredLlm, "append");
+      const ch = await reviseChapter(nid, activeId, appendInstr.trim(), preferredLlm, "append");
+      if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
       setChapters(full);
       setContent(ch.content);
       setSummary(ch.summary);
       setAppendInstr("");
-      scheduleMergeAsyncSummary();
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -399,18 +473,34 @@ export default function NovelWrite() {
                   暂无章节
                 </p>
               ) : (
-                chapters.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`chapter-item${c.id === activeId ? " active" : ""}`}
-                    onClick={() => {
-                      setActiveId(c.id);
-                      if (narrow) setSidebarOpen(false);
-                    }}
-                  >
-                    {c.title?.trim() || `章节 #${c.id}`}
-                  </button>
+                chapters.map((c, idx) => (
+                  <div key={c.id} className="chapter-row">
+                    <button
+                      type="button"
+                      className={`chapter-item${c.id === activeId ? " active" : ""}`}
+                      onClick={() => void selectChapter(c.id)}
+                    >
+                      {c.title?.trim() || `第 ${idx + 1} 章`}
+                    </button>
+                    <button
+                      type="button"
+                      className="chapter-del"
+                      title="删除章节"
+                      aria-label="删除章节"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteChapterById(c.id);
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -434,15 +524,6 @@ export default function NovelWrite() {
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="正文内容"
                   />
-                </div>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
-                  <button type="button" className="btn btn-primary" disabled={saving} onClick={onSaveChapter}>
-                    {saving ? "保存中…" : "保存本章"}
-                  </button>
-                  <button type="button" className="btn btn-danger" onClick={onDeleteChapter}>
-                    删除本章
-                  </button>
                 </div>
               </>
             ) : (

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -21,8 +21,6 @@ from app.schemas.chapter import (
 )
 from app.services.chapter_gen import build_generation_prompt, parse_chapter_generation_json
 from app.services.chapter_llm import append_chapter_body, revise_chapter_body, suggest_chapter_title
-from app.services.chapter_tasks import regenerate_chapter_summary_task
-
 router = APIRouter(prefix="/novels/{novel_id}/chapters", tags=["chapters"])
 
 
@@ -145,7 +143,6 @@ def revise_chapter(
     body: ChapterReviseIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-    background_tasks: BackgroundTasks,
 ) -> Chapter:
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
@@ -186,8 +183,6 @@ def revise_chapter(
     db.add(ch)
     db.commit()
     db.refresh(ch)
-    if list_available_providers():
-        background_tasks.add_task(regenerate_chapter_summary_task, chapter_id, novel_id, user.id)
     return ch
 
 
@@ -248,23 +243,17 @@ def update_chapter(
     body: ChapterUpdate,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-    background_tasks: BackgroundTasks,
 ) -> Chapter:
     _get_owned_novel(db, user.id, novel_id)
     ch = db.get(Chapter, chapter_id)
     if ch is None or ch.novel_id != novel_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
-    old_content_stripped = (ch.content or "").strip()
     data = body.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(ch, k, v)
-    new_content_stripped = (ch.content or "").strip()
-    need_async_summary = "content" in data and new_content_stripped != old_content_stripped
     db.add(ch)
     db.commit()
     db.refresh(ch)
-    if need_async_summary and list_available_providers():
-        background_tasks.add_task(regenerate_chapter_summary_task, chapter_id, novel_id, user.id)
     return ch
 
 

@@ -584,24 +584,53 @@ select {
   overflow: auto;
   padding-right: 0.25rem;
 }
+.chapter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.35rem;
+}
 .chapter-item {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  margin-bottom: 0.35rem;
   font-size: 0.9rem;
   color: var(--ink);
 }
-.chapter-item:hover {
+.chapter-row:hover .chapter-item {
   background: var(--bg-deep);
 }
 .chapter-item.active {
   border-color: var(--border);
   background: var(--card);
   font-weight: 600;
+}
+.chapter-del {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.chapter-del:hover {
+  color: var(--danger, #b42318);
+  background: color-mix(in oklab, var(--danger, #b42318) 12%, transparent);
+}
+.chapter-del svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .editor-title {
