@@ -20,6 +20,7 @@ from app.schemas.ai import (
 from app.schemas.export import NovelExportPdfIn
 from app.schemas.novel import NovelCreate, NovelOut, NovelUpdate
 from app.services.novel_export_pdf import build_novel_pdf_bytes, safe_export_pdf_stem
+from app.observability.otel_ai import ai_span
 from app.services.novel_ai import (
     novel_chapter_summary_inspire_messages,
     novel_naming_messages,
@@ -87,9 +88,10 @@ def novel_ai_chat(
             return
         buf: list[str] = []
         try:
-            for part in llm.stream_complete(system, user_msg):
-                buf.append(part)
-                yield ndjson_line({"t": part})
+            with ai_span("novel.ai_chat.stream_complete", novel_id=novel_id):
+                for part in llm.stream_complete(system, user_msg):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
             yield ndjson_line({"reply": "".join(buf).strip()})
         except LLMRequestError as e:
             yield ndjson_line({"error": e.message})
@@ -122,9 +124,10 @@ def novel_ai_naming(
             return
         buf: list[str] = []
         try:
-            for part in llm.stream_complete(system, user_msg):
-                buf.append(part)
-                yield ndjson_line({"t": part})
+            with ai_span("novel.ai_naming.stream_complete", novel_id=novel_id):
+                for part in llm.stream_complete(system, user_msg):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
             yield ndjson_line({"text": "".join(buf).strip()})
         except LLMRequestError as e:
             yield ndjson_line({"error": e.message})
@@ -171,9 +174,10 @@ def novel_ai_chapter_summary_inspire_ep(
             return
         buf: list[str] = []
         try:
-            for part in llm.stream_complete(system, user_msg):
-                buf.append(part)
-                yield ndjson_line({"t": part})
+            with ai_span("novel.chapter_summary_inspire.stream_complete", novel_id=novel_id):
+                for part in llm.stream_complete(system, user_msg):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
             yield ndjson_line({"summary": "".join(buf).strip()})
         except LLMRequestError as e:
             yield ndjson_line({"error": e.message})

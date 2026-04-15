@@ -14,12 +14,16 @@ from app.models import Chapter
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
     ChapterCreate,
+    ChapterEvaluateIn,
+    ChapterEvaluateOut,
     ChapterGenerateIn,
     ChapterOut,
     ChapterReviseIn,
     ChapterSuggestTitleIn,
     ChapterUpdate,
 )
+from app.services.chapter_eval import evaluate_chapter
+from app.observability.otel_ai import ai_span
 from app.services.chapter_gen import build_generation_prompt, parse_chapter_generation_json
 from app.services.chapter_llm import (
     finalize_suggested_title,
@@ -75,9 +79,10 @@ def generate_chapter(
     fixed_title = req_title or None
     need_model_title = fixed_title is None
 
-    system, user_msg = build_generation_prompt(
-        db, novel, body.summary.strip(), target, fixed_title=fixed_title
-    )
+    with ai_span("chapter.generate.build_generation_prompt", novel_id=novel_id):
+        system, user_msg = build_generation_prompt(
+            db, novel, body.summary.strip(), target, fixed_title=fixed_title
+        )
 
     def gen():
         try:
@@ -87,12 +92,14 @@ def generate_chapter(
             return
         buf: list[str] = []
         try:
-            for part in llm.stream_complete(system, user_msg):
-                buf.append(part)
-                yield ndjson_line({"t": part})
+            with ai_span("chapter.generate.stream_complete", novel_id=novel_id):
+                for part in llm.stream_complete(system, user_msg):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
 
             raw = "".join(buf)
-            gen_title, body_text = parse_chapter_generation_json(raw, need_title=need_model_title)
+            with ai_span("chapter.generate.parse_chapter_generation_json", novel_id=novel_id):
+                gen_title, body_text = parse_chapter_generation_json(raw, need_title=need_model_title)
 
             if target is None:
                 max_order = db.scalar(
@@ -163,9 +170,10 @@ def suggest_title_for_chapter(
             return
         buf: list[str] = []
         try:
-            for part in llm.stream_complete(system, user_msg):
-                buf.append(part)
-                yield ndjson_line({"t": part})
+            with ai_span("chapter.suggest_title.stream_complete", novel_id=novel_id, chapter_id=chapter_id):
+                for part in llm.stream_complete(system, user_msg):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
         except LLMRequestError as e:
             yield ndjson_line({"error": e.message})
             return
@@ -180,6 +188,61 @@ def suggest_title_for_chapter(
         media_type="application/x-ndjson",
         headers=_STREAM_HEADERS,
     )
+
+
+@router.post("/{chapter_id}/ai-evaluate", response_model=ChapterEvaluateOut)
+def ai_evaluate_chapter(
+    novel_id: int,
+    chapter_id: int,
+    body: ChapterEvaluateIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ChapterEvaluateOut:
+    """根据当前章节（可选用编辑器未保存内容）给出弱点与去 AI 化分数。"""
+    novel = _get_owned_novel(db, user.id, novel_id)
+    available = list_available_providers()
+    prov = (body.llm_provider or "").lower().strip() or None
+    if prov and prov not in available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"该模型未配置或不可用。当前可用: {', '.join(available) or '无'}",
+        )
+    if not available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+
+    title_eff = ch.title if body.title is None else body.title
+    summary_eff = ch.summary if body.summary is None else body.summary
+    content_eff = ch.content if body.content is None else body.content
+    if not (content_eff or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="正文为空，无法评估；请先撰写正文或保存后再试",
+        )
+
+    try:
+        llm = resolve_llm_for_user(user, body.llm_provider)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    try:
+        with ai_span("chapter.ai_evaluate.complete", novel_id=novel_id, chapter_id=chapter_id):
+            return evaluate_chapter(
+                llm,
+                novel,
+                title=title_eff or "",
+                summary=summary_eff or "",
+                content=content_eff or "",
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
+    except LLMRequestError as e:
+        raise _llm_http_exc(e) from e
 
 
 @router.post("/{chapter_id}/revise")
@@ -226,18 +289,20 @@ def revise_chapter(
             if mode_eff == "append":
                 sys_a, usr_a = messages_append_chapter_body(novel, ch, body.instruction)
                 buf: list[str] = []
-                for part in llm.stream_complete(sys_a, usr_a):
-                    buf.append(part)
-                    yield ndjson_line({"t": part})
+                with ai_span("chapter.revise.append_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
+                    for part in llm.stream_complete(sys_a, usr_a):
+                        buf.append(part)
+                        yield ndjson_line({"t": part})
                 addition = "".join(buf).strip()
                 existing = (ch.content or "").strip()
                 new_content = addition if not existing else existing.rstrip() + "\n\n" + addition
             else:
                 sys_r, usr_r = messages_revise_chapter_body(novel, ch, body.instruction)
                 buf2: list[str] = []
-                for part in llm.stream_complete(sys_r, usr_r):
-                    buf2.append(part)
-                    yield ndjson_line({"t": part})
+                with ai_span("chapter.revise.rewrite_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
+                    for part in llm.stream_complete(sys_r, usr_r):
+                        buf2.append(part)
+                        yield ndjson_line({"t": part})
                 new_content = "".join(buf2).strip()
 
             ch.content = new_content

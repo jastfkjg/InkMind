@@ -61,3 +61,31 @@ class ChapterGenerateIn(BaseModel):
         default=None,
         description="若填写则固定为该章节标题，仅生成正文；留空则模型同时返回标题与正文（JSON）",
     )
+
+
+class ChapterEvaluateIssue(BaseModel):
+    aspect: str = Field(..., description="问题点简述")
+    detail: str = Field(..., description="为何不理想")
+
+
+class ChapterEvaluateOut(BaseModel):
+    issues: list[ChapterEvaluateIssue] = Field(default_factory=list)
+    de_ai_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="去 AI 化分数：越高越接近自然人类文风，越少套话与机械感",
+    )
+
+
+class ChapterEvaluateIn(BaseModel):
+    llm_provider: str | None = Field(
+        default=None,
+        description="留空则使用用户偏好或全局默认",
+    )
+    title: str | None = Field(default=None, description="评估时使用的章节标题；为空则用数据库中的值")
+    summary: str | None = Field(default=None, description="评估时使用的本章概要；为空则用数据库中的值")
+    content: str | None = Field(
+        default=None,
+        description="评估时使用的正文；为空则用数据库中的值。写作页应传当前编辑器内容。",
+    )

@@ -6,6 +6,7 @@ from sqlalchemy import inspect, text
 
 from app.config import settings
 from app.database import Base, engine
+from app.observability.otel_setup import setup_otel
 from app.routers import auth, chapters, characters, memos, meta, novels
 
 
@@ -57,13 +58,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(auth.router)
 app.include_router(novels.router)
 app.include_router(chapters.router)
 app.include_router(characters.router)
 app.include_router(memos.router)
 app.include_router(meta.router)
+
+setup_otel(app)
 
 
 @app.get("/health")

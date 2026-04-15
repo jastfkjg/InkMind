@@ -1,3 +1,4 @@
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +38,25 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+
+    # OpenTelemetry：AI 相关 Span + FastAPI/HTTPX 自动插桩（见 app.observability.otel_setup）
+    otel_enabled: bool = Field(default=False, validation_alias="OTEL_ENABLED")
+    otel_service_name: str = Field(default="inkmind-api", validation_alias="OTEL_SERVICE_NAME")
+    # 留空则 Span 输出到控制台；设置后走 OTLP HTTP，例如 http://127.0.0.1:4318
+    otel_exporter_otlp_endpoint: str | None = Field(
+        default=None,
+        validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT",
+    )
+
+    @field_validator("otel_enabled", mode="before")
+    @classmethod
+    def _normalize_otel_enabled(cls, v: object) -> bool:
+        if v is None or v == "":
+            return False
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        return s in ("1", "true", "yes", "on")
 
 
 settings = Settings()

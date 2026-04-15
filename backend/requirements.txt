@@ -14,3 +14,8 @@ anthropic==0.42.0
 python-dotenv==1.0.1
 email-validator==2.2.0
 fpdf2==2.8.2
+opentelemetry-api==1.28.2
+opentelemetry-sdk==1.28.2
+opentelemetry-instrumentation-fastapi==0.49b2
+opentelemetry-instrumentation-httpx==0.49b2
+opentelemetry-exporter-otlp-proto-http==1.28.2
