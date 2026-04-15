@@ -3,6 +3,8 @@ export type User = {
   email: string;
   display_name: string | null;
   preferred_llm_provider?: string | null;
+  /** 累计 LLM 流式调用成功次数（非 token） */
+  llm_call_count?: number;
 };
 
 export type Novel = {
@@ -44,4 +46,22 @@ export type Memo = {
   body: string;
   created_at: string;
   updated_at: string;
+};
+
+export type LlmUsageItem = {
+  id: number;
+  provider: string;
+  action: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  created_at: string;
+};
+
+export type LlmUsageSummary = {
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  items: LlmUsageItem[];
 };

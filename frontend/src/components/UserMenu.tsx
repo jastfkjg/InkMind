@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiErrorMessage, fetchLlmProviders } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 
@@ -7,6 +8,8 @@ const LLM_LABEL: Record<string, string> = {
   anthropic: "Anthropic",
   qwen: "通义千问",
   deepseek: "DeepSeek",
+  minimax: "MiniMax",
+  kimi: "Kimi",
 };
 
 function llmLabel(id: string) {
@@ -14,7 +17,7 @@ function llmLabel(id: string) {
 }
 
 export default function UserMenu() {
-  const { user, logout, updatePreferredLlm } = useAuth();
+  const { user, logout, updatePreferredLlm, refreshUser } = useAuth();
   const [open, setOpen] = useState(false);
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [defaultLlm, setDefaultLlm] = useState("");
@@ -30,6 +33,10 @@ export default function UserMenu() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (open) void refreshUser();
+  }, [open, refreshUser]);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -102,6 +109,14 @@ export default function UserMenu() {
             </p>
           )}
           {err ? <p className="form-error" style={{ marginTop: "0.5rem" }}>{err}</p> : null}
+          <Link
+            to="/usage"
+            className="btn btn-ghost"
+            style={{ width: "100%", marginTop: "0.5rem" }}
+            onClick={() => setOpen(false)}
+          >
+            Token 用量统计
+          </Link>
           <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.75rem" }} onClick={logout}>
             退出登录
           </button>

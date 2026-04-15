@@ -863,6 +863,35 @@ select {
   word-break: break-word;
 }
 
+.write-eval-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-deep);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.write-eval-score-num {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.write-eval-score-denom {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.write-eval-score-label {
+  font-size: 0.85rem;
+  margin-left: 0.15rem;
+}
+
 .editor-title--compact {
   margin-bottom: 0.4rem !important;
   font-size: 1.2rem !important;
@@ -1166,4 +1195,198 @@ select {
   stroke-linecap: round;
   stroke-linejoin: round;
   flex-shrink: 0;
+}
+
+/* 正文选区：扩写 / 润色（贴近选区上方的竖向浮层） */
+.write-selection-float {
+  position: fixed;
+  z-index: 180;
+  transform: translate(-100%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 7rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  padding: 0.2rem 0;
+  overflow: hidden;
+}
+
+.write-selection-float__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.86rem;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink);
+  width: 100%;
+}
+
+.write-selection-float__item:hover:not(:disabled) {
+  background: var(--bg-deep);
+}
+
+.write-selection-float__item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.write-selection-float__icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.write-selection-float__icon--stroke {
+  opacity: 0.55;
+}
+
+.write-selection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(28, 25, 23, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.write-selection-card {
+  width: min(100%, 28rem);
+  max-height: min(72vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  padding: 1rem 1.1rem 0.85rem;
+}
+
+.write-selection-card__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-ui);
+}
+
+.write-selection-card__body {
+  flex: 1;
+  min-height: 6rem;
+  max-height: 40vh;
+  overflow: auto;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-serif);
+  color: var(--ink);
+  padding: 0.25rem 0;
+}
+
+.write-selection-card__disclaimer {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.write-selection-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.write-selection-card__replace {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent-soft) !important;
+  color: #fff !important;
+}
+
+.write-selection-card__replace:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.write-selection-card__actions-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.write-selection-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.write-selection-icon-btn:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--bg-deep);
+}
+
+.write-selection-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.usage-summary-grid {
+  margin: 0 0 0.75rem;
+}
+
+.usage-summary-card .muted {
+  font-size: 0.82rem;
+}
+
+.usage-summary-num {
+  margin-top: 0.35rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+  font-family: var(--font-serif);
+}
+
+.usage-table-wrap {
+  overflow: auto;
+}
+
+.usage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.usage-table th,
+.usage-table td {
+  text-align: left;
+  padding: 0.55rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.usage-table th {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
 }

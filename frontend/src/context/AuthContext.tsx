@@ -17,6 +17,7 @@ type AuthState = {
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
   updatePreferredLlm: (preferred_llm_provider: string | null) => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -65,9 +66,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const t = getToken();
+    if (!t) return;
+    try {
+      const u = await authMe();
+      setUser(u);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, updatePreferredLlm }),
-    [user, loading, login, register, logout, updatePreferredLlm]
+    () => ({ user, loading, login, register, logout, updatePreferredLlm, refreshUser }),
+    [user, loading, login, register, logout, updatePreferredLlm, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

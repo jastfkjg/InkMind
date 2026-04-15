@@ -12,6 +12,7 @@ import NovelMemoForm from "@/pages/NovelMemoForm";
 import NovelSettings from "@/pages/NovelSettings";
 import NovelWrite from "@/pages/NovelWrite";
 import Register from "@/pages/Register";
+import UsageDashboard from "@/pages/UsageDashboard";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +40,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/usage"
+        element={
+          <ProtectedRoute>
+            <UsageDashboard />
           </ProtectedRoute>
         }
       />

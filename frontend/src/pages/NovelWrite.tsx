@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   apiErrorMessage,
   createChapter,
   deleteChapter,
+  chapterSelectionAi,
+  evaluateChapter,
   fetchChapters,
   fetchLlmProviders,
   generateChapter,
@@ -16,8 +18,9 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import type { Chapter } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
+import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 
-type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask";
+type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate";
 
 const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
   { key: "generate", line2: "生成" },
@@ -25,6 +28,7 @@ const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
   { key: "append", line2: "追加" },
   { key: "naming", line2: "起名" },
   { key: "ask", line2: "提问" },
+  { key: "evaluate", line2: "评估" },
 ];
 
 const WRITE_BODY_FONT_KEY = "inkmind_write_body_font";
@@ -145,12 +149,29 @@ export default function NovelWrite() {
   const [namingResult, setNamingResult] = useState("");
   const [askHistory, setAskHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [askInput, setAskInput] = useState("");
+  const [evaluateBusy, setEvaluateBusy] = useState(false);
+  const [evaluateResult, setEvaluateResult] = useState<{
+    issues: { aspect: string; detail: string }[];
+    de_ai_score: number;
+  } | null>(null);
 
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [summaryInspireBusy, setSummaryInspireBusy] = useState(false);
-  const [genStreamPreview, setGenStreamPreview] = useState("");
+  const [evaluateStreamText, setEvaluateStreamText] = useState("");
+  /** 正文选区：用于 AI 扩写/润色 */
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
+  const [selectionPanel, setSelectionPanel] = useState<{
+    mode: "expand" | "polish";
+    start: number;
+    end: number;
+    text: string;
+    streaming: string;
+  } | null>(null);
+  const [selectionMenuPos, setSelectionMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const selectionRangeRef = useRef<{ start: number; end: number } | null>(null);
+  selectionRangeRef.current = selectionRange;
   const [err, setErr] = useState("");
   const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
@@ -268,7 +289,18 @@ export default function NovelWrite() {
   useEffect(() => {
     setAskHistory([]);
     setAskInput("");
+    setEvaluateResult(null);
+    setEvaluateStreamText("");
+    setSelectionRange(null);
+    setSelectionPanel(null);
   }, [id]);
+
+  useEffect(() => {
+    setEvaluateResult(null);
+    setEvaluateStreamText("");
+    setSelectionRange(null);
+    setSelectionPanel(null);
+  }, [activeId]);
 
   useEffect(() => {
     if (activeId === null) {
@@ -295,11 +327,142 @@ export default function NovelWrite() {
     drawerEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [askHistory, rightTool]);
 
+  useEffect(() => {
+    if (!busy || rightTool !== "generate") return;
+    const el = bodyTextareaRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [content, busy, rightTool]);
+
   const hasBody = (content || "").trim().length > 0;
   const hasLlm = llmOptions.length > 0;
 
+  function captureSelection(): { start: number; end: number } | null {
+    const ta = bodyTextareaRef.current;
+    if (!ta) return null;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    if (s === e) return null;
+    return { start: s, end: e };
+  }
+
+  function syncSelectionFromTextarea() {
+    setSelectionRange(captureSelection());
+  }
+
+  useEffect(() => {
+    if (!selectionPanel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectionPanel(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectionPanel]);
+
+  async function runSelectionAi(
+    mode: "expand" | "polish",
+    rangeOverride?: { start: number; end: number }
+  ) {
+    const r = rangeOverride ?? selectionRange ?? captureSelection();
+    if (!r || r.start === r.end || activeId === null) return;
+    const sel = content.slice(r.start, r.end);
+    if (!sel.trim()) {
+      setErr("请先选中要处理的文字");
+      return;
+    }
+    if (!hasLlm) {
+      setErr("未配置 LLM");
+      return;
+    }
+    setErr("");
+    setSelectionPanel({ mode, start: r.start, end: r.end, text: "", streaming: "" });
+    setBusy(true);
+    try {
+      let acc = "";
+      const { text } = await chapterSelectionAi(
+        id,
+        activeId,
+        {
+          mode,
+          selected_text: sel,
+          chapter_content: content,
+          llm_provider: preferredLlm,
+        },
+        {
+          onToken: (t) => {
+            acc += t;
+            setSelectionPanel((p) => (p ? { ...p, streaming: acc } : null));
+          },
+        }
+      );
+      setSelectionPanel((p) => (p ? { ...p, text, streaming: text } : null));
+    } catch (e) {
+      setSelectionPanel(null);
+      setErr(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function closeSelectionPanel() {
+    setSelectionPanel(null);
+  }
+
+  function applySelectionReplace() {
+    if (!selectionPanel || !selectionPanel.text.trim()) return;
+    const { start, end, text } = selectionPanel;
+    setContent((c) => normalizeBodyParagraphIndent(c.slice(0, start) + text + c.slice(end)));
+    setSelectionPanel(null);
+    setSelectionRange(null);
+    setSelectionMenuPos(null);
+  }
+
+  async function copySelectionResult() {
+    if (!selectionPanel?.text) return;
+    try {
+      await navigator.clipboard.writeText(selectionPanel.text);
+    } catch {
+      setErr("复制失败，请手动复制");
+    }
+  }
+
+  const showSelectionBar =
+    Boolean(activeId) &&
+    Boolean(selectionRange && selectionRange.start !== selectionRange.end) &&
+    !selectionPanel;
+
+  useLayoutEffect(() => {
+    if (!showSelectionBar) {
+      setSelectionMenuPos(null);
+      return;
+    }
+    const ta = bodyTextareaRef.current;
+    const r = selectionRangeRef.current;
+    if (!ta || !r || r.start === r.end) {
+      setSelectionMenuPos(null);
+      return;
+    }
+    const update = () => {
+      const t = bodyTextareaRef.current;
+      const cur = selectionRangeRef.current;
+      if (!t || !cur || cur.start === cur.end) return;
+      const endPt = getCaretViewportPoint(t, cur.end);
+      const startPt = getCaretViewportPoint(t, cur.start);
+      const anchorTop = Math.min(endPt.top, startPt.top);
+      const anchorLeft = endPt.left;
+      setSelectionMenuPos({ top: anchorTop - 8, left: anchorLeft });
+    };
+    update();
+    ta.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      ta.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [showSelectionBar, selectionRange, content, bodyFontSizePx, bodyFontId]);
+
   function needsChapter(tool: AiTool): boolean {
-    return tool === "generate" || tool === "rewrite" || tool === "append";
+    return tool === "generate" || tool === "rewrite" || tool === "append" || tool === "evaluate";
   }
 
   function canOpenTool(tool: AiTool): boolean {
@@ -481,15 +644,16 @@ export default function NovelWrite() {
       const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，是否继续？");
       if (!ok) return;
     }
+    const savedContent = content;
     setBusy(true);
     setErr("");
-    setGenStreamPreview("");
+    setContent("");
     try {
       const ch = await generateChapter(nid, s, {
         chapterId: activeId,
         title: title.trim() || null,
         onToken: (t) => {
-          if (novelIdRef.current === nid) setGenStreamPreview((p) => p + t);
+          if (novelIdRef.current === nid) setContent((p) => p + t);
         },
       });
       if (novelIdRef.current !== nid) return;
@@ -504,9 +668,9 @@ export default function NovelWrite() {
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
+        setContent(savedContent);
       }
     } finally {
-      setGenStreamPreview("");
       setBusy(false);
     }
   }
@@ -663,6 +827,43 @@ export default function NovelWrite() {
       setAskInput(q);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onRunEvaluate() {
+    const aid = activeId;
+    if (aid === null) return;
+    if (!(content || "").trim()) {
+      setErr("请先撰写正文后再评估");
+      return;
+    }
+    setEvaluateBusy(true);
+    setErr("");
+    setEvaluateStreamText("");
+    setEvaluateResult(null);
+    try {
+      const data = await evaluateChapter(
+        id,
+        aid,
+        {
+          title,
+          summary,
+          content,
+          llm_provider: preferredLlm,
+        },
+        {
+          onToken: (t) => {
+            setEvaluateStreamText((prev) => prev + t);
+          },
+        }
+      );
+      setEvaluateResult(data);
+      setEvaluateStreamText("");
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+      setEvaluateStreamText("");
+    } finally {
+      setEvaluateBusy(false);
     }
   }
 
@@ -874,7 +1075,9 @@ export default function NovelWrite() {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     onKeyDown={handleBodyKeyDown}
-                    //placeholder="正文内容"
+                    onMouseUp={syncSelectionFromTextarea}
+                    onSelect={syncSelectionFromTextarea}
+                    onKeyUp={syncSelectionFromTextarea}
                   />
                 </div>
               </>
@@ -920,6 +1123,7 @@ export default function NovelWrite() {
               {rightTool === "append" && "AI 追加"}
               {rightTool === "naming" && "AI 起名"}
               {rightTool === "ask" && "AI 提问"}
+              {rightTool === "evaluate" && "AI 评估"}
             </span>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
               关闭
@@ -981,11 +1185,6 @@ export default function NovelWrite() {
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
                   {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
                 </button>
-                {busy && genStreamPreview ? (
-                  <pre className="write-ai-stream-preview muted" style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap" }}>
-                    {genStreamPreview}
-                  </pre>
-                ) : null}
               </div>
             ) : null}
 
@@ -1068,6 +1267,56 @@ export default function NovelWrite() {
               </div>
             ) : null}
 
+            {rightTool === "evaluate" && activeId ? (
+              <div className="write-ai-section">
+                <p className="hint">
+                AI评估本章内容
+                </p>
+                <p className="muted" style={{ margin: "0.25rem 0 0.75rem", fontSize: "0.82rem" }}>
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={evaluateBusy || busy}
+                  onClick={() => void onRunEvaluate()}
+                >
+                  {evaluateBusy ? "评估中…" : "评估本章"}
+                </button>
+                {evaluateBusy && evaluateStreamText ? (
+                  <pre
+                    className="write-ai-stream-preview muted"
+                    style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap", fontSize: "0.82rem" }}
+                  >
+                    {evaluateStreamText}
+                  </pre>
+                ) : null}
+                {evaluateResult ? (
+                  <div className="write-eval-block" style={{ marginTop: "1rem" }}>
+                    <div className="write-eval-score" aria-label="去 AI 化分数">
+                      <span className="write-eval-score-num">{evaluateResult.de_ai_score}</span>
+                      <span className="write-eval-score-denom">/ 100</span>
+                      <span className="muted write-eval-score-label">分数越高表示越接近自然人类创作</span>
+                    </div>
+                    {evaluateResult.issues.length === 0 ? (
+                      <p className="muted" style={{ margin: "0.75rem 0 0", fontSize: "0.9rem" }}>
+                        未发现明显问题（或正文过短）。你可改写后再试。
+                      </p>
+                    ) : (
+                      <ul className="write-eval-issues stack-sm" style={{ margin: "0.75rem 0 0", paddingLeft: "1.1rem" }}>
+                        {evaluateResult.issues.map((it, i) => (
+                          <li key={i} style={{ fontSize: "0.9rem" }}>
+                            <strong>{it.aspect}</strong>
+                            <span className="muted"> — </span>
+                            {it.detail}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {rightTool === "ask" ? (
               <div className="write-ai-chat">
                 <div className="write-ai-messages">
@@ -1107,6 +1356,124 @@ export default function NovelWrite() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {showSelectionBar && selectionMenuPos ? (
+        <div
+          className="write-selection-float"
+          role="toolbar"
+          aria-label="选中文本 AI"
+          style={{ top: selectionMenuPos.top, left: selectionMenuPos.left }}
+        >
+          <button
+            type="button"
+            className="write-selection-float__item"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void runSelectionAi("expand")}
+          >
+            <svg className="write-selection-float__icon" viewBox="0 0 24 24" aria-hidden>
+              <path
+                fill="currentColor"
+                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+              />
+            </svg>
+            扩写
+          </button>
+          <button
+            type="button"
+            className="write-selection-float__item"
+            disabled={busy}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void runSelectionAi("polish")}
+          >
+            <svg
+              className="write-selection-float__icon write-selection-float__icon--stroke"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              aria-hidden
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+              />
+            </svg>
+            润色
+          </button>
+        </div>
+      ) : null}
+
+      {selectionPanel ? (
+        <div
+          className="write-selection-overlay"
+          role="presentation"
+          onClick={closeSelectionPanel}
+        >
+          <div
+            className="write-selection-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="write-selection-card-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="write-selection-card-title" className="write-selection-card__title">
+              {selectionPanel.mode === "expand" ? "AI 扩写" : "AI 润色"}
+            </h2>
+            <div className="write-selection-card__body">
+              {selectionPanel.streaming || (busy ? "生成中…" : "")}
+            </div>
+            <p className="write-selection-card__disclaimer">
+              内容由 AI 生成，仅供参考；请自行核对后使用。
+            </p>
+            <div className="write-selection-card__actions">
+              <button
+                type="button"
+                className="btn btn-primary write-selection-card__replace"
+                disabled={busy || !selectionPanel.text.trim()}
+                onClick={applySelectionReplace}
+              >
+                替换
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={busy || !selectionPanel.text.trim()}
+                onClick={() => void copySelectionResult()}
+              >
+                复制
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={closeSelectionPanel}>
+                退出
+              </button>
+              <div className="write-selection-card__actions-right">
+                <button
+                  type="button"
+                  className="write-selection-icon-btn"
+                  title="重新生成"
+                  aria-label="重新生成"
+                  disabled={busy}
+                  onClick={() =>
+                    void runSelectionAi(selectionPanel.mode, {
+                      start: selectionPanel.start,
+                      end: selectionPanel.end,
+                    })
+                  }
+                >
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

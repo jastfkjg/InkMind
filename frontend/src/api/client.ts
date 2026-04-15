@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Chapter, Character, Memo, Novel, User } from "@/types";
+import type { Chapter, Character, LlmUsageSummary, Memo, Novel, User } from "@/types";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
@@ -7,12 +7,19 @@ const baseURL =
 
 export const api = axios.create({ baseURL });
 
+/** AI 评估结果（与后端 ChapterEvaluateOut 一致） */
+export type ChapterEvaluateResult = {
+  issues: { aspect: string; detail: string }[];
+  de_ai_score: number;
+};
+
 export type NdjsonAiResult = {
   chapter?: Chapter;
   title?: string;
   reply?: string;
   text?: string;
   summary?: string;
+  evaluate?: ChapterEvaluateResult;
 };
 
 /** POST NDJSON 流：每行一个 JSON，含 token 片段 `t` 与最终字段（chapter / reply / text / summary / title）。 */
@@ -58,6 +65,9 @@ export async function postNdjsonAi(
     if ("reply" in obj && typeof obj.reply === "string") out.reply = obj.reply;
     if ("text" in obj && typeof obj.text === "string") out.text = obj.text;
     if ("summary" in obj && typeof obj.summary === "string") out.summary = obj.summary;
+    if ("evaluate" in obj && obj.evaluate != null && typeof obj.evaluate === "object") {
+      out.evaluate = obj.evaluate as ChapterEvaluateResult;
+    }
   };
   while (true) {
     const { done, value } = await reader.read();
@@ -275,6 +285,48 @@ export async function novelAiChapterSummaryInspire(
   return { summary };
 }
 
+/** 评估当前章节：NDJSON 流式 token + 最终 evaluate。正文传编辑器当前值（可含未保存）。 */
+export async function evaluateChapter(
+  novelId: number,
+  chapterId: number,
+  payload: {
+    title?: string;
+    summary?: string;
+    content?: string;
+    llm_provider?: string | null;
+  },
+  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+): Promise<ChapterEvaluateResult> {
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/chapters/${chapterId}/ai-evaluate`,
+    payload,
+    { onToken: options?.onToken, signal: options?.signal }
+  );
+  if (!r.evaluate) throw new Error("未收到评估结果");
+  return r.evaluate;
+}
+
+/** 正文选区扩写 / 润色（NDJSON 流 + 最终 text） */
+export async function chapterSelectionAi(
+  novelId: number,
+  chapterId: number,
+  payload: {
+    mode: "expand" | "polish";
+    selected_text: string;
+    chapter_content: string;
+    llm_provider?: string | null;
+  },
+  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+): Promise<{ text: string }> {
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/chapters/${chapterId}/selection-ai`,
+    payload,
+    { onToken: options?.onToken, signal: options?.signal }
+  );
+  const text = r.text ?? "";
+  return { text };
+}
+
 export async function fetchCharacters(novelId: number) {
   const { data } = await api.get<Character[]>(`/novels/${novelId}/characters`);
   return data;
@@ -369,4 +421,10 @@ export async function exportNovelPdfBlob(novelId: number, chapterIds: number[] |
     }
     throw e;
   }
+}
+
+
+export async function fetchLlmUsage(limit = 100) {
+  const { data } = await api.get<LlmUsageSummary>(`/usage/llm?limit=${Math.max(1, Math.min(500, limit))}`);
+  return data;
 }
