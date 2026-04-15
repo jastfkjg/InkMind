@@ -9,6 +9,10 @@ function fmtNum(n: number) {
   return new Intl.NumberFormat("zh-CN").format(n);
 }
 
+function fmtK(n: number) {
+  return `${(n / 1000).toFixed(1)}K`;
+}
+
 function fmtTime(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -42,9 +46,6 @@ export default function UsageDashboard() {
       <header className="top-bar top-bar--dashboard">
         <div>
           <div className="brand brand--list">Token 用量统计</div>
-          <p className="muted" style={{ margin: "0.25rem 0 0" }}>
-            每次 LLM 调用的时间、类型与 token 估算值
-          </p>
         </div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <Link to="/" className="btn btn-ghost">
@@ -60,18 +61,18 @@ export default function UsageDashboard() {
       {err ? <p className="form-error">{err}</p> : null}
 
       {data ? (
-        <div className="grid-3 usage-summary-grid">
-          <div className="card usage-summary-card">
-            <div className="muted">总调用次数</div>
-            <div className="usage-summary-num">{fmtNum(data.total_calls)}</div>
+        <div className="card usage-summary-strip">
+          <div className="usage-summary-strip__item">
+            <div className="usage-summary-strip__label">总调用次数</div>
+            <div className="usage-summary-strip__value">{fmtNum(data.total_calls)}</div>
           </div>
-          <div className="card usage-summary-card">
-            <div className="muted">输入 Token（估算）</div>
-            <div className="usage-summary-num">{fmtNum(data.total_input_tokens)}</div>
+          <div className="usage-summary-strip__item">
+            <div className="usage-summary-strip__label">总输入 Token</div>
+            <div className="usage-summary-strip__value">{fmtK(data.total_input_tokens)}</div>
           </div>
-          <div className="card usage-summary-card">
-            <div className="muted">输出 Token（估算）</div>
-            <div className="usage-summary-num">{fmtNum(data.total_output_tokens)}</div>
+          <div className="usage-summary-strip__item">
+            <div className="usage-summary-strip__label">总输出 Token</div>
+            <div className="usage-summary-strip__value">{fmtK(data.total_output_tokens)}</div>
           </div>
         </div>
       ) : null}
@@ -103,9 +104,9 @@ export default function UsageDashboard() {
                   <td>{fmtTime(it.created_at)}</td>
                   <td>{it.action || "-"}</td>
                   <td>{it.provider || "-"}</td>
-                  <td>{fmtNum(it.input_tokens)}</td>
-                  <td>{fmtNum(it.output_tokens)}</td>
-                  <td>{fmtNum(it.total_tokens)}</td>
+                  <td>{fmtK(it.input_tokens)}</td>
+                  <td>{fmtK(it.output_tokens)}</td>
+                  <td>{fmtK(it.total_tokens)}</td>
                 </tr>
               ))}
             </tbody>
