@@ -82,7 +82,7 @@ def novel_ai_chat(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="AI提问")
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
@@ -118,7 +118,7 @@ def novel_ai_naming(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="AI起名")
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
@@ -168,7 +168,7 @@ def novel_ai_chapter_summary_inspire_ep(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="AI概要灵感")
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return

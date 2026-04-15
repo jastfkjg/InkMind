@@ -15,20 +15,21 @@ from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
     ChapterCreate,
     ChapterEvaluateIn,
-    ChapterEvaluateOut,
     ChapterGenerateIn,
     ChapterOut,
     ChapterReviseIn,
+    ChapterSelectionAiIn,
     ChapterSuggestTitleIn,
     ChapterUpdate,
 )
-from app.services.chapter_eval import evaluate_chapter
+from app.services.chapter_eval import parse_evaluation_json, stream_evaluate_tokens
 from app.observability.otel_ai import ai_span
 from app.services.chapter_gen import build_generation_prompt, parse_chapter_generation_json
 from app.services.chapter_llm import (
     finalize_suggested_title,
     messages_append_chapter_body,
     messages_revise_chapter_body,
+    messages_selection_ai,
     messages_suggest_chapter_title,
 )
 
@@ -86,7 +87,7 @@ def generate_chapter(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="AI生成")
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
@@ -164,7 +165,7 @@ def suggest_title_for_chapter(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="AI标题")
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
@@ -190,14 +191,14 @@ def suggest_title_for_chapter(
     )
 
 
-@router.post("/{chapter_id}/ai-evaluate", response_model=ChapterEvaluateOut)
+@router.post("/{chapter_id}/ai-evaluate")
 def ai_evaluate_chapter(
     novel_id: int,
     chapter_id: int,
     body: ChapterEvaluateIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-) -> ChapterEvaluateOut:
+):
     """根据当前章节（可选用编辑器未保存内容）给出弱点与去 AI 化分数。"""
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
@@ -226,23 +227,119 @@ def ai_evaluate_chapter(
         )
 
     try:
-        llm = resolve_llm_for_user(user, body.llm_provider)
+        llm = resolve_llm_for_user(user, body.llm_provider, db=db, action="AI评估")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    try:
-        with ai_span("chapter.ai_evaluate.complete", novel_id=novel_id, chapter_id=chapter_id):
-            return evaluate_chapter(
-                llm,
-                novel,
-                title=title_eff or "",
-                summary=summary_eff or "",
-                content=content_eff or "",
-            )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e)) from e
-    except LLMRequestError as e:
-        raise _llm_http_exc(e) from e
+    def gen():
+        buf: list[str] = []
+        try:
+            with ai_span("chapter.ai_evaluate.stream", novel_id=novel_id, chapter_id=chapter_id):
+                for part in stream_evaluate_tokens(
+                    llm,
+                    novel,
+                    title=title_eff or "",
+                    summary=summary_eff or "",
+                    content=content_eff or "",
+                ):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
+            raw = "".join(buf)
+            with ai_span("chapter.ai_evaluate.parse", novel_id=novel_id, chapter_id=chapter_id):
+                out = parse_evaluation_json(raw)
+            yield ndjson_line({"evaluate": out.model_dump(mode="json")})
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "评估失败"})
+
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers=_STREAM_HEADERS,
+    )
+
+
+def _verify_unique_selection(chapter_content: str, selected_text: str) -> None:
+    if selected_text not in chapter_content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="选区与当前正文不一致，请重试或重新选中",
+        )
+    if chapter_content.count(selected_text) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="选中片段在正文中出现多次，请扩大选区或改选唯一片段",
+        )
+
+
+@router.post("/{chapter_id}/selection-ai")
+def selection_ai(
+    novel_id: int,
+    chapter_id: int,
+    body: ChapterSelectionAiIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """正文选区：扩写或润色（NDJSON 流 + 最终 text）。"""
+    novel = _get_owned_novel(db, user.id, novel_id)
+    available = list_available_providers()
+    prov = (body.llm_provider or "").lower().strip() or None
+    if prov and prov not in available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"该模型未配置或不可用。当前可用: {', '.join(available) or '无'}",
+        )
+    if not available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key",
+        )
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    if not (body.chapter_content or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="章节正文为空")
+    _verify_unique_selection(body.chapter_content, body.selected_text)
+
+    def gen():
+        try:
+            llm = resolve_llm_for_user(user, body.llm_provider, db=db, action=("AI扩写" if body.mode == "expand" else "AI润色"))
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+            return
+        sys_m, usr_m = messages_selection_ai(
+            novel,
+            ch,
+            chapter_content_full=body.chapter_content,
+            selected_text=body.selected_text,
+            mode=body.mode,
+        )
+        buf: list[str] = []
+        try:
+            with ai_span(
+                "chapter.selection_ai.stream",
+                novel_id=novel_id,
+                chapter_id=chapter_id,
+                mode=body.mode,
+            ):
+                for part in llm.stream_complete(sys_m, usr_m):
+                    buf.append(part)
+                    yield ndjson_line({"t": part})
+            raw = "".join(buf).strip()
+            yield ndjson_line({"text": raw})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "请求失败"})
+
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers=_STREAM_HEADERS,
+    )
 
 
 @router.post("/{chapter_id}/revise")
@@ -281,7 +378,7 @@ def revise_chapter(
 
     def gen():
         try:
-            llm = resolve_llm_for_user(user, body.llm_provider)
+            llm = resolve_llm_for_user(user, body.llm_provider, db=db, action=("AI续写" if mode_eff == "append" else "AI改写"))
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return

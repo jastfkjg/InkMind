@@ -1,4 +1,7 @@
-from pydantic import Field, field_validator
+import os
+from typing import Self
+
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +37,20 @@ class Settings(BaseSettings):
     deepseek_send_temperature: bool = True
     deepseek_timeout: float = 120.0
 
+    # MiniMax OpenAI 兼容：https://api.minimax.io/v1
+    minimax_api_key: str | None = None
+    minimax_base_url: str = "https://api.minimax.io/v1"
+    minimax_model: str = "MiniMax-M2"
+    minimax_send_temperature: bool = True
+    minimax_timeout: float = 120.0
+
+    # Kimi（月之暗面 Moonshot，OpenAI 兼容）：MOONSHOT_API_KEY；亦可单独设 KIMI_API_KEY
+    moonshot_api_key: str | None = None
+    moonshot_base_url: str = "https://api.moonshot.ai/v1"
+    moonshot_model: str = "moonshot-v1-8k"
+    moonshot_send_temperature: bool = True
+    moonshot_timeout: float = 120.0
+
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
@@ -57,6 +74,14 @@ class Settings(BaseSettings):
             return v
         s = str(v).strip().lower()
         return s in ("1", "true", "yes", "on")
+
+    @model_validator(mode="after")
+    def _moonshot_key_from_kimi_env(self) -> Self:
+        if self.moonshot_api_key is None:
+            k = os.getenv("KIMI_API_KEY", "").strip()
+            if k:
+                object.__setattr__(self, "moonshot_api_key", k)
+        return self
 
 
 settings = Settings()

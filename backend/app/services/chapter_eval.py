@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from app.llm.base import LLMProvider
@@ -51,9 +52,15 @@ def build_evaluate_messages(
     return system, user_msg
 
 
-def evaluate_chapter(llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str) -> ChapterEvaluateOut:
+def stream_evaluate_tokens(
+    llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str
+) -> Iterator[str]:
     system, user_msg = build_evaluate_messages(novel, title=title, summary=summary, content=content)
-    raw = llm.complete(system, user_msg)
+    yield from llm.stream_complete(system, user_msg)
+
+
+def evaluate_chapter(llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str) -> ChapterEvaluateOut:
+    raw = "".join(stream_evaluate_tokens(llm, novel, title=title, summary=summary, content=content))
     return parse_evaluation_json(raw)
 
 

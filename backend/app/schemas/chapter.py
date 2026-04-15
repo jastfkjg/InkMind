@@ -89,3 +89,17 @@ class ChapterEvaluateIn(BaseModel):
         default=None,
         description="评估时使用的正文；为空则用数据库中的值。写作页应传当前编辑器内容。",
     )
+
+
+class ChapterSelectionAiIn(BaseModel):
+    """正文选区：扩写或润色。chapter_content 为当前编辑器全文，用于校验选区。"""
+    mode: Literal["expand", "polish"] = Field(..., description="expand=扩写；polish=润色")
+    selected_text: str = Field(..., min_length=1, max_length=8000, description="选中的片段")
+    chapter_content: str = Field(
+        ...,
+        description="当前章节完整正文（与编辑器一致），服务端校验选区是否属于该文本",
+    )
+    llm_provider: str | None = Field(
+        default=None,
+        description="留空则使用用户偏好或全局默认",
+    )

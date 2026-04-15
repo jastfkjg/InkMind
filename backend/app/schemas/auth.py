@@ -17,6 +17,7 @@ class UserOut(BaseModel):
     email: str
     display_name: str | None
     preferred_llm_provider: str | None = None
+    llm_call_count: int = 0
 
     model_config = {"from_attributes": True}
 

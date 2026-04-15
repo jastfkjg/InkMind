@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from app.config import settings
 from app.database import Base, engine
 from app.observability.otel_setup import setup_otel
-from app.routers import auth, chapters, characters, memos, meta, novels
+from app.routers import auth, chapters, characters, memos, meta, novels, usage
 
 
 def _migrate_sqlite() -> None:
@@ -24,6 +24,8 @@ def _migrate_sqlite() -> None:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN preferred_llm_provider VARCHAR(128)")
                 )
+            if "llm_call_count" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN llm_call_count INTEGER NOT NULL DEFAULT 0"))
             if "novels" in tables:
                 ncols = {c["name"] for c in insp.get_columns("novels")}
                 if "outline" in ncols and "background" not in ncols:
@@ -64,6 +66,7 @@ app.include_router(chapters.router)
 app.include_router(characters.router)
 app.include_router(memos.router)
 app.include_router(meta.router)
+app.include_router(usage.router)
 
 setup_otel(app)
 

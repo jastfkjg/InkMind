@@ -19,7 +19,7 @@ def regenerate_chapter_summary_task(chapter_id: int, novel_id: int, user_id: int
         if not list_available_providers():
             return
         try:
-            llm = resolve_llm_for_user(user, None)
+            llm = resolve_llm_for_user(user, None, db=db, action="自动摘要")
             chapter.summary = summarize_chapter_body(llm, chapter.title, chapter.content or "")
         except Exception:
             logger.exception("regenerate chapter summary failed chapter_id=%s", chapter_id)

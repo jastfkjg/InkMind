@@ -20,9 +20,13 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     preferred_llm_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    llm_call_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
+    llm_usage_events: Mapped[list["LLMUsageEvent"]] = relationship(
+        "LLMUsageEvent", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Novel(Base):
@@ -100,3 +104,18 @@ class NovelMemo(Base):
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="memos")
+
+
+class LLMUsageEvent(Base):
+    __tablename__ = "llm_usage_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(64), default="")
+    action: Mapped[str] = mapped_column(String(128), default="")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    user: Mapped["User"] = relationship("User", back_populates="llm_usage_events")

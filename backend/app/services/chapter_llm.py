@@ -1,3 +1,5 @@
+from typing import Literal
+
 from app.llm.base import LLMProvider
 from app.models import Chapter, Novel
 
@@ -5,6 +7,57 @@ _REVISE_CONTENT_MAX = 10000
 _APPEND_EXISTING_MAX = 12000
 _SUMMARY_INPUT_MAX = 8000
 _SUGGEST_EXCERPT_MAX = 900
+_SELECTION_MAX = 8000
+_SELECTION_CTX_MAX = 12000
+
+
+def messages_selection_ai(
+    novel: Novel,
+    chapter: Chapter,
+    *,
+    chapter_content_full: str,
+    selected_text: str,
+    mode: Literal["expand", "polish"],
+) -> tuple[str, str]:
+    """选区扩写 / 润色。chapter_content_full 为当前编辑器中的章节全文。"""
+    sel = (selected_text or "").strip()[:_SELECTION_MAX]
+    overview = (
+        f"【作品】{novel.title or '未命名'}\n"
+        f"【类型】{novel.genre or '未指定'}\n"
+        f"【文风】{(novel.writing_style or '未指定')[:1600]}\n"
+        f"【章节标题】{chapter.title or '（无）'}\n"
+        f"【本章概要】\n{(chapter.summary or '（无）')[:2000]}\n"
+    )
+    full_ctx = (chapter_content_full or "").strip()[:_SELECTION_CTX_MAX]
+    if mode == "expand":
+        system = (
+            "你是小说作者。用户选中了文中一段文字，请对其进行扩写。"
+            "保持与全书类型、文风一致、情节连贯；增加细节、描写或节奏，使片段更丰满。"
+            "只输出扩写后的正文片段，不要解释、不要前后缀、不要引用说明。"
+        )
+        user_msg = f"""{overview}
+【全文节选供上下文参考】
+{full_ctx or '（无）'}
+
+【选中片段】
+{sel}
+
+请只输出扩写后的正文片段，不要包含标题或说明。"""
+    else:
+        system = (
+            "你是小说编辑。用户选中了文中一段文字，请对其进行润色。"
+            "保持原意与叙事节奏，优化句式、用词与节奏；避免口水套话与模板化表达。"
+            "只输出润色后的正文片段，不要解释、不要前后缀。"
+        )
+        user_msg = f"""{overview}
+【全文节选供上下文参考】
+{full_ctx or '（无）'}
+
+【选中片段】
+{sel}
+
+请只输出润色后的正文片段。"""
+    return system, user_msg
 
 
 def summarize_chapter_body(llm: LLMProvider, title: str, content: str) -> str:
