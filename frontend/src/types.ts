@@ -63,5 +63,7 @@ export type LlmUsageSummary = {
   total_input_tokens: number;
   total_output_tokens: number;
   total_tokens: number;
+  token_quota: number;
+  token_remaining: number;
   items: LlmUsageItem[];
 };

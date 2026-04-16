@@ -30,10 +30,14 @@ def llm_usage(
         .filter(LLMUsageEvent.user_id == user.id)
         .one()
     )
+    quota = user.token_quota or 0
+    total_all_int = int(total_all or 0)
     return LLMUsageListOut(
         total_calls=int(total_calls or 0),
         total_input_tokens=int(total_in or 0),
         total_output_tokens=int(total_out or 0),
-        total_tokens=int(total_all or 0),
+        total_tokens=total_all_int,
+        token_quota=quota,
+        token_remaining=max(0, quota - total_all_int),
         items=[LLMUsageItemOut.model_validate(x) for x in rows],
     )

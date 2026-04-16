@@ -21,6 +21,7 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     preferred_llm_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
     llm_call_count: Mapped[int] = mapped_column(Integer, default=0)
+    token_quota: Mapped[int] = mapped_column(Integer, default=500000)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")

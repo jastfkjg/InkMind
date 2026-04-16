@@ -1386,7 +1386,7 @@ select {
 .usage-summary-strip {
   margin: 0 0 0.75rem;
   display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  grid-template-columns: repeat(5, 1fr);
   gap: 0;
   padding: 0;
 }
@@ -1406,7 +1406,7 @@ select {
 }
 
 .usage-summary-strip__value {
-  font-size: 1.7rem;
+  font-size: 1.25rem;
   line-height: 1.25;
   font-family: var(--font-serif);
   font-weight: 600;
@@ -1415,7 +1415,7 @@ select {
 
 @media (max-width: 820px) {
   .usage-summary-strip {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
   .usage-summary-strip__item + .usage-summary-strip__item {
     border-left: none;

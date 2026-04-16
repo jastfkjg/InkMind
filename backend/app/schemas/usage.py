@@ -20,4 +20,6 @@ class LLMUsageListOut(BaseModel):
     total_input_tokens: int
     total_output_tokens: int
     total_tokens: int
+    token_quota: int
+    token_remaining: int
     items: list[LLMUsageItemOut]

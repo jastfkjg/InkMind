@@ -63,6 +63,19 @@ export default function UsageDashboard() {
       {data ? (
         <div className="card usage-summary-strip">
           <div className="usage-summary-strip__item">
+            <div className="usage-summary-strip__label">剩余配额</div>
+            <div
+              className="usage-summary-strip__value"
+              style={{ color: data.token_remaining < 50000 ? "#e53e3e" : undefined }}
+            >
+              {fmtK(data.token_remaining)}
+            </div>
+          </div>
+          <div className="usage-summary-strip__item">
+            <div className="usage-summary-strip__label">总消耗</div>
+            <div className="usage-summary-strip__value">{fmtK(data.total_tokens)}</div>
+          </div>
+          <div className="usage-summary-strip__item">
             <div className="usage-summary-strip__label">总调用次数</div>
             <div className="usage-summary-strip__value">{fmtNum(data.total_calls)}</div>
           </div>

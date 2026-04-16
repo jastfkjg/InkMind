@@ -15,6 +15,9 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./inkmind.db"
 
+    # 用户 Token 配额（默认 500K）
+    token_quota: int = 500000
+
     default_llm_provider: str = "openai"
     openai_api_key: str | None = None
     openai_base_url: str | None = None
