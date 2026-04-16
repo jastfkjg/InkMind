@@ -30,6 +30,7 @@ frontend/dist/
 .env
 .env.*
 !**/.env.example
+!frontend/.env.production
 
 # Local SQLite (regenerate with app startup)
 *.db
