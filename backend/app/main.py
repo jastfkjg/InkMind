@@ -45,7 +45,7 @@ def _migrate_sqlite() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, checkfirst=True)
     _migrate_sqlite()
     yield
 
