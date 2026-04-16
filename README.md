@@ -34,17 +34,17 @@
 - **多 LLM 支持** — OpenAI / Anthropic / 通义千问 / DeepSeek / MiniMax / Kimi，一键切换
 - **作品管理** — 大纲、类型（文学/玄幻/都市/爱情/哲学等）、写作风格、背景设定
 - **章节编辑** — 增删改排序、正文在页编辑、字体调整
-- **人物系统** — 人物卡管理，含角色关系（生成时自动纳入上下文）
+- **人物系统** — 人物管理
 - **作品导出** — 支持多种格式导出已完成的章节
-- **Token 统计** — 各模型用量、调用次数、费用一目了然
+- **Token 统计** — 各模型用量、调用次数一目了然
 
 ## 预览
 
 ### 作品列表
-<img src="images/novallistpage.png" width="800"/>
+<img src="images/novellistpage.png" width="800"/>
 
 ### 作品设定
-<img src="images/novelsettingpage.png" width="800"/>
+<img src="images/novelsettingpage.png" width="600"/>
 
 作品信息、类型、写作风格与背景设定。
 
@@ -59,12 +59,12 @@
 右侧 AI 工具栏提供：生成、改写、追加、提问、评估五大功能。
 
 ### AI 评估
-<img src="images/ai-evaluate.png" width="800"/>
+<img src="images/ai-evaluate.png" width="600"/>
 
 AI 评估当前章节存在的问题与不足，给出具体改进建议。
 
 ### AI 生成
-<img src="images/ai-generate.png" width="800"/>
+<img src="images/ai-generate.png" width="600"/>
 
 ### 选中扩写 & 润色
 <img src="images/textaugmentation.png" width="800"/>
@@ -176,7 +176,7 @@ InkMind/
 |------|------|
 | 后端 | FastAPI · Uvicorn · SQLAlchemy 2.0 · Pydantic 2.10 |
 | 前端 | React 18 · Vite 6 · TypeScript 5.7 · React Router 7 · Axios |
-| 数据库 | SQLite（默认）· PostgreSQL（生产推荐） |
+| 数据库 | SQLite（默认）· |
 | 认证 | JWT (python-jose) · bcrypt |
 | AI | OpenAI · Anthropic · 通义千问 · DeepSeek · MiniMax · Kimi |
 | 可观测性 | OpenTelemetry（支持 OTLP 导出） |
