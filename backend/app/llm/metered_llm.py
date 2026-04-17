@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Iterator
 import logging
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.llm.base import LLMProvider
-from app.llm.token_estimator import estimate_tokens
+from app.llm.token_counter import count_tokens
 from app.models import LLMUsageEvent, User
 
 log = logging.getLogger(__name__)
@@ -27,8 +28,8 @@ def _record_usage(
     if u is None:
         return
     u.llm_call_count = int(u.llm_call_count or 0) + 1
-    in_tokens = estimate_tokens(input_text)
-    out_tokens = estimate_tokens(output_text)
+    in_tokens = count_tokens(input_text, provider)
+    out_tokens = count_tokens(output_text, provider)
     evt = LLMUsageEvent(
         user_id=user_id,
         provider=provider,
