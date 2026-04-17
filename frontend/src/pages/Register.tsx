@@ -61,7 +61,7 @@ export default function Register() {
             />
           </div>
           <div className="field">
-            <label htmlFor="dn">昵称（可选）</label>
+            <label htmlFor="dn">用户名（可选）</label>
             <input
               id="dn"
               className="input"
