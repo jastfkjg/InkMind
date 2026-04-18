@@ -1,10 +1,26 @@
 import json
 import re
-from typing import Any
+from typing import Annotated, Any
 
 from sqlalchemy.orm import Session
 
+from app.agent.memory import NovelMemory
+from app.agent.react import ReActAgent
+from app.agent.tools import (
+    GenerateChapterTool,
+    GetCharacterProfilesTool,
+    GetNovelContextTool,
+    GetPreviousChaptersTool,
+)
+from app.llm.base import LLMProvider
+from app.llm.ndjson_stream import filter_think_chunks
 from app.models import Chapter, Novel
+from app.services.chapter_llm import (
+    ensure_unique_chapter_title,
+    finalize_suggested_title,
+    list_existing_chapter_titles,
+    messages_suggest_chapter_title,
+)
 
 _BG_MAX = 2200
 _WRITING_STYLE_MAX = 700
@@ -55,31 +71,13 @@ def build_generation_prompt(
     chapter_summary: str,
     target_chapter: Chapter | None,
     *,
-    fixed_title: str | None,
+    fixed_title: str | None = None,
 ) -> tuple[str, str]:
-    chapters = (
-        db.query(Chapter)
-        .filter(Chapter.novel_id == novel.id)
-        .order_by(Chapter.sort_order, Chapter.id)
-        .all()
-    )
+    """构建章节生成的 system prompt 和 user prompt。
 
-    prev_snippets = []
-    for ch in chapters:
-        if target_chapter and ch.id == target_chapter.id:
-            continue
-        if ch.summary:
-            line = f"【{ch.title or '无标题'}】概要：{_clip(ch.summary, _SUMMARY_LINE_MAX)}"
-            prev_snippets.append(line)
-    prev_block = (
-        "\n\n".join(prev_snippets[-_PREV_CHAPTER_COUNT:])
-        if prev_snippets
-        else "（尚无其他章节概要）"
-    )
-
-    bg = _clip(novel.background, _BG_MAX) or "（未填写）"
-    ws = _clip(novel.writing_style, _WRITING_STYLE_MAX) or "未指定"
-    task_sum = _clip(chapter_summary, _TASK_SUMMARY_MAX) or "（无）"
+    内部使用 NovelMemory 统一管理上下文检索（章节召回 + 人物召回）。
+    """
+    memory = NovelMemory(db, novel)
 
     if fixed_title:
         system = """你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章正文。
@@ -97,25 +95,255 @@ def build_generation_prompt(
 2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
 4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
-
         title_line = ""
         if target_chapter and (target_chapter.title or "").strip():
             title_line = f"\n【当前章节已有标题（可改写或沿用模型生成的 title）】{target_chapter.title.strip()}"
 
-    user = f"""【作品标题】{novel.title}
-【类型】{novel.genre or '未指定'}
-【文风说明】{ws}
+    context = memory.build_context(chapter_summary)
 
-【背景】
-{bg}
-
-【已有章节语境】
-{prev_block}
+    user = f"""{context}
 
 【本章任务】
-本章概要：{task_sum}
+本章概要：{_clip(chapter_summary, _TASK_SUMMARY_MAX) or '（无）'}
 {title_line}
 
 请严格按 system 要求的 JSON 结构输出。"""
 
     return system, user
+
+
+def run_react_chapter_generation(
+    db: Session,
+    novel: Novel,
+    chapter_summary: str,
+    target_chapter: Chapter | None,
+    llm: LLMProvider,
+    *,
+    fixed_title: str | None = None,
+    max_iterations: int = 8,
+    new_sort_order: int | None = None,
+):
+    """使用 ReAct Agent 执行章节生成（推理-工具-生成循环）。
+
+    流程：
+    1. Agent 推理是否需要调用工具获取上下文
+    2. 工具（获取作品设定/前文概要/人物）返回 Observation
+    3. 循环直到 Agent 认为上下文足够，调用 generate_chapter 工具
+    4. generate_chapter 工具流式输出正文内容（纯文本）
+
+    Yields:
+        str: 正文 chunks（实时流式输出）
+        Chapter: 最终章节对象（生成完毕后）
+    """
+    from app.models import Chapter as ChapterModel
+    from sqlalchemy import func, select
+
+    tools = [
+        GetPreviousChaptersTool(db, novel),
+        GetCharacterProfilesTool(db, novel),
+        GetNovelContextTool(db, novel),
+        GenerateChapterTool(db, novel, llm),
+    ]
+
+    task = _build_react_task(chapter_summary, fixed_title)
+
+    agent = ReActAgent(llm, tools, max_iterations=max_iterations)
+
+    # 收集 chunks（流式输出为纯正文，过滤 think 标签）
+    result_chunks: list[str] = []
+    for chunk in filter_think_chunks(
+        agent.run(
+            task,
+            stream=True,
+            fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title},
+        )
+    ):
+        result_chunks.append(chunk)
+        yield chunk  # 实时流式 yield 给调用者
+
+    # run_stream() 输出纯正文，无需 JSON 解析
+    body_text = _sanitize_generated_body("".join(result_chunks))
+    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
+        db,
+        llm,
+        novel,
+        target_chapter,
+        chapter_summary=chapter_summary,
+        body_text=body_text,
+    )
+
+    if target_chapter is None:
+        if new_sort_order is not None:
+            next_order = new_sort_order
+        else:
+            max_order = db.scalar(
+                select(func.max(ChapterModel.sort_order)).where(ChapterModel.novel_id == novel.id)
+            )
+            next_order = (max_order or 0) + 1
+        ch = ChapterModel(
+            novel_id=novel.id,
+            title=title_out,
+            summary=chapter_summary.strip(),
+            content=body_text,
+            sort_order=next_order,
+        )
+        db.add(ch)
+    else:
+        target_chapter.summary = chapter_summary.strip()
+        target_chapter.content = body_text
+        target_chapter.title = title_out
+        db.add(target_chapter)
+        ch = target_chapter
+
+    db.commit()
+    db.refresh(ch)
+    yield ch
+
+
+def _build_react_task(chapter_summary: str, fixed_title: str | None) -> str:
+    """构建 ReAct Agent 的任务描述。"""
+    title_req = f"本章标题已指定为「{fixed_title}」，请在生成正文时不要写入标题。" if fixed_title else "标题将在生成后自动提取或由用户指定。"
+    return f"""请为小说创作本章正文。
+
+【本章概要】
+{chapter_summary}
+
+【要求】
+1. {title_req}
+2. 正文应符合作品设定、文风和类型。
+3. 情节需与前文衔接自然，人物言行符合其设定。
+4. 请先使用工具获取必要的上下文信息（作品设定、前文情节、人物设定），然后生成正文。
+5. 最终输出直接是小说正文内容，不需要任何 JSON 包装。"""
+
+
+def _sanitize_generated_body(raw: str) -> str:
+    text = _strip_code_fence(raw)
+    final_match = re.search(r"(?:^|\n)\s*Final[:：]\s*(.*)$", text, re.DOTALL)
+    if final_match:
+        text = final_match.group(1)
+
+    lines = text.splitlines()
+    while lines and re.match(r"^\s*(Thought|Action|Observation)[:：]", lines[0]):
+        lines.pop(0)
+
+    return "\n".join(lines).strip()
+
+
+def _generate_chapter_title(
+    db: Session,
+    llm: LLMProvider,
+    novel: Novel,
+    target_chapter: Chapter | None,
+    *,
+    chapter_summary: str,
+    body_text: str,
+) -> str:
+    if not body_text.strip():
+        return (target_chapter.title or "").strip() if target_chapter else ""
+
+    existing_titles = list_existing_chapter_titles(
+        db,
+        novel.id,
+        exclude_chapter_id=target_chapter.id if target_chapter else None,
+    )
+    candidate = Chapter(
+        novel_id=novel.id,
+        title=(target_chapter.title or "") if target_chapter else "",
+        summary=chapter_summary.strip(),
+        content=body_text,
+        sort_order=target_chapter.sort_order if target_chapter else 0,
+    )
+    system, user = messages_suggest_chapter_title(novel, candidate, existing_titles=existing_titles)
+    raw = "".join(filter_think_chunks(llm.stream_complete(system, user))).strip()
+    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles)
+
+
+def plan_batch_chapters(
+    db: Session,
+    novel: Novel,
+    llm: LLMProvider,
+    *,
+    total_summary: str,
+    chapter_count: int,
+    after_chapter: Chapter | None = None,
+) -> list[dict[str, str]]:
+    memory = NovelMemory(db, novel)
+    context = memory.build_context(total_summary)
+    existing_titles = list_existing_chapter_titles(
+        db,
+        novel.id,
+        exclude_chapter_id=after_chapter.id if after_chapter else None,
+    )
+
+    system = (
+        "你是资深中文长篇小说策划编辑。请把用户给出的后续总概要拆分成逐章计划。\n"
+        "【重要】禁止输出思考过程、推理步骤或 think 标签。\n"
+        "你必须只输出合法 JSON 对象，结构为 {\"chapters\": [{\"title\": \"...\", \"summary\": \"...\"}]}。\n"
+        "chapters 数组长度必须严格等于用户要求的章节数。\n"
+        "每章都要有不重复的标题与摘要；标题不得与已存在章节重名；summary 用 2～4 句概括本章主要推进。\n"
+        "当章节数较多时，要注意整体节奏递进，让前几章偏铺垫，中间推动冲突，结尾形成阶段性结果。"
+    )
+    existing_block = "\n".join(f"- {t}" for t in existing_titles[:80]) or "（无）"
+    after_title = after_chapter.title.strip() if after_chapter and (after_chapter.title or "").strip() else "当前章节"
+    user = f"""{context}
+
+【已有章节标题（禁止重名）】
+{existing_block}
+
+【生成位置】
+从《{after_title}》之后开始，连续规划 {chapter_count} 章。
+
+【后续总概要】
+{_clip(total_summary, _TASK_SUMMARY_MAX) or '（无）'}
+
+请严格输出 JSON。"""
+
+    raw = "".join(filter_think_chunks(llm.stream_complete(system, user))).strip()
+    return _parse_batch_plan(raw, chapter_count=chapter_count, existing_titles=existing_titles)
+
+
+def _parse_batch_plan(
+    raw: str,
+    *,
+    chapter_count: int,
+    existing_titles: list[str] | None = None,
+) -> list[dict[str, str]]:
+    text = _strip_code_fence(raw)
+    try:
+        data: Any = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ValueError("模型返回的批量章节规划格式不正确，请重试") from e
+
+    if not isinstance(data, dict) or not isinstance(data.get("chapters"), list):
+        raise ValueError("模型返回的批量章节规划格式不正确，请重试")
+
+    plan: list[dict[str, str]] = []
+    seen_titles = list(existing_titles or [])
+    for i, item in enumerate(data.get("chapters") or [], start=1):
+        if len(plan) >= chapter_count:
+            break
+        if not isinstance(item, dict):
+            continue
+        raw_title = finalize_suggested_title(str(item.get("title") or "").strip()) or f"第{i}章"
+        title = ensure_unique_chapter_title(raw_title, seen_titles)
+        summary = str(item.get("summary") or "").strip()
+        if not summary:
+            summary = f"围绕后续主线推进第{i}章剧情，并与前文自然衔接。"
+        plan.append({"title": title, "summary": summary})
+        seen_titles.append(title)
+
+    if not plan:
+        raise ValueError("模型未返回可用的批量章节规划，请重试")
+
+    while len(plan) < chapter_count:
+        idx = len(plan) + 1
+        title = ensure_unique_chapter_title(f"第{idx}章", seen_titles)
+        plan.append(
+            {
+                "title": title,
+                "summary": f"承接后续总概要，推进第{idx}章剧情，并形成明确的场景与冲突。",
+            }
+        )
+        seen_titles.append(title)
+
+    return plan

@@ -1,4 +1,7 @@
+import re
 from typing import Literal
+
+from sqlalchemy.orm import Session
 
 from app.llm.base import LLMProvider
 from app.models import Chapter, Novel
@@ -149,17 +152,23 @@ def messages_suggest_chapter_title(
     novel: Novel,
     chapter: Chapter,
     hint: str = "",
+    *,
+    existing_titles: list[str] | None = None,
 ) -> tuple[str, str]:
     system = (
         "你是文学编辑。请根据作品信息与本章内容，给出唯一一个合适的章节标题。"
+        "标题不得与本书已有章节标题重复。"
         "只输出标题本身：不超过18个汉字，不要书名号、引号、编号或任何解释。"
     )
     excerpt = (chapter.content or "").strip()
     if len(excerpt) > _SUGGEST_EXCERPT_MAX:
         excerpt = excerpt[:_SUGGEST_EXCERPT_MAX] + "…"
     hint_s = (hint or "").strip()
+    existing_block = "\n".join(f"- {t}" for t in (existing_titles or [])[:50]) or "（无）"
     user_msg = f"""【作品】{novel.title or '未命名'}
 【类型】{novel.genre or '未指定'}
+【已有章节标题（禁止重名）】
+{existing_block}
 【本章摘要】{(chapter.summary or '（无）')[:800]}
 【本章正文节选】
 {excerpt or '（尚无正文）'}
@@ -173,12 +182,64 @@ def finalize_suggested_title(raw: str) -> str:
     return one[:512] if one else raw[:512]
 
 
+def list_existing_chapter_titles(
+    db: Session,
+    novel_id: int,
+    *,
+    exclude_chapter_id: int | None = None,
+) -> list[str]:
+    rows = (
+        db.query(Chapter.id, Chapter.title)
+        .filter(Chapter.novel_id == novel_id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .all()
+    )
+    out: list[str] = []
+    seen: set[str] = set()
+    for chapter_id, title in rows:
+        if exclude_chapter_id is not None and chapter_id == exclude_chapter_id:
+            continue
+        clean = (title or "").strip()
+        if not clean:
+            continue
+        norm = _normalize_title(clean)
+        if norm in seen:
+            continue
+        seen.add(norm)
+        out.append(clean)
+    return out
+
+
+def ensure_unique_chapter_title(title: str, existing_titles: list[str] | None = None) -> str:
+    candidate = (title or "").strip() or "新章"
+    existing_titles = existing_titles or []
+    existing_norm = {_normalize_title(t) for t in existing_titles if (t or "").strip()}
+    if _normalize_title(candidate) not in existing_norm:
+        return candidate[:512]
+
+    base = re.sub(r"[（(]\d+[)）]\s*$", "", candidate).strip() or "新章"
+    n = 2
+    while True:
+        deduped = f"{base}（{n}）"
+        if _normalize_title(deduped) not in existing_norm:
+            return deduped[:512]
+        n += 1
+
+
+def _normalize_title(title: str) -> str:
+    text = (title or "").strip().lower()
+    text = text.strip("「」『』\"'《》 ")
+    return re.sub(r"\s+", "", text)
+
+
 def suggest_chapter_title(
     llm: LLMProvider,
     novel: Novel,
     chapter: Chapter,
     hint: str = "",
+    *,
+    existing_titles: list[str] | None = None,
 ) -> str:
-    s, u = messages_suggest_chapter_title(novel, chapter, hint)
+    s, u = messages_suggest_chapter_title(novel, chapter, hint, existing_titles=existing_titles)
     raw = llm.complete(s, u).strip()
-    return finalize_suggested_title(raw)
+    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles)

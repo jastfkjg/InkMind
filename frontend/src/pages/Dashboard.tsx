@@ -100,8 +100,8 @@ export default function Dashboard() {
                     </Link>
                     <p className="muted" style={{ margin: "0.35rem 0 0", fontSize: "0.85rem" }}>
                       {n.genre ? `类型：${n.genre}` : "未设置类型"}
-                      {" · "}
-                      更新 {new Date(n.updated_at).toLocaleString()}
+                      {"  ·  "}
+                      {new Date(n.updated_at).toLocaleString()}
                     </p>
                   </div>
                   <div className="dashboard-novel-actions">

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     String,
@@ -22,8 +22,7 @@ class User(Base):
     preferred_llm_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
     llm_call_count: Mapped[int] = mapped_column(Integer, default=0)
     token_quota: Mapped[int] = mapped_column(Integer, default=500000)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
     llm_usage_events: Mapped[list["LLMUsageEvent"]] = relationship(
         "LLMUsageEvent", back_populates="user", cascade="all, delete-orphan"
@@ -39,9 +38,9 @@ class Novel(Base):
     background: Mapped[str] = mapped_column(Text, default="")
     genre: Mapped[str] = mapped_column(String(128), default="")
     writing_style: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="novels")
@@ -68,9 +67,9 @@ class Chapter(Base):
     summary: Mapped[str] = mapped_column(Text, default="")
     content: Mapped[str] = mapped_column(Text, default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="chapters")
@@ -84,9 +83,9 @@ class Character(Base):
     name: Mapped[str] = mapped_column(String(256))
     profile: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="characters")
@@ -99,9 +98,9 @@ class NovelMemo(Base):
     novel_id: Mapped[int] = mapped_column(ForeignKey("novels.id", ondelete="CASCADE"))
     title: Mapped[str] = mapped_column(String(512), default="")
     body: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="memos")
@@ -117,6 +116,6 @@ class LLMUsageEvent(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="llm_usage_events")

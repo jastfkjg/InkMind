@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import CurrentUser
 from app.llm.llm_errors import LLMRequestError
-from app.llm.ndjson_stream import ndjson_line
+from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
 from app.models import Chapter
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
+    ChapterBatchGenerateIn,
     ChapterCreate,
     ChapterEvaluateIn,
     ChapterGenerateIn,
@@ -24,9 +25,16 @@ from app.schemas.chapter import (
 )
 from app.services.chapter_eval import parse_evaluation_json, stream_evaluate_tokens
 from app.observability.otel_ai import ai_span
-from app.services.chapter_gen import build_generation_prompt, parse_chapter_generation_json
+from app.services.chapter_gen import (
+    build_generation_prompt,
+    parse_chapter_generation_json,
+    plan_batch_chapters,
+    run_react_chapter_generation,
+)
 from app.services.chapter_llm import (
+    ensure_unique_chapter_title,
     finalize_suggested_title,
+    list_existing_chapter_titles,
     messages_append_chapter_body,
     messages_revise_chapter_body,
     messages_selection_ai,
@@ -77,13 +85,7 @@ def generate_chapter(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
 
     req_title = (body.title or "").strip()
-    fixed_title = req_title or None
-    need_model_title = fixed_title is None
-
-    with ai_span("chapter.generate.build_generation_prompt", novel_id=novel_id):
-        system, user_msg = build_generation_prompt(
-            db, novel, body.summary.strip(), target, fixed_title=fixed_title
-        )
+    fixed_title = req_title if body.lock_title and req_title else None
 
     def gen():
         try:
@@ -91,50 +93,133 @@ def generate_chapter(
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
-        buf: list[str] = []
+
         try:
-            with ai_span("chapter.generate.stream_complete", novel_id=novel_id):
-                for part in llm.stream_complete(system, user_msg):
-                    buf.append(part)
-                    yield ndjson_line({"t": part})
-
-            raw = "".join(buf)
-            with ai_span("chapter.generate.parse_chapter_generation_json", novel_id=novel_id):
-                gen_title, body_text = parse_chapter_generation_json(raw, need_title=need_model_title)
-
-            if target is None:
-                max_order = db.scalar(
-                    select(func.max(Chapter.sort_order)).where(Chapter.novel_id == novel_id)
+            with ai_span("chapter.generate.react_agent", novel_id=novel_id):
+                result = run_react_chapter_generation(
+                    db, novel, body.summary.strip(), target,
+                    llm, fixed_title=fixed_title
                 )
-                next_order = (max_order or 0) + 1
-                title_out = fixed_title if fixed_title is not None else gen_title
-                ch = Chapter(
-                    novel_id=novel_id,
-                    title=title_out,
-                    summary=body.summary.strip(),
-                    content=body_text,
-                    sort_order=next_order,
-                )
-                db.add(ch)
-            else:
-                target.summary = body.summary.strip()
-                target.content = body_text
-                if fixed_title is not None:
-                    target.title = fixed_title
+            # 迭代生成器：前部分是文本 chunks，最后是 Chapter 对象
+            ch = None
+            for item in result:
+                if isinstance(item, Chapter):
+                    ch = item
                 else:
-                    if gen_title:
-                        target.title = gen_title
-                ch = target
-                db.add(ch)
-
-            db.commit()
-            db.refresh(ch)
-            yield ndjson_line({"chapter": ChapterOut.model_validate(ch).model_dump(mode="json")})
+                    # 文本 chunk，直接转发
+                    if item:
+                        yield ndjson_line({"t": item})
+            # 最后返回章节元数据
+            if ch is not None:
+                yield ndjson_line({"chapter": ChapterOut.model_validate(ch).model_dump(mode="json")})
         except LLMRequestError as e:
             yield ndjson_line({"error": e.message})
         except Exception as e:
             db.rollback()
             yield ndjson_line({"error": str(e) or "生成失败"})
+
+    return StreamingResponse(
+        gen(),
+        media_type="application/x-ndjson",
+        headers=_STREAM_HEADERS,
+    )
+
+
+@router.post("/generate-batch")
+def generate_chapter_batch(
+    novel_id: int,
+    body: ChapterBatchGenerateIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    novel = _get_owned_novel(db, user.id, novel_id)
+    available = list_available_providers()
+    if not available:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="未配置任何 LLM API Key，请在环境变量中设置 OPENAI_API_KEY 或 ANTHROPIC_API_KEY",
+        )
+
+    anchor: Chapter | None = None
+    ordered = (
+        db.query(Chapter)
+        .filter(Chapter.novel_id == novel_id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .all()
+    )
+    if body.after_chapter_id is not None:
+        anchor = next((c for c in ordered if c.id == body.after_chapter_id), None)
+        if anchor is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+        latest = ordered[-1] if ordered else None
+        if latest is not None and anchor.id != latest.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="批量生成仅支持从最新章节开始")
+
+    def gen():
+        try:
+            llm = resolve_llm_for_user(user, None, db=db, action="AI批量生成")
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+            return
+
+        generated: list[Chapter] = []
+        try:
+            yield ndjson_line({"t": f"正在规划接下来 {body.chapter_count} 章...\n"})
+            start_from_current = anchor is not None and not (anchor.content or "").strip()
+            plan_anchor = None if start_from_current else anchor
+            with ai_span("chapter.generate_batch.plan", novel_id=novel_id):
+                plan = plan_batch_chapters(
+                    db,
+                    novel,
+                    llm,
+                    total_summary=body.total_summary.strip(),
+                    chapter_count=body.chapter_count,
+                    after_chapter=plan_anchor,
+                )
+
+            insert_order = (anchor.sort_order + (0 if start_from_current else 1)) if anchor is not None else (
+                (ordered[-1].sort_order + 1) if ordered else 0
+            )
+            shift_count = body.chapter_count - 1 if start_from_current else body.chapter_count
+            if shift_count > 0 and anchor is not None:
+                for later in ordered:
+                    if later.id == anchor.id:
+                        continue
+                    if later.sort_order >= insert_order + (1 if start_from_current else 0):
+                        later.sort_order += shift_count
+                        db.add(later)
+                db.commit()
+
+            for idx, item in enumerate(plan, start=1):
+                yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 正在生成《{item['title']}》...\n"})
+                target_chapter = anchor if start_from_current and idx == 1 else None
+                sort_order = None if target_chapter is not None else insert_order + idx - (1 if start_from_current else 0)
+                result = run_react_chapter_generation(
+                    db,
+                    novel,
+                    item["summary"],
+                    target_chapter,
+                    llm,
+                    fixed_title=item["title"],
+                    new_sort_order=sort_order,
+                )
+                created: Chapter | None = None
+                for piece in result:
+                    if isinstance(piece, Chapter):
+                        created = piece
+                if created is not None:
+                    generated.append(created)
+                    yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 已完成《{created.title}》\n"})
+
+            yield ndjson_line(
+                {"chapters": [ChapterOut.model_validate(ch).model_dump(mode="json") for ch in generated]}
+            )
+        except ValueError as e:
+            yield ndjson_line({"error": str(e)})
+        except LLMRequestError as e:
+            yield ndjson_line({"error": e.message})
+        except Exception as e:
+            yield ndjson_line({"error": str(e) or "批量生成失败"})
 
     return StreamingResponse(
         gen(),
@@ -161,7 +246,13 @@ def suggest_title_for_chapter(
     if ch is None or ch.novel_id != novel_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
 
-    system, user_msg = messages_suggest_chapter_title(novel, ch, body.hint or "")
+    existing_titles = list_existing_chapter_titles(db, novel_id, exclude_chapter_id=chapter_id)
+    system, user_msg = messages_suggest_chapter_title(
+        novel,
+        ch,
+        body.hint or "",
+        existing_titles=existing_titles,
+    )
 
     def gen():
         try:
@@ -172,7 +263,7 @@ def suggest_title_for_chapter(
         buf: list[str] = []
         try:
             with ai_span("chapter.suggest_title.stream_complete", novel_id=novel_id, chapter_id=chapter_id):
-                for part in llm.stream_complete(system, user_msg):
+                for part in filter_think_chunks(llm.stream_complete(system, user_msg)):
                     buf.append(part)
                     yield ndjson_line({"t": part})
         except LLMRequestError as e:
@@ -182,7 +273,8 @@ def suggest_title_for_chapter(
             yield ndjson_line({"error": str(e) or "请求失败"})
             return
         raw = "".join(buf).strip()
-        yield ndjson_line({"title": finalize_suggested_title(raw)})
+        title = ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles)
+        yield ndjson_line({"title": title})
 
     return StreamingResponse(
         gen(),
@@ -235,13 +327,13 @@ def ai_evaluate_chapter(
         buf: list[str] = []
         try:
             with ai_span("chapter.ai_evaluate.stream", novel_id=novel_id, chapter_id=chapter_id):
-                for part in stream_evaluate_tokens(
+                for part in filter_think_chunks(stream_evaluate_tokens(
                     llm,
                     novel,
                     title=title_eff or "",
                     summary=summary_eff or "",
                     content=content_eff or "",
-                ):
+                )):
                     buf.append(part)
                     yield ndjson_line({"t": part})
             raw = "".join(buf)
@@ -325,7 +417,7 @@ def selection_ai(
                 chapter_id=chapter_id,
                 mode=body.mode,
             ):
-                for part in llm.stream_complete(sys_m, usr_m):
+                for part in filter_think_chunks(llm.stream_complete(sys_m, usr_m)):
                     buf.append(part)
                     yield ndjson_line({"t": part})
             raw = "".join(buf).strip()
@@ -387,7 +479,7 @@ def revise_chapter(
                 sys_a, usr_a = messages_append_chapter_body(novel, ch, body.instruction)
                 buf: list[str] = []
                 with ai_span("chapter.revise.append_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
-                    for part in llm.stream_complete(sys_a, usr_a):
+                    for part in filter_think_chunks(llm.stream_complete(sys_a, usr_a)):
                         buf.append(part)
                         yield ndjson_line({"t": part})
                 addition = "".join(buf).strip()
@@ -397,7 +489,7 @@ def revise_chapter(
                 sys_r, usr_r = messages_revise_chapter_body(novel, ch, body.instruction)
                 buf2: list[str] = []
                 with ai_span("chapter.revise.rewrite_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
-                    for part in llm.stream_complete(sys_r, usr_r):
+                    for part in filter_think_chunks(llm.stream_complete(sys_r, usr_r)):
                         buf2.append(part)
                         yield ndjson_line({"t": part})
                 new_content = "".join(buf2).strip()

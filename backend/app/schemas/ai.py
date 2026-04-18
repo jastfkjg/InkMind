@@ -30,6 +30,12 @@ class NovelAiChatOut(BaseModel):
 
 class NovelChapterSummaryInspireIn(BaseModel):
     chapter_id: int | None = Field(default=None, description="当前章节 id；不提供则按「承接全书最后一章」理解")
+    chapter_count: int = Field(
+        default=1,
+        ge=1,
+        le=20,
+        description="准备生成的章节数；大于 1 时，返回更偏整体剧情推进的总概要",
+    )
 
 
 class NovelChapterSummaryInspireOut(BaseModel):

@@ -1,7 +1,31 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+
+def _utc_dt(v: datetime) -> datetime:
+    """Ensure datetime is treated as UTC in ISO format."""
+    if v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v
+
+
+class ChapterOut(BaseModel):
+    id: int
+    novel_id: int
+    title: str
+    summary: str
+    content: str
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dt(self, v: datetime) -> str:
+        return _utc_dt(v).isoformat()
 
 
 class ChapterCreate(BaseModel):
@@ -60,6 +84,24 @@ class ChapterGenerateIn(BaseModel):
     title: str | None = Field(
         default=None,
         description="若填写则固定为该章节标题，仅生成正文；留空则模型同时返回标题与正文（JSON）",
+    )
+    lock_title: bool = Field(
+        default=False,
+        description="为 true 时强制沿用 title；否则即便当前章节原本有标题，也允许模型重新拟题",
+    )
+
+
+class ChapterBatchGenerateIn(BaseModel):
+    chapter_count: int = Field(
+        ...,
+        ge=1,
+        le=20,
+        description="批量生成章节数，最高 20 章",
+    )
+    total_summary: str = Field(..., min_length=1, description="接下来若干章的总概要")
+    after_chapter_id: int | None = Field(
+        default=None,
+        description="从该章节之后插入生成；为空则追加到全书末尾",
     )
 
 
