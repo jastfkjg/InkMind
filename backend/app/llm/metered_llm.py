@@ -73,7 +73,7 @@ class MeteredLLM(LLMProvider):
 
     def stream_complete(self, system: str, user: str) -> Iterator[str]:
         # 调用前估算并检查配额（保守估算 output ≤ input，总量 ≤ 2 * input）
-        in_tokens = estimate_tokens(f"{system}\n{user}")
+        in_tokens = count_tokens(f"{system}\n{user}", self._provider)
         self._check_quota_or_raise(in_tokens * 2)
 
         def gen() -> Iterator[str]:
