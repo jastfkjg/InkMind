@@ -1,0 +1,239 @@
+"""Agent 工具实现：数据检索 + 章节生成。"""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Annotated
+
+from sqlalchemy.orm import Session
+
+from app.agent.base import BaseTool
+from app.models import Character, Chapter, Novel
+
+if TYPE_CHECKING:
+    from app.llm.base import LLMProvider
+
+_BG_MAX = 2200
+_WRITING_STYLE_MAX = 700
+_SUMMARY_LINE_MAX = 320
+_TASK_SUMMARY_MAX = 2800
+
+
+def _clip(s: str | None, n: int) -> str:
+    t = (s or "").strip()
+    if len(t) <= n:
+        return t
+    return t[: n - 1] + "…"
+
+
+class GetPreviousChaptersTool(BaseTool):
+    """获取作品已完成的章节概要，帮助了解故事前文进展。"""
+
+    name = "get_previous_chapters"
+    description = "获取作品的前 N 章概要，用于了解故事进展。参数 limit 指定章节数量（默认3）。"
+
+    def __init__(self, db: Session, novel: Novel) -> None:
+        self._db = db
+        self._novel = novel
+
+    def run(self, limit: int = 3) -> str:
+        chapters = (
+            self._db.query(Chapter)
+            .filter(Chapter.novel_id == self._novel.id)
+            .filter(Chapter.summary.isnot(None), Chapter.summary != "")
+            .order_by(Chapter.sort_order.desc(), Chapter.id.desc())
+            .limit(limit)
+            .all()
+        )
+        if not chapters:
+            return "（尚无其他章节概要）"
+        lines = []
+        for ch in reversed(list(chapters)):
+            lines.append(f"【{ch.title or '无标题'}】{_clip(ch.summary, _SUMMARY_LINE_MAX)}")
+        return "\n\n".join(lines)
+
+
+class GetCharacterProfilesTool(BaseTool):
+    """获取作品人物的相关设定（根据关键词召回）。"""
+
+    name = "get_character_profiles"
+    description = (
+        "获取本章可能涉及的人物设定。"
+        "通过本章概要中的关键词与人物名称/设定的关键词匹配召回。"
+    )
+
+    def __init__(self, db: Session, novel: Novel) -> None:
+        self._db = db
+        self._novel = novel
+
+    def run(self, chapter_summary: str = "") -> str:
+        if not chapter_summary:
+            return "（未提供概要，无法召回人物）"
+
+        chinese_words = re.findall(r"[\u4e00-\u9fff]{2,}", chapter_summary)
+        english_words = re.findall(r"[a-zA-Z]{2,}", chapter_summary)
+        keywords = set(chinese_words + english_words)
+
+        all_chars = self._db.query(Character).filter(Character.novel_id == self._novel.id).all()
+        matched: list[tuple[int, Character]] = []
+        for char in all_chars:
+            char_keywords = set(re.findall(r"[\u4e00-\u9fff]{2,}|[a-zA-Z]{2,}", f"{char.name} {char.profile}"))
+            overlap = keywords & char_keywords
+            if overlap:
+                matched.append((len(overlap), char))
+
+        matched.sort(key=lambda x: x[0], reverse=True)
+        if not matched:
+            return "（无相关人物记录）"
+        lines = []
+        for _, char in matched:
+            profile = _clip(char.profile, 400) or "（未填写）"
+            notes = _clip(char.notes, 200)
+            entry = f"【{char.name}】\n设定：{profile}"
+            if notes:
+                entry += f"\n备注：{notes}"
+            lines.append(entry)
+        return "\n\n".join(lines)
+
+
+class GetNovelContextTool(BaseTool):
+    """获取作品的基础设定（标题、类型、背景、文风）。"""
+
+    name = "get_novel_context"
+    description = "获取作品的基础设定，包括标题、类型、写作风格和世界观背景。"
+
+    def __init__(self, db: Session, novel: Novel) -> None:
+        self._db = db
+        self._novel = novel
+
+    def run(self) -> str:
+        novel = self._novel
+        bg = _clip(novel.background, _BG_MAX) or "（未填写）"
+        ws = _clip(novel.writing_style, _WRITING_STYLE_MAX) or "未指定"
+        genre = novel.genre or "未指定"
+        return f"""【作品标题】{novel.title}
+【类型】{genre}
+【文风说明】{ws}
+【背景/世界观】
+{bg}"""
+
+
+class GenerateChapterTool(BaseTool):
+    """整合上下文后调用 LLM 生成章节正文（支持流式输出）。"""
+
+    name = "generate_chapter"
+    description = (
+        "生成符合上下文的小说正文。接收本章概要（chapter_summary）和"
+        "固定标题（fixed_title，可选），使用 NovelMemory 自动构建上下文，"
+        "返回 JSON 格式的章节内容。"
+    )
+
+    def __init__(
+        self,
+        db: Session,
+        novel: Novel,
+        llm: "LLMProvider",
+    ) -> None:
+        self._db = db
+        self._novel = novel
+        self._llm = llm
+
+    def run(self, chapter_summary: str = "", fixed_title: str | None = None) -> str:
+        """执行章节生成，返回 JSON 格式的完整内容。"""
+        from app.agent.memory import NovelMemory
+
+        memory = NovelMemory(self._db, self._novel)
+        context = memory.build_context(chapter_summary)
+
+        system, user = _build_generate_system_user(context, fixed_title)
+
+        return self._llm.complete(system, user)
+
+    def run_stream(self, chapter_summary: str = "", fixed_title: str | None = None) -> Iterator[str]:
+        """执行章节生成，流式返回正文内容（纯文本，非 JSON）。"""
+        from app.agent.memory import NovelMemory
+
+        memory = NovelMemory(self._db, self._novel)
+        context = memory.build_context(chapter_summary)
+
+        # 流式输出时，直接输出正文而非 JSON，方便前端直接显示
+        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+
+要求：
+1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
+2. 只输出正文内容，不要任何解释、标签或结构标记。
+3. 情节需与前文衔接自然，人物言行符合其设定。"""
+
+        if fixed_title:
+            title_line = f"（本章标题：{fixed_title}）"
+        else:
+            title_line = ""
+
+        user = f"""{context}
+{title_line}
+
+请创作符合上述设定的正文。"""
+
+        return self._llm.stream_complete(system, user)
+
+
+def _build_generate_system_user(context: str, fixed_title: str | None) -> tuple[str, str]:
+    """构建生成章节的 system 和 user prompt。"""
+    if fixed_title:
+        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+要求：
+1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
+2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
+3. JSON 只能有一个键 body，值为字符串：本章完整正文。
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。"""
+        title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
+    else:
+        system = """你是一位专业中文小说作者。请根据上下文，创作本章。
+要求：
+1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
+2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
+3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
+        title_line = ""
+
+    user = f"""{context}
+{title_line}
+
+请严格按 system 要求的 JSON 结构输出。"""
+
+    return system, user
+
+
+def build_generation_prompt(
+    novel: Novel,
+    chapter_summary: str,
+    context: str,
+    *,
+    fixed_title: str | None = None,
+) -> tuple[str, str]:
+    """构建章节生成的 system prompt 和 user prompt（供 GenerateChapterTool 内部调用）。"""
+    if fixed_title:
+        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+要求：
+1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
+2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
+3. JSON 只能有一个键 body，值为字符串：本章完整正文。
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。"""
+        title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
+    else:
+        system = """你是一位专业中文小说作者。请根据上下文，创作本章。
+要求：
+1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
+2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
+3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
+        title_line = ""
+
+    user = f"""{context}
+{title_line}
+
+请严格按 system 要求的 JSON 结构输出。"""
+
+    return system, user

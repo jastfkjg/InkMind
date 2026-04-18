@@ -15,6 +15,7 @@ export type ChapterEvaluateResult = {
 
 export type NdjsonAiResult = {
   chapter?: Chapter;
+  chapters?: Chapter[];
   title?: string;
   reply?: string;
   text?: string;
@@ -61,6 +62,7 @@ export async function postNdjsonAi(
     if (typeof obj.t === "string") onToken?.(obj.t);
     if ("error" in obj && obj.error != null) throw new Error(String(obj.error));
     if ("chapter" in obj) out.chapter = obj.chapter as Chapter;
+    if ("chapters" in obj && Array.isArray(obj.chapters)) out.chapters = obj.chapters as Chapter[];
     if ("title" in obj && typeof obj.title === "string") out.title = obj.title;
     if ("reply" in obj && typeof obj.reply === "string") out.reply = obj.reply;
     if ("text" in obj && typeof obj.text === "string") out.text = obj.text;
@@ -207,7 +209,12 @@ export async function deleteChapter(novelId: number, chapterId: number) {
 export async function generateChapter(
   novelId: number,
   summary: string,
-  options?: { chapterId?: number | null; title?: string | null; onToken?: (chunk: string) => void }
+  options?: {
+    chapterId?: number | null;
+    title?: string | null;
+    lockTitle?: boolean;
+    onToken?: (chunk: string) => void;
+  }
 ) {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/generate`,
@@ -215,11 +222,30 @@ export async function generateChapter(
       summary,
       chapter_id: options?.chapterId ?? null,
       title: options?.title?.trim() ? options.title.trim() : null,
+      lock_title: options?.lockTitle ?? false,
     },
     { onToken: options?.onToken }
   );
   if (!r.chapter) throw new Error("未收到章节数据");
   return r.chapter;
+}
+
+export async function generateChapterBatch(
+  novelId: number,
+  payload: {
+    chapter_count: number;
+    total_summary: string;
+    after_chapter_id?: number | null;
+  },
+  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+) {
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/chapters/generate-batch`,
+    payload,
+    { onToken: options?.onToken, signal: options?.signal }
+  );
+  if (!r.chapters) throw new Error("未收到批量章节数据");
+  return r.chapters;
 }
 
 export async function reviseChapter(
@@ -273,7 +299,7 @@ export async function novelAiChat(
 
 export async function novelAiChapterSummaryInspire(
   novelId: number,
-  payload: { chapter_id: number | null },
+  payload: { chapter_id: number | null; chapter_count?: number },
   onToken?: (chunk: string) => void
 ) {
   const r = await postNdjsonAi(

@@ -9,6 +9,7 @@ import {
   fetchChapters,
   fetchLlmProviders,
   generateChapter,
+  generateChapterBatch,
   novelAiChat,
   novelAiChapterSummaryInspire,
   novelAiNaming,
@@ -21,6 +22,7 @@ import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 
 type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate";
+type GenerateTab = "single" | "batch";
 
 const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
   { key: "generate", line2: "生成" },
@@ -116,6 +118,14 @@ function readStoredBodyFontSizeId(): WriteBodyFontSizeId {
   return "md";
 }
 
+function parseBatchChapterCountInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(1, Math.min(20, Math.round(n)));
+}
+
 export default function NovelWrite() {
   const { novelId } = useParams();
   const id = Number(novelId);
@@ -159,7 +169,13 @@ export default function NovelWrite() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [summaryInspireBusy, setSummaryInspireBusy] = useState(false);
-  const [evaluateStreamText, setEvaluateStreamText] = useState("");
+  const [batchSummaryInspireBusy, setBatchSummaryInspireBusy] = useState(false);
+  const [generateTab, setGenerateTab] = useState<GenerateTab>("single");
+  const [singleGenerateTitle, setSingleGenerateTitle] = useState("");
+  const [singleGenerateLockTitle, setSingleGenerateLockTitle] = useState(false);
+  const [batchChapterCountInput, setBatchChapterCountInput] = useState("3");
+  const [batchSummary, setBatchSummary] = useState("");
+  const [batchStreaming, setBatchStreaming] = useState("");
   /** 正文选区：用于 AI 扩写/润色 */
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [selectionPanel, setSelectionPanel] = useState<{
@@ -190,6 +206,11 @@ export default function NovelWrite() {
   }, [id]);
 
   const preferredLlm = user?.preferred_llm_provider ?? null;
+  const latestChapterId = chapters.length > 0 ? chapters[chapters.length - 1]?.id ?? null : null;
+  const isLatestChapter = activeId !== null && latestChapterId === activeId;
+  const batchChapterCount = parseBatchChapterCountInput(batchChapterCountInput);
+  const showSingleInspireCta = !summary.trim();
+  const showBatchInspireCta = !batchSummary.trim();
 
   const bodyFontSizePx = WRITE_BODY_FONT_SIZES.find((x) => x.id === bodyFontSizeId)?.px ?? 17;
   const bodyFontSizeIndex = (() => {
@@ -290,17 +311,32 @@ export default function NovelWrite() {
     setAskHistory([]);
     setAskInput("");
     setEvaluateResult(null);
-    setEvaluateStreamText("");
+    setGenerateTab("single");
+    setSingleGenerateTitle("");
+    setSingleGenerateLockTitle(false);
+    setBatchChapterCountInput("3");
+    setBatchSummary("");
+    setBatchStreaming("");
     setSelectionRange(null);
     setSelectionPanel(null);
   }, [id]);
 
   useEffect(() => {
     setEvaluateResult(null);
-    setEvaluateStreamText("");
+    setSingleGenerateTitle("");
+    setSingleGenerateLockTitle(false);
+    setBatchChapterCountInput("3");
+    setBatchSummary("");
+    setBatchStreaming("");
     setSelectionRange(null);
     setSelectionPanel(null);
   }, [activeId]);
+
+  useEffect(() => {
+    if (!isLatestChapter && generateTab === "batch") {
+      setGenerateTab("single");
+    }
+  }, [generateTab, isLatestChapter]);
 
   useEffect(() => {
     if (activeId === null) {
@@ -617,7 +653,7 @@ export default function NovelWrite() {
     try {
       await novelAiChapterSummaryInspire(
         nid,
-        { chapter_id: activeId },
+        { chapter_id: activeId, chapter_count: 1 },
         (t) => {
           acc += t;
           if (novelIdRef.current === nid) setSummary(acc);
@@ -632,6 +668,38 @@ export default function NovelWrite() {
     }
   }
 
+  async function onBatchSummaryInspire() {
+    const nid = id;
+    if (!activeId || !hasLlm) return;
+    if (!isLatestChapter) {
+      setErr("批量生成仅支持从最新章节开始");
+      return;
+    }
+    if (!batchChapterCount) {
+      setErr("请填写 1 到 20 之间的生成章节数");
+      return;
+    }
+    setBatchSummaryInspireBusy(true);
+    setErr("");
+    let acc = "";
+    try {
+      await novelAiChapterSummaryInspire(
+        nid,
+        { chapter_id: activeId, chapter_count: batchChapterCount },
+        (t) => {
+          acc += t;
+          if (novelIdRef.current === nid) setBatchSummary(acc);
+        }
+      );
+    } catch (e) {
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
+    } finally {
+      setBatchSummaryInspireBusy(false);
+    }
+  }
+
   async function onGenerate() {
     const nid = id;
     const s = summary.trim();
@@ -641,17 +709,19 @@ export default function NovelWrite() {
     }
     if (!activeId) return;
     if (hasBody) {
-      const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，是否继续？");
+      const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，标题也可能随内容一起更新，是否继续？");
       if (!ok) return;
     }
     const savedContent = content;
+    const savedTitle = title;
     setBusy(true);
     setErr("");
     setContent("");
     try {
       const ch = await generateChapter(nid, s, {
         chapterId: activeId,
-        title: title.trim() || null,
+        title: singleGenerateTitle.trim() || null,
+        lockTitle: singleGenerateLockTitle,
         onToken: (t) => {
           if (novelIdRef.current === nid) setContent((p) => p + t);
         },
@@ -665,10 +735,66 @@ export default function NovelWrite() {
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(normalizeBodyParagraphIndent(ch.content));
+      setSingleGenerateTitle("");
+      setSingleGenerateLockTitle(false);
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
+        setTitle(savedTitle);
         setContent(savedContent);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onBatchGenerate() {
+    const nid = id;
+    if (!activeId) return;
+    if (!isLatestChapter) {
+      setErr("批量生成仅支持从最新章节开始");
+      return;
+    }
+    if (!batchChapterCount) {
+      setErr("请填写 1 到 20 之间的生成章节数");
+      return;
+    }
+    const total = batchSummary.trim();
+    if (!total) {
+      setErr("请填写后续章节总概要");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    setBatchStreaming("");
+    try {
+      await flushSave();
+      if (novelIdRef.current !== nid) return;
+      const created = await generateChapterBatch(
+        nid,
+        {
+          chapter_count: batchChapterCount,
+          total_summary: total,
+          after_chapter_id: activeId,
+        },
+        {
+          onToken: (t) => {
+            if (novelIdRef.current === nid) setBatchStreaming((prev) => prev + t);
+          },
+        }
+      );
+      if (novelIdRef.current !== nid) return;
+      const full = await loadChapters();
+      if (novelIdRef.current !== nid) return;
+      setChapters(full);
+      if (created.length > 0) {
+        setActiveId(created[0].id);
+      }
+      setGenerateTab("single");
+      setBatchStreaming((prev) => prev + `已完成，共生成 ${created.length} 章。`);
+    } catch (e) {
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
       }
     } finally {
       setBusy(false);
@@ -839,7 +965,6 @@ export default function NovelWrite() {
     }
     setEvaluateBusy(true);
     setErr("");
-    setEvaluateStreamText("");
     setEvaluateResult(null);
     try {
       const data = await evaluateChapter(
@@ -850,18 +975,11 @@ export default function NovelWrite() {
           summary,
           content,
           llm_provider: preferredLlm,
-        },
-        {
-          onToken: (t) => {
-            setEvaluateStreamText((prev) => prev + t);
-          },
         }
       );
       setEvaluateResult(data);
-      setEvaluateStreamText("");
     } catch (e) {
       setErr(apiErrorMessage(e));
-      setEvaluateStreamText("");
     } finally {
       setEvaluateBusy(false);
     }
@@ -1013,7 +1131,7 @@ export default function NovelWrite() {
           <div className="write-left-inner card">
             <div className="write-left-head">
               <strong>章节</strong>
-              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={onAddChapter}>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={(e) => { e.stopPropagation(); void onAddChapter(); }}>
                 新建
               </button>
             </div>
@@ -1028,7 +1146,7 @@ export default function NovelWrite() {
                     <button
                       type="button"
                       className={`chapter-item${c.id === activeId ? " active" : ""}`}
-                      onClick={() => void selectChapter(c.id)}
+                      onClick={(e) => { e.stopPropagation(); void selectChapter(c.id); }}
                     >
                       {c.title?.trim() || `第 ${idx + 1} 章`}
                     </button>
@@ -1132,65 +1250,181 @@ export default function NovelWrite() {
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">AI根据输入概要生成正文内容</p>
-                <div className="field">
-                  <div className="write-ai-field-label">
-                    <label htmlFor="write-ai-chapter-summary">本章概要</label>
+                <div className="write-generate-tabs" role="tablist" aria-label="生成模式">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={generateTab === "single"}
+                    className={`write-generate-tab${generateTab === "single" ? " is-active" : ""}`}
+                    onClick={() => setGenerateTab("single")}
+                  >
+                    单章生成
+                  </button>
+                  {isLatestChapter ? (
                     <button
                       type="button"
-                      className="write-summary-inspire-btn"
-                      title="根据本书设定与此前各章概要，生成本章概要灵感（2～4 句）"
-                      aria-label="概要灵感"
-                      disabled={!hasLlm || summaryInspireBusy}
-                      onClick={() => void onSummaryInspire()}
+                      role="tab"
+                      aria-selected={generateTab === "batch"}
+                      className={`write-generate-tab${generateTab === "batch" ? " is-active" : ""}`}
+                      onClick={() => setGenerateTab("batch")}
                     >
-                      {summaryInspireBusy ? (
-                        <span className="write-summary-inspire-btn__busy" aria-hidden />
-                      ) : (
-                        <svg
-                          className="write-summary-inspire-btn__icon"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.75"
-                          aria-hidden
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9.663 17h4.673M12 3v1m6.364 6.364l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                          />
-                        </svg>
-                      )}
+                      批量生成
                     </button>
-                  </div>
-                  <textarea
-                    id="write-ai-chapter-summary"
-                    className="textarea"
-                    rows={5}
-                    value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
-                    placeholder="本章要写的情节与要点…"
-                  />
+                  ) : null}
                 </div>
-                <div className="field">
-                  <label>章节标题（可选）</label>
-                  <input
-                    className="input"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="若留空，由 AI 拟定章节标题"
-                  />
-                </div>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
-                  {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
-                </button>
+
+                {generateTab === "single" ? (
+                  <>
+                    <p className="hint">为当前章节生成正文</p>
+                    <div className="field">
+                      <div className="write-ai-field-label">
+                        <label htmlFor="write-ai-chapter-summary">本章概要</label>
+                        <button
+                          type="button"
+                          className={`write-summary-inspire-btn${showSingleInspireCta ? " write-summary-inspire-btn--with-text" : ""}`}
+                          title="根据本书设定与已有章节，生成本章概要灵感"
+                          aria-label="概要灵感"
+                          disabled={!hasLlm || summaryInspireBusy}
+                          onClick={() => void onSummaryInspire()}
+                        >
+                          {summaryInspireBusy ? (
+                            <span className="write-summary-inspire-btn__busy" aria-hidden />
+                          ) : (
+                            <svg
+                              className="write-summary-inspire-btn__icon"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.75"
+                              aria-hidden
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M9.663 17h4.673M12 3v1m6.364 6.364l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                              />
+                            </svg>
+                          )}
+                          {showSingleInspireCta ? <span>生成本章灵感</span> : null}
+                        </button>
+                      </div>
+                      <textarea
+                        id="write-ai-chapter-summary"
+                        className="textarea"
+                        rows={5}
+                        value={summary}
+                        onChange={(e) => setSummary(e.target.value)}
+                        placeholder="本章要写的情节与要点…"
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="write-ai-generate-title">生成标题（可选）</label>
+                      <input
+                        id="write-ai-generate-title"
+                        className="input"
+                        value={singleGenerateTitle}
+                        onChange={(e) => setSingleGenerateTitle(e.target.value)}
+                        placeholder="留空则由 AI 根据新内容重新拟题"
+                      />
+                    </div>
+                    <label className="write-generate-lock">
+                      <input
+                        type="checkbox"
+                        checked={singleGenerateLockTitle}
+                        onChange={(e) => setSingleGenerateLockTitle(e.target.checked)}
+                      />
+                      <span>固定使用上方标题，不让 AI 改题</span>
+                    </label>
+                    <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
+                      {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="hint">连续生成多章</p>
+                    <div className="field">
+                      <label htmlFor="write-ai-batch-count">生成章节数</label>
+                      <input
+                        id="write-ai-batch-count"
+                        className="input"
+                        type="text"
+                        inputMode="numeric"
+                        value={batchChapterCountInput}
+                        onChange={(e) => {
+                          const next = e.target.value.replace(/[^\d]/g, "");
+                          setBatchChapterCountInput(next);
+                        }}
+                        onBlur={() => {
+                          const next = parseBatchChapterCountInput(batchChapterCountInput);
+                          setBatchChapterCountInput(String(next ?? 3));
+                        }}
+                      />
+                    </div>
+                    {!isLatestChapter ? (
+                      <p className="muted" style={{ margin: "-0.2rem 0 0.85rem", fontSize: "0.84rem" }}>
+                        为避免影响既有章节顺序，批量生成仅在最新章节可用。
+                      </p>
+                    ) : null}
+                    <div className="field">
+                      <div className="write-ai-field-label">
+                        <label htmlFor="write-ai-batch-summary">后续总概要</label>
+                        <button
+                          type="button"
+                          className={`write-summary-inspire-btn${showBatchInspireCta ? " write-summary-inspire-btn--with-text" : ""}`}
+                          title="根据本书设定、已有章节，生成后续数章的总体剧情灵感"
+                          aria-label="批量概要灵感"
+                          disabled={!hasLlm || batchSummaryInspireBusy}
+                          onClick={() => void onBatchSummaryInspire()}
+                        >
+                          {batchSummaryInspireBusy ? (
+                            <span className="write-summary-inspire-btn__busy" aria-hidden />
+                          ) : (
+                            <svg
+                              className="write-summary-inspire-btn__icon"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.75"
+                              aria-hidden
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M9.663 17h4.673M12 3v1m6.364 6.364l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                              />
+                            </svg>
+                          )}
+                          {showBatchInspireCta ? <span>生成后续灵感</span> : null}
+                        </button>
+                      </div>
+                      <textarea
+                        id="write-ai-batch-summary"
+                        className="textarea"
+                        rows={7}
+                        value={batchSummary}
+                        onChange={(e) => setBatchSummary(e.target.value)}
+                        placeholder="描述接下来几章的大体主线、冲突推进与阶段目标…"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy || !isLatestChapter}
+                      onClick={onBatchGenerate}
+                    >
+                      {busy ? "批量生成中…" : `批量生成 ${batchChapterCount ?? 0} 章`}
+                    </button>
+                    {batchStreaming ? (
+                      <pre className="write-generate-log">{batchStreaming}</pre>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : null}
 
             {rightTool === "rewrite" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">说明希望如何修改正文，将整体替换为模型输出。</p>
+                <p className="hint">说明希望如何修改正文，将本章内容替换为模型输出。</p>
                 <textarea
                   className="textarea"
                   rows={5}
@@ -1206,7 +1440,7 @@ export default function NovelWrite() {
 
             {rightTool === "append" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">说明要在文末追加的内容，不会重复已有段落。</p>
+                <p className="hint">说明要在文末追加的内容。</p>
                 <textarea
                   className="textarea"
                   rows={5}
@@ -1222,7 +1456,7 @@ export default function NovelWrite() {
 
             {rightTool === "naming" ? (
               <div className="write-ai-section">
-                <p className="hint">为人物、物品、功法等请求备选名称（非章节标题）。</p>
+                <p className="hint">为人物、物品、功法等请求备选名称。</p>
                 <div className="field">
                   <label>类别</label>
                   <select
@@ -1282,14 +1516,6 @@ export default function NovelWrite() {
                 >
                   {evaluateBusy ? "评估中…" : "评估本章"}
                 </button>
-                {evaluateBusy && evaluateStreamText ? (
-                  <pre
-                    className="write-ai-stream-preview muted"
-                    style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap", fontSize: "0.82rem" }}
-                  >
-                    {evaluateStreamText}
-                  </pre>
-                ) : null}
                 {evaluateResult ? (
                   <div className="write-eval-block" style={{ marginTop: "1rem" }}>
                     <div className="write-eval-score" aria-label="去 AI 化分数">

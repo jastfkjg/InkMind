@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import CurrentUser
 from app.llm.llm_errors import LLMRequestError
-from app.llm.ndjson_stream import ndjson_line
+from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
 from app.models import Chapter, Novel
 from app.schemas.ai import (
@@ -89,7 +89,7 @@ def novel_ai_chat(
         buf: list[str] = []
         try:
             with ai_span("novel.ai_chat.stream_complete", novel_id=novel_id):
-                for part in llm.stream_complete(system, user_msg):
+                for part in filter_think_chunks(llm.stream_complete(system, user_msg)):
                     buf.append(part)
                     yield ndjson_line({"t": part})
             yield ndjson_line({"reply": "".join(buf).strip()})
@@ -125,7 +125,7 @@ def novel_ai_naming(
         buf: list[str] = []
         try:
             with ai_span("novel.ai_naming.stream_complete", novel_id=novel_id):
-                for part in llm.stream_complete(system, user_msg):
+                for part in filter_think_chunks(llm.stream_complete(system, user_msg)):
                     buf.append(part)
                     yield ndjson_line({"t": part})
             yield ndjson_line({"text": "".join(buf).strip()})
@@ -161,10 +161,16 @@ def novel_ai_chapter_summary_inspire_ep(
         idx = next((i for i, c in enumerate(chapters) if c.id == body.chapter_id), None)
         if idx is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
-        previous = chapters[:idx]
+        current = chapters[idx]
+        include_current = body.chapter_count > 1 and bool((current.content or "").strip())
+        previous = chapters[: idx + 1] if include_current else chapters[:idx]
     else:
         previous = chapters
-    system, user_msg = novel_chapter_summary_inspire_messages(novel, previous)
+    system, user_msg = novel_chapter_summary_inspire_messages(
+        novel,
+        previous,
+        chapter_count=body.chapter_count,
+    )
 
     def gen():
         try:
@@ -175,7 +181,7 @@ def novel_ai_chapter_summary_inspire_ep(
         buf: list[str] = []
         try:
             with ai_span("novel.chapter_summary_inspire.stream_complete", novel_id=novel_id):
-                for part in llm.stream_complete(system, user_msg):
+                for part in filter_think_chunks(llm.stream_complete(system, user_msg)):
                     buf.append(part)
                     yield ndjson_line({"t": part})
             yield ndjson_line({"summary": "".join(buf).strip()})
