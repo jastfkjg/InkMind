@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -18,8 +19,21 @@ def llm_usage(
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(default=100, ge=1, le=500),
 ) -> LLMUsageListOut:
-    q = db.query(LLMUsageEvent).filter(LLMUsageEvent.user_id == user.id)
-    rows = q.order_by(LLMUsageEvent.created_at.desc(), LLMUsageEvent.id.desc()).limit(limit).all()
+    base_q = db.query(LLMUsageEvent).filter(LLMUsageEvent.user_id == user.id)
+    total_count = db.query(func.count(LLMUsageEvent.id)).filter(LLMUsageEvent.user_id == user.id).scalar() or 0
+
+    # 如果总条数超过 50，只返回最近一周的记录
+    if total_count > 50:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        rows = (
+            base_q.filter(LLMUsageEvent.created_at >= cutoff)
+            .order_by(LLMUsageEvent.created_at.desc(), LLMUsageEvent.id.desc())
+            .limit(limit)
+            .all()
+        )
+    else:
+        rows = base_q.order_by(LLMUsageEvent.created_at.desc(), LLMUsageEvent.id.desc()).limit(limit).all()
+
     total_calls, total_in, total_out, total_all = (
         db.query(
             func.count(LLMUsageEvent.id),
