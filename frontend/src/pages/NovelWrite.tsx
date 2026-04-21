@@ -46,6 +46,85 @@ const WRITE_BODY_FONTS: { id: WriteBodyFontId; label: string }[] = [
   { id: "mono", label: "等宽" },
 ];
 
+type LineHeightId = "compact" | "normal" | "relaxed" | "loose";
+
+const LINE_HEIGHTS: { id: LineHeightId; label: string; value: number }[] = [
+  { id: "compact", label: "紧凑", value: 1.6 },
+  { id: "normal", label: "标准", value: 1.85 },
+  { id: "relaxed", label: "宽松", value: 2.0 },
+  { id: "loose", label: "超宽", value: 2.2 },
+];
+
+const WRITE_LINE_HEIGHT_KEY = "inkmind_write_line_height";
+
+type LineWidthId = "narrow" | "medium" | "wide" | "full";
+
+const LINE_WIDTHS: { id: LineWidthId; label: string; maxWidth: string | null }[] = [
+  { id: "narrow", label: "窄", maxWidth: "40ch" },
+  { id: "medium", label: "中", maxWidth: "55ch" },
+  { id: "wide", label: "宽", maxWidth: "70ch" },
+  { id: "full", label: "铺满", maxWidth: null },
+];
+
+const WRITE_LINE_WIDTH_KEY = "inkmind_write_line_width";
+
+type ThemeId = "light" | "sepia" | "dark";
+
+const THEMES: { id: ThemeId; label: string }[] = [
+  { id: "light", label: "明亮" },
+  { id: "sepia", label: "护眼" },
+  { id: "dark", label: "夜间" },
+];
+
+const WRITE_THEME_KEY = "inkmind_write_theme";
+
+const WRITE_FOCUS_MODE_KEY = "inkmind_write_focus_mode";
+
+function readStoredLineHeight(): LineHeightId {
+  try {
+    const v = localStorage.getItem(WRITE_LINE_HEIGHT_KEY);
+    if (v && LINE_HEIGHTS.some((x) => x.id === v)) {
+      return v as LineHeightId;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "normal";
+}
+
+function readStoredLineWidth(): LineWidthId {
+  try {
+    const v = localStorage.getItem(WRITE_LINE_WIDTH_KEY);
+    if (v && LINE_WIDTHS.some((x) => x.id === v)) {
+      return v as LineWidthId;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "medium";
+}
+
+function readStoredTheme(): ThemeId {
+  try {
+    const v = localStorage.getItem(WRITE_THEME_KEY);
+    if (v && THEMES.some((x) => x.id === v)) {
+      return v as ThemeId;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "light";
+}
+
+function readStoredFocusMode(): boolean {
+  try {
+    const v = localStorage.getItem(WRITE_FOCUS_MODE_KEY);
+    return v === "true";
+  } catch {
+    return false;
+  }
+}
+
 /** Sample each option in the menu with its own font. */
 const WRITE_FONT_PREVIEW: Record<WriteBodyFontId, string> = {
   noto: 'var(--font-serif), "Noto Serif SC", Georgia, serif',
@@ -146,8 +225,23 @@ export default function NovelWrite() {
   const [bodyFontSizeId, setBodyFontSizeId] = useState<WriteBodyFontSizeId>(() =>
     typeof window !== "undefined" ? readStoredBodyFontSizeId() : "md"
   );
+  const [lineHeightId, setLineHeightId] = useState<LineHeightId>(() =>
+    typeof window !== "undefined" ? readStoredLineHeight() : "normal"
+  );
+  const [lineWidthId, setLineWidthId] = useState<LineWidthId>(() =>
+    typeof window !== "undefined" ? readStoredLineWidth() : "medium"
+  );
+  const [themeId, setThemeId] = useState<ThemeId>(() =>
+    typeof window !== "undefined" ? readStoredTheme() : "light"
+  );
+  const [focusMode, setFocusMode] = useState(() =>
+    typeof window !== "undefined" ? readStoredFocusMode() : false
+  );
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
+  const [lineHeightMenuOpen, setLineHeightMenuOpen] = useState(false);
+  const [lineWidthMenuOpen, setLineWidthMenuOpen] = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const sidebarToolsRef = useRef<HTMLDivElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -217,12 +311,32 @@ export default function NovelWrite() {
     const i = WRITE_BODY_FONT_SIZES.findIndex((x) => x.id === bodyFontSizeId);
     return i >= 0 ? i : 2;
   })();
+  const lineHeightValue = LINE_HEIGHTS.find((x) => x.id === lineHeightId)?.value ?? 1.85;
+  const lineWidthValue = LINE_WIDTHS.find((x) => x.id === lineWidthId)?.maxWidth;
+
+  const wordCount = content.replace(/\s/g, "").length;
+  const charCount = content.length;
+  const paragraphCount = content.split("\n").filter((p) => p.trim()).length;
 
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < 900);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ".") {
+        e.preventDefault();
+        setFocusMode((prev) => !prev);
+      }
+      if (e.key === "Escape" && focusMode) {
+        setFocusMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusMode]);
 
   useEffect(() => {
     try {
@@ -241,17 +355,59 @@ export default function NovelWrite() {
   }, [bodyFontSizeId]);
 
   useEffect(() => {
-    if (!fontMenuOpen && !sizeMenuOpen) return;
+    try {
+      localStorage.setItem(WRITE_LINE_HEIGHT_KEY, lineHeightId);
+    } catch {
+      /* ignore */
+    }
+  }, [lineHeightId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WRITE_LINE_WIDTH_KEY, lineWidthId);
+    } catch {
+      /* ignore */
+    }
+  }, [lineWidthId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WRITE_THEME_KEY, themeId);
+    } catch {
+      /* ignore */
+    }
+  }, [themeId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WRITE_FOCUS_MODE_KEY, String(focusMode));
+    } catch {
+      /* ignore */
+    }
+    if (focusMode) {
+      setSidebarOpen(false);
+      setRightTool(null);
+    }
+  }, [focusMode]);
+
+  useEffect(() => {
+    if (!fontMenuOpen && !sizeMenuOpen && !lineHeightMenuOpen && !lineWidthMenuOpen && !themeMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       if (sidebarToolsRef.current && !sidebarToolsRef.current.contains(e.target as Node)) {
         setFontMenuOpen(false);
         setSizeMenuOpen(false);
+        setLineHeightMenuOpen(false);
+        setLineWidthMenuOpen(false);
+        setThemeMenuOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setFontMenuOpen(false);
         setSizeMenuOpen(false);
+        setLineHeightMenuOpen(false);
+        setLineWidthMenuOpen(false);
+        setThemeMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -260,7 +416,7 @@ export default function NovelWrite() {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [fontMenuOpen, sizeMenuOpen]);
+  }, [fontMenuOpen, sizeMenuOpen, lineHeightMenuOpen, lineWidthMenuOpen, themeMenuOpen]);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -993,10 +1149,10 @@ export default function NovelWrite() {
     rightTool && hasLlm && (activeId !== null || rightTool === "ask" || rightTool === "naming");
 
   return (
-    <div className="write-shell">
+    <div className={`write-shell write-theme--${themeId}${focusMode ? " write-focus-mode" : ""}`}>
       {err ? <p className="form-error write-err-banner">{err}</p> : null}
 
-      {narrow && sidebarOpen ? (
+      {narrow && sidebarOpen && !focusMode ? (
         <button
           type="button"
           className="write-sidebar-backdrop"
@@ -1068,6 +1224,9 @@ export default function NovelWrite() {
                 aria-label="正文字号"
                 onClick={() => {
                   setFontMenuOpen(false);
+                  setLineHeightMenuOpen(false);
+                  setLineWidthMenuOpen(false);
+                  setThemeMenuOpen(false);
                   setSizeMenuOpen((v) => !v);
                 }}
               >
@@ -1124,6 +1283,148 @@ export default function NovelWrite() {
                 </div>
               ) : null}
             </div>
+
+            <div className="write-line-height-picker">
+              <button
+                type="button"
+                className="write-icon-btn write-line-height-btn"
+                title="行高"
+                aria-expanded={lineHeightMenuOpen}
+                aria-haspopup="listbox"
+                aria-label="行高"
+                onClick={() => {
+                  setFontMenuOpen(false);
+                  setSizeMenuOpen(false);
+                  setLineWidthMenuOpen(false);
+                  setThemeMenuOpen(false);
+                  setLineHeightMenuOpen((v) => !v);
+                }}
+              >
+                <span className="write-line-height-icon" aria-hidden>
+                  <span className="write-line-height-line" />
+                  <span className="write-line-height-line" />
+                  <span className="write-line-height-line" />
+                </span>
+              </button>
+              {lineHeightMenuOpen ? (
+                <ul className="write-line-height-menu" role="listbox" aria-label="选择行高">
+                  {LINE_HEIGHTS.map((lh) => (
+                    <li key={lh.id} role="presentation">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={lineHeightId === lh.id}
+                        className={`write-line-height-option${lineHeightId === lh.id ? " is-active" : ""}`}
+                        onClick={() => {
+                          setLineHeightId(lh.id);
+                          setLineHeightMenuOpen(false);
+                        }}
+                      >
+                        {lh.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
+            <div className="write-line-width-picker">
+              <button
+                type="button"
+                className="write-icon-btn write-line-width-btn"
+                title="行宽"
+                aria-expanded={lineWidthMenuOpen}
+                aria-haspopup="listbox"
+                aria-label="行宽"
+                onClick={() => {
+                  setFontMenuOpen(false);
+                  setSizeMenuOpen(false);
+                  setLineHeightMenuOpen(false);
+                  setThemeMenuOpen(false);
+                  setLineWidthMenuOpen((v) => !v);
+                }}
+              >
+                <span className="write-line-width-icon" aria-hidden>
+                  <span className="write-line-width-bar write-line-width-bar--short" />
+                  <span className="write-line-width-bar write-line-width-bar--medium" />
+                  <span className="write-line-width-bar write-line-width-bar--long" />
+                </span>
+              </button>
+              {lineWidthMenuOpen ? (
+                <ul className="write-line-width-menu" role="listbox" aria-label="选择行宽">
+                  {LINE_WIDTHS.map((lw) => (
+                    <li key={lw.id} role="presentation">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={lineWidthId === lw.id}
+                        className={`write-line-width-option${lineWidthId === lw.id ? " is-active" : ""}`}
+                        onClick={() => {
+                          setLineWidthId(lw.id);
+                          setLineWidthMenuOpen(false);
+                        }}
+                      >
+                        {lw.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
+            <div className="write-theme-picker">
+              <button
+                type="button"
+                className="write-icon-btn write-theme-btn"
+                title="主题"
+                aria-expanded={themeMenuOpen}
+                aria-haspopup="listbox"
+                aria-label="主题"
+                onClick={() => {
+                  setFontMenuOpen(false);
+                  setSizeMenuOpen(false);
+                  setLineHeightMenuOpen(false);
+                  setLineWidthMenuOpen(false);
+                  setThemeMenuOpen((v) => !v);
+                }}
+              >
+                <span className="write-theme-icon" aria-hidden>
+                  {themeId === "dark" ? "☾" : themeId === "sepia" ? "◐" : "☼"}
+                </span>
+              </button>
+              {themeMenuOpen ? (
+                <ul className="write-theme-menu" role="listbox" aria-label="选择主题">
+                  {THEMES.map((t) => (
+                    <li key={t.id} role="presentation">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={themeId === t.id}
+                        className={`write-theme-option${themeId === t.id ? " is-active" : ""}`}
+                        onClick={() => {
+                          setThemeId(t.id);
+                          setThemeMenuOpen(false);
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              className={`write-icon-btn write-focus-btn${focusMode ? " is-active" : ""}`}
+              title={focusMode ? "退出专注模式 (Ctrl+.)" : "专注模式 (Ctrl+.)"}
+              aria-label="专注模式"
+              onClick={() => setFocusMode((v) => !v)}
+            >
+              <span className="write-focus-icon" aria-hidden>
+                {focusMode ? "◆" : "◇"}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1176,39 +1477,70 @@ export default function NovelWrite() {
         </aside>
 
         <div className="write-main write-main--with-rail">
-          <div className="card write-editor-card">
+          <div className={`card write-editor-card write-editor-card--${themeId}`}>
             {activeId ? (
               <>
-                <input
-                  className="editor-title editor-title--compact"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="标题"
-                />
-                <div className="field write-body-field">
-                  <textarea
-                    ref={bodyTextareaRef}
-                    className={`textarea editor-body editor-body--${bodyFontId}`}
-                    style={{ fontSize: `${bodyFontSizePx}px` }}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    onKeyDown={handleBodyKeyDown}
-                    onMouseUp={syncSelectionFromTextarea}
-                    onSelect={syncSelectionFromTextarea}
-                    onKeyUp={syncSelectionFromTextarea}
+                <div className="write-editor-header">
+                  <input
+                    className="editor-title editor-title--improved"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="章节标题"
                   />
+                </div>
+                <div className={`write-body-wrapper write-body-wrapper--${lineWidthId}`}>
+                  <div className="field write-body-field">
+                    <textarea
+                      ref={bodyTextareaRef}
+                      className={`textarea editor-body editor-body--${bodyFontId} editor-body--line-height-${lineHeightId}`}
+                      style={{ fontSize: `${bodyFontSizePx}px` }}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
+                      onKeyDown={handleBodyKeyDown}
+                      onMouseUp={syncSelectionFromTextarea}
+                      onSelect={syncSelectionFromTextarea}
+                      onKeyUp={syncSelectionFromTextarea}
+                      placeholder="开始写作..."
+                    />
+                  </div>
+                </div>
+                <div className="write-editor-footer">
+                  <div className="write-word-stats">
+                    <span className="write-word-stat-item">
+                      <span className="write-word-stat-label">字数</span>
+                      <span className="write-word-stat-value">{wordCount}</span>
+                    </span>
+                    <span className="write-word-stat-item">
+                      <span className="write-word-stat-label">字符</span>
+                      <span className="write-word-stat-value">{charCount}</span>
+                    </span>
+                    <span className="write-word-stat-item">
+                      <span className="write-word-stat-label">段落</span>
+                      <span className="write-word-stat-value">{paragraphCount}</span>
+                    </span>
+                  </div>
+                  {focusMode ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost write-exit-focus-btn"
+                      onClick={() => setFocusMode(false)}
+                    >
+                      退出专注模式 (ESC)
+                    </button>
+                  ) : null}
                 </div>
               </>
             ) : (
-              <p className="muted" style={{ margin: 0 }}>
-                请打开左侧边栏并选择章节，或新建一章。
+              <p className="muted write-empty-hint" style={{ margin: 0 }}>
+                {focusMode ? "请先选择或创建章节" : "请打开左侧边栏并选择章节，或新建一章。"}
               </p>
             )}
           </div>
         </div>
       </div>
 
-      <nav className="write-ai-rail" aria-label="AI 功能">
+      {!focusMode ? (
+        <nav className="write-ai-rail" aria-label="AI 功能">
         {RAIL_ITEMS.map(({ key, line2 }) => (
           <button
             key={key}
@@ -1232,7 +1564,7 @@ export default function NovelWrite() {
         ))}
       </nav>
 
-      {drawerOpen && rightTool ? (
+      {!focusMode && drawerOpen && rightTool ? (
         <div className="write-ai-drawer">
           <div className="write-ai-drawer-head">
             <span>

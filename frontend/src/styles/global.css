@@ -295,6 +295,73 @@ select {
   margin-right: -0.25rem;
   padding-right: 60px;
   min-height: calc(100vh - 7.25rem);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.write-theme--light {
+  --theme-bg: var(--bg);
+  --theme-card: var(--card);
+  --theme-ink: var(--ink);
+  --theme-muted: var(--muted);
+  --theme-border: var(--border);
+  --theme-bg-deep: var(--bg-deep);
+}
+
+.write-theme--sepia {
+  --theme-bg: #f4ecd8;
+  --theme-card: #faf6e9;
+  --theme-ink: #5c4b37;
+  --theme-muted: #8b7355;
+  --theme-border: #d4c4a8;
+  --theme-bg-deep: #e8dcc0;
+  background: var(--theme-bg);
+  background-image: none;
+}
+
+.write-theme--dark {
+  --theme-bg: #1a1a2e;
+  --theme-card: #16213e;
+  --theme-ink: #e8e8e8;
+  --theme-muted: #9ca3af;
+  --theme-border: #374151;
+  --theme-bg-deep: #1f2937;
+  background: var(--theme-bg);
+  background-image: none;
+}
+
+.write-theme--dark .write-shell,
+.write-theme--sepia .write-shell {
+  background: var(--theme-bg);
+}
+
+.write-focus-mode {
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.write-focus-mode .write-sidenav-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.write-focus-mode:hover .write-sidenav-toggle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.write-focus-mode .write-left-sidebar {
+  display: none;
+}
+
+.write-focus-mode .write-workspace {
+  justify-content: center;
+}
+
+.write-focus-mode .write-main {
+  max-width: 900px;
+  margin: 0 auto;
+  flex: 0 1 auto;
 }
 
 /* 人物新建/编辑：占满可用宽度，保留右侧 AI 浮条占位 */
@@ -563,6 +630,131 @@ select {
 .write-font-option.is-active {
   color: var(--accent-soft);
   font-weight: 600;
+}
+
+.write-line-height-picker,
+.write-line-width-picker,
+.write-theme-picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.write-line-height-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 18px;
+}
+
+.write-line-height-line {
+  display: block;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 1px;
+}
+
+.write-line-height-menu,
+.write-line-width-menu,
+.write-theme-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  min-width: 8rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(28, 25, 23, 0.14);
+}
+
+.write-line-height-menu li,
+.write-line-width-menu li,
+.write-theme-menu li {
+  margin: 0;
+}
+
+.write-line-height-option,
+.write-line-width-option,
+.write-theme-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.85rem;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.write-line-height-option:hover,
+.write-line-width-option:hover,
+.write-theme-option:hover {
+  background: var(--bg-deep);
+}
+
+.write-line-height-option.is-active,
+.write-line-width-option.is-active,
+.write-theme-option.is-active {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
+.write-line-width-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 18px;
+}
+
+.write-line-width-bar {
+  display: block;
+  height: 2px;
+  background: var(--ink);
+  border-radius: 1px;
+}
+
+.write-line-width-bar--short {
+  width: 8px;
+}
+
+.write-line-width-bar--medium {
+  width: 13px;
+}
+
+.write-line-width-bar--long {
+  width: 18px;
+}
+
+.write-theme-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.write-focus-btn {
+  transition: all 0.2s ease;
+}
+
+.write-focus-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.write-focus-btn.is-active:hover {
+  background: #9a3412;
+  border-color: #9a3412;
+}
+
+.write-focus-icon {
+  font-size: 0.85rem;
+  line-height: 1;
 }
 
 .write-icon-btn {
@@ -972,6 +1164,288 @@ select {
 .editor-title--compact {
   margin-bottom: 0.4rem !important;
   font-size: 1.2rem !important;
+}
+
+.write-editor-card {
+  position: relative;
+}
+
+.write-editor-card--sepia {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-editor-card--dark {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-editor-header {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.write-theme--sepia .write-editor-header,
+.write-theme--dark .write-editor-header {
+  border-bottom-color: var(--theme-border);
+}
+
+.editor-title--improved {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  border: none;
+  background: transparent;
+  width: 100%;
+  color: var(--ink);
+  padding: 0.25rem 0;
+  text-align: center;
+}
+
+.write-theme--sepia .editor-title--improved {
+  color: var(--theme-ink);
+}
+
+.write-theme--dark .editor-title--improved {
+  color: var(--theme-ink);
+}
+
+.write-body-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.write-body-wrapper--narrow .write-body-field {
+  max-width: 40ch;
+}
+
+.write-body-wrapper--medium .write-body-field {
+  max-width: 55ch;
+}
+
+.write-body-wrapper--wide .write-body-field {
+  max-width: 70ch;
+}
+
+.write-body-wrapper--full .write-body-field {
+  max-width: none;
+}
+
+.write-body-field {
+  width: 100%;
+  margin: 0 !important;
+}
+
+.editor-body--line-height-compact {
+  line-height: 1.6;
+}
+
+.editor-body--line-height-normal {
+  line-height: 1.85;
+}
+
+.editor-body--line-height-relaxed {
+  line-height: 2.0;
+}
+
+.editor-body--line-height-loose {
+  line-height: 2.2;
+}
+
+.write-editor-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+}
+
+.write-theme--sepia .write-editor-footer,
+.write-theme--dark .write-editor-footer {
+  border-top-color: var(--theme-border);
+}
+
+.write-word-stats {
+  display: flex;
+  gap: 1rem;
+  color: var(--muted);
+}
+
+.write-theme--sepia .write-word-stats {
+  color: var(--theme-muted);
+}
+
+.write-theme--dark .write-word-stats {
+  color: var(--theme-muted);
+}
+
+.write-word-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.write-word-stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.write-theme--sepia .write-word-stat-label {
+  color: var(--theme-muted);
+}
+
+.write-theme--dark .write-word-stat-label {
+  color: var(--theme-muted);
+}
+
+.write-word-stat-value {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.write-theme--sepia .write-word-stat-value {
+  color: var(--theme-ink);
+}
+
+.write-theme--dark .write-word-stat-value {
+  color: var(--theme-ink);
+}
+
+.write-exit-focus-btn {
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.5rem !important;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.write-exit-focus-btn:hover {
+  opacity: 1;
+}
+
+.write-empty-hint {
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.95rem;
+}
+
+.write-theme--sepia .write-empty-hint,
+.write-theme--dark .write-empty-hint {
+  color: var(--theme-muted);
+}
+
+.write-theme--sepia .card,
+.write-theme--dark .card {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .input,
+.write-theme--sepia .textarea,
+.write-theme--dark .input,
+.write-theme--dark .textarea {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+  color: var(--theme-ink);
+}
+
+.write-theme--sepia .input::placeholder,
+.write-theme--sepia .textarea::placeholder,
+.write-theme--dark .input::placeholder,
+.write-theme--dark .textarea::placeholder {
+  color: var(--theme-muted);
+  opacity: 0.6;
+}
+
+.write-theme--sepia .write-icon-btn,
+.write-theme--dark .write-icon-btn {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+  color: var(--theme-ink);
+}
+
+.write-theme--sepia .write-icon-btn:hover,
+.write-theme--dark .write-icon-btn:hover {
+  background: var(--theme-bg-deep);
+}
+
+.write-theme--sepia .write-ai-rail,
+.write-theme--dark .write-ai-rail {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .write-ai-drawer,
+.write-theme--dark .write-ai-drawer {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .muted,
+.write-theme--dark .muted {
+  color: var(--theme-muted);
+}
+
+.write-theme--sepia .chapter-item,
+.write-theme--dark .chapter-item {
+  color: var(--theme-ink);
+}
+
+.write-theme--sepia .chapter-item.active,
+.write-theme--dark .chapter-item.active {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .chapter-row:hover .chapter-item,
+.write-theme--dark .chapter-row:hover .chapter-item {
+  background: var(--theme-bg-deep);
+}
+
+.write-theme--sepia .write-left-inner,
+.write-theme--dark .write-left-inner {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .write-font-menu,
+.write-theme--sepia .write-line-height-menu,
+.write-theme--sepia .write-line-width-menu,
+.write-theme--sepia .write-theme-menu,
+.write-theme--dark .write-font-menu,
+.write-theme--dark .write-line-height-menu,
+.write-theme--dark .write-line-width-menu,
+.write-theme--dark .write-theme-menu {
+  background: var(--theme-card);
+  border-color: var(--theme-border);
+}
+
+.write-theme--sepia .write-font-option,
+.write-theme--sepia .write-line-height-option,
+.write-theme--sepia .write-line-width-option,
+.write-theme--sepia .write-theme-option,
+.write-theme--dark .write-font-option,
+.write-theme--dark .write-line-height-option,
+.write-theme--dark .write-line-width-option,
+.write-theme--dark .write-theme-option {
+  color: var(--theme-ink);
+}
+
+.write-theme--sepia .write-font-option:hover,
+.write-theme--sepia .write-line-height-option:hover,
+.write-theme--sepia .write-line-width-option:hover,
+.write-theme--sepia .write-theme-option:hover,
+.write-theme--dark .write-font-option:hover,
+.write-theme--dark .write-line-height-option:hover,
+.write-theme--dark .write-line-width-option:hover,
+.write-theme--dark .write-theme-option:hover {
+  background: var(--theme-bg-deep);
 }
 
 @media (min-width: 900px) {
