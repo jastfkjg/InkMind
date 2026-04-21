@@ -1539,32 +1539,33 @@ export default function NovelWrite() {
         </div>
       </div>
 
-      {!focusMode ? (
+      {!focusMode && (
         <nav className="write-ai-rail" aria-label="AI 功能">
-        {RAIL_ITEMS.map(({ key, line2 }) => (
-          <button
-            key={key}
-            type="button"
-            className={`write-rail-btn${rightTool === key ? " active" : ""}`}
-            disabled={!canOpenTool(key)}
-            title={
-              !hasLlm
-                ? "未配置 LLM"
-                : needsChapter(key) && !activeId
-                  ? "请先选择章节"
-                  : `AI${line2}`
-            }
-            onClick={() => toggleTool(key)}
-          >
-            <span className="write-rail-stack">
-              <span className="write-rail-ai">AI</span>
-              <span className="write-rail-name">{line2}</span>
-            </span>
-          </button>
-        ))}
-      </nav>
+          {RAIL_ITEMS.map(({ key, line2 }) => (
+            <button
+              key={key}
+              type="button"
+              className={`write-rail-btn${rightTool === key ? " active" : ""}`}
+              disabled={!canOpenTool(key)}
+              title={
+                !hasLlm
+                  ? "未配置 LLM"
+                  : needsChapter(key) && !activeId
+                    ? "请先选择章节"
+                    : `AI${line2}`
+              }
+              onClick={() => toggleTool(key)}
+            >
+              <span className="write-rail-stack">
+                <span className="write-rail-ai">AI</span>
+                <span className="write-rail-name">{line2}</span>
+              </span>
+            </button>
+          ))}
+        </nav>
+      )}
 
-      {!focusMode && drawerOpen && rightTool ? (
+      {!focusMode && drawerOpen && rightTool && (
         <div className="write-ai-drawer">
           <div className="write-ai-drawer-head">
             <span>
@@ -1916,9 +1917,9 @@ export default function NovelWrite() {
             ) : null}
           </div>
         </div>
-      ) : null}
+      )}
 
-      {showSelectionBar && selectionMenuPos ? (
+      {showSelectionBar && selectionMenuPos && (
         <div
           className="write-selection-float"
           role="toolbar"
@@ -1964,9 +1965,9 @@ export default function NovelWrite() {
             润色
           </button>
         </div>
-      ) : null}
+      )}
 
-      {selectionPanel ? (
+      {selectionPanel && (
         <div
           className="write-selection-overlay"
           role="presentation"
@@ -2034,7 +2035,7 @@ export default function NovelWrite() {
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
