@@ -1218,16 +1218,28 @@ select {
   width: 100%;
 }
 
-.write-body-wrapper--narrow .write-body-field {
-  max-width: 40ch;
+.write-body-wrapper--xs .write-body-field {
+  max-width: 35ch;
 }
 
-.write-body-wrapper--medium .write-body-field {
-  max-width: 55ch;
+.write-body-wrapper--sm .write-body-field {
+  max-width: 42ch;
 }
 
-.write-body-wrapper--wide .write-body-field {
-  max-width: 70ch;
+.write-body-wrapper--md .write-body-field {
+  max-width: 50ch;
+}
+
+.write-body-wrapper--lg .write-body-field {
+  max-width: 60ch;
+}
+
+.write-body-wrapper--xl .write-body-field {
+  max-width: 72ch;
+}
+
+.write-body-wrapper--2xl .write-body-field {
+  max-width: 85ch;
 }
 
 .write-body-wrapper--full .write-body-field {
