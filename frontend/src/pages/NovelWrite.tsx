@@ -57,12 +57,15 @@ const LINE_HEIGHTS: { id: LineHeightId; label: string; value: number }[] = [
 
 const WRITE_LINE_HEIGHT_KEY = "inkmind_write_line_height";
 
-type LineWidthId = "narrow" | "medium" | "wide" | "full";
+type LineWidthId = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "full";
 
 const LINE_WIDTHS: { id: LineWidthId; label: string; maxWidth: string | null }[] = [
-  { id: "narrow", label: "窄", maxWidth: "40ch" },
-  { id: "medium", label: "中", maxWidth: "55ch" },
-  { id: "wide", label: "宽", maxWidth: "70ch" },
+  { id: "xs", label: "极窄 (35ch)", maxWidth: "35ch" },
+  { id: "sm", label: "窄 (42ch)", maxWidth: "42ch" },
+  { id: "md", label: "适中 (50ch)", maxWidth: "50ch" },
+  { id: "lg", label: "宽 (60ch)", maxWidth: "60ch" },
+  { id: "xl", label: "很宽 (72ch)", maxWidth: "72ch" },
+  { id: "2xl", label: "超宽 (85ch)", maxWidth: "85ch" },
   { id: "full", label: "铺满", maxWidth: null },
 ];
 
@@ -92,16 +95,30 @@ function readStoredLineHeight(): LineHeightId {
   return "normal";
 }
 
+const LEGACY_LINE_WIDTH_MAP: Record<string, LineWidthId> = {
+  narrow: "sm",
+  medium: "md",
+  wide: "lg",
+  full: "full",
+};
+
 function readStoredLineWidth(): LineWidthId {
   try {
     const v = localStorage.getItem(WRITE_LINE_WIDTH_KEY);
-    if (v && LINE_WIDTHS.some((x) => x.id === v)) {
-      return v as LineWidthId;
+    if (v) {
+      if (LINE_WIDTHS.some((x) => x.id === v)) {
+        return v as LineWidthId;
+      }
+      const mapped = LEGACY_LINE_WIDTH_MAP[v];
+      if (mapped) {
+        localStorage.setItem(WRITE_LINE_WIDTH_KEY, mapped);
+        return mapped;
+      }
     }
   } catch {
     /* ignore */
   }
-  return "medium";
+  return "md";
 }
 
 function readStoredTheme(): ThemeId {
