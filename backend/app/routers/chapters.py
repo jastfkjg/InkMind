@@ -668,7 +668,7 @@ def get_chapter_version_detail(
     return version
 
 
-@router.get("/{chapter_id}/versions/compare")
+@router.get("/{chapter_id}/versions/compare", response_model=ChapterVersionDiffOut)
 def compare_two_versions(
     novel_id: int,
     chapter_id: int,
@@ -676,7 +676,7 @@ def compare_two_versions(
     db: Annotated[Session, Depends(get_db)],
     version_id_1: int = Query(..., description="第一个版本ID"),
     version_id_2: int = Query(..., description="第二个版本ID"),
-) -> dict[str, str | int]:
+) -> ChapterVersionDiffOut:
     _get_owned_novel(db, user.id, novel_id)
     ch = db.get(Chapter, chapter_id)
     if ch is None or ch.novel_id != novel_id:
@@ -685,17 +685,17 @@ def compare_two_versions(
     result = compare_versions(db, chapter_id, version_id_1, version_id_2)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
-    return result
+    return ChapterVersionDiffOut(**result)
 
 
-@router.get("/{chapter_id}/versions/{version_id}/compare-current")
+@router.get("/{chapter_id}/versions/{version_id}/compare-current", response_model=ChapterVersionDiffOut)
 def compare_version_with_current_chapter(
     novel_id: int,
     chapter_id: int,
     version_id: int,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
-) -> dict[str, str | int]:
+) -> ChapterVersionDiffOut:
     _get_owned_novel(db, user.id, novel_id)
     ch = db.get(Chapter, chapter_id)
     if ch is None or ch.novel_id != novel_id:
@@ -704,7 +704,7 @@ def compare_version_with_current_chapter(
     result = compare_version_with_current(db, ch, version_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
-    return result
+    return ChapterVersionDiffOut(**result)
 
 
 @router.post("/{chapter_id}/rollback", response_model=ChapterOut)
