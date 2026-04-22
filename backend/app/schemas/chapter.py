@@ -145,3 +145,36 @@ class ChapterSelectionAiIn(BaseModel):
         default=None,
         description="留空则使用用户偏好或全局默认",
     )
+
+
+class ChapterVersionOut(BaseModel):
+    id: int
+    chapter_id: int
+    version_number: int
+    title: str
+    summary: str
+    content: str
+    change_type: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_serializer("created_at")
+    def serialize_dt(self, v: datetime) -> str:
+        return _utc_dt(v).isoformat()
+
+
+class ChapterVersionDiffOut(BaseModel):
+    diff_html: str
+    diff_text: str
+    added_count: int
+    removed_count: int
+    changed_count: int
+
+
+class ChapterRollbackIn(BaseModel):
+    version_id: int = Field(..., description="要回滚到的版本ID")
+    save_current: bool = Field(
+        default=True,
+        description="是否保存当前版本作为历史版本后再回滚",
+    )

@@ -454,3 +454,53 @@ export async function fetchLlmUsage(limit = 100) {
   const { data } = await api.get<LlmUsageSummary>(`/usage/llm?limit=${Math.max(1, Math.min(500, limit))}`);
   return data;
 }
+
+export async function fetchChapterVersions(novelId: number, chapterId: number, limit = 50) {
+  const { data } = await api.get<ChapterVersion[]>(
+    `/novels/${novelId}/chapters/${chapterId}/versions?limit=${Math.max(1, Math.min(200, limit))}`
+  );
+  return data;
+}
+
+export async function fetchChapterVersionDetail(novelId: number, chapterId: number, versionId: number) {
+  const { data } = await api.get<ChapterVersion>(
+    `/novels/${novelId}/chapters/${chapterId}/versions/${versionId}`
+  );
+  return data;
+}
+
+export async function compareChapterVersions(
+  novelId: number,
+  chapterId: number,
+  versionId1: number,
+  versionId2: number
+) {
+  const { data } = await api.get<ChapterVersionDiff>(
+    `/novels/${novelId}/chapters/${chapterId}/versions/compare?version_id_1=${versionId1}&version_id_2=${versionId2}`
+  );
+  return data;
+}
+
+export async function compareVersionWithCurrent(
+  novelId: number,
+  chapterId: number,
+  versionId: number
+) {
+  const { data } = await api.get<ChapterVersionDiff>(
+    `/novels/${novelId}/chapters/${chapterId}/versions/${versionId}/compare-current`
+  );
+  return data;
+}
+
+export async function rollbackChapterToVersion(
+  novelId: number,
+  chapterId: number,
+  versionId: number,
+  saveCurrent: boolean = true
+) {
+  const { data } = await api.post<Chapter>(
+    `/novels/${novelId}/chapters/${chapterId}/rollback`,
+    { version_id: versionId, save_current: saveCurrent }
+  );
+  return data;
+}

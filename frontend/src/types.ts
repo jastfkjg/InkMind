@@ -65,3 +65,31 @@ export type LlmUsageSummary = {
   total_tokens: number;
   items: LlmUsageItem[];
 };
+
+export type ChapterVersion = {
+  id: number;
+  chapter_id: number;
+  version_number: number;
+  title: string;
+  summary: string;
+  content: string;
+  change_type: string;
+  created_at: string;
+};
+
+export type ChapterVersionDiff = {
+  diff_html: string;
+  diff_text: string;
+  added_count: number;
+  removed_count: number;
+  changed_count: number;
+  old_version?: ChapterVersion;
+  new_version?: ChapterVersion;
+  current_version?: {
+    id: number;
+    title: string;
+    summary: string;
+    content: string;
+    updated_at: string;
+  };
+};
