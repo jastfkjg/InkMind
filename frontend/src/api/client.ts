@@ -213,6 +213,7 @@ export async function generateChapter(
     chapterId?: number | null;
     title?: string | null;
     lockTitle?: boolean;
+    wordCount?: number | null;
     onToken?: (chunk: string) => void;
   }
 ) {
@@ -223,6 +224,7 @@ export async function generateChapter(
       chapter_id: options?.chapterId ?? null,
       title: options?.title?.trim() ? options.title.trim() : null,
       lock_title: options?.lockTitle ?? false,
+      word_count: (options?.wordCount && options.wordCount >= 500 && options.wordCount <= 4000) ? options.wordCount : null,
     },
     { onToken: options?.onToken }
   );
@@ -236,12 +238,16 @@ export async function generateChapterBatch(
     chapter_count: number;
     total_summary: string;
     after_chapter_id?: number | null;
+    word_count?: number | null;
   },
   options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
 ) {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/generate-batch`,
-    payload,
+    {
+      ...payload,
+      word_count: (payload.word_count && payload.word_count >= 500 && payload.word_count <= 4000) ? payload.word_count : null,
+    },
     { onToken: options?.onToken, signal: options?.signal }
   );
   if (!r.chapters) throw new Error("未收到批量章节数据");

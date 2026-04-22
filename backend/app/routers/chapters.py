@@ -98,6 +98,7 @@ def generate_chapter(
 
     req_title = (body.title or "").strip()
     fixed_title = req_title if body.lock_title and req_title else None
+    word_count = body.word_count if body.word_count and 500 <= body.word_count <= 4000 else None
 
     def gen():
         try:
@@ -113,7 +114,7 @@ def generate_chapter(
             with ai_span("chapter.generate.react_agent", novel_id=novel_id):
                 result = run_react_chapter_generation(
                     db, novel, body.summary.strip(), target,
-                    llm, fixed_title=fixed_title
+                    llm, fixed_title=fixed_title, word_count=word_count
                 )
             # 迭代生成器：前部分是文本 chunks，最后是 Chapter 对象
             ch = None
@@ -170,6 +171,8 @@ def generate_chapter_batch(
         if latest is not None and anchor.id != latest.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="批量生成仅支持从最新章节开始")
 
+    word_count = body.word_count if body.word_count and 500 <= body.word_count <= 4000 else None
+
     def gen():
         try:
             llm = resolve_llm_for_user(user, None, db=db, action="AI批量生成")
@@ -217,6 +220,7 @@ def generate_chapter_batch(
                     llm,
                     fixed_title=item["title"],
                     new_sort_order=sort_order,
+                    word_count=word_count,
                 )
                 created: Chapter | None = None
                 for piece in result:

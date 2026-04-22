@@ -89,6 +89,12 @@ class ChapterGenerateIn(BaseModel):
         default=False,
         description="为 true 时强制沿用 title；否则即便当前章节原本有标题，也允许模型重新拟题",
     )
+    word_count: int | None = Field(
+        default=None,
+        ge=500,
+        le=4000,
+        description="期望生成的正文字数（500-4000字），模型会尽量接近但不保证严格符合",
+    )
 
 
 class ChapterBatchGenerateIn(BaseModel):
@@ -102,6 +108,12 @@ class ChapterBatchGenerateIn(BaseModel):
     after_chapter_id: int | None = Field(
         default=None,
         description="从该章节之后插入生成；为空则追加到全书末尾",
+    )
+    word_count: int | None = Field(
+        default=None,
+        ge=500,
+        le=4000,
+        description="期望生成的每章正文字数（500-4000字），模型会尽量接近但不保证严格符合",
     )
 
 
