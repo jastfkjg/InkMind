@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from sqlalchemy import (
     String,
@@ -10,6 +11,16 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+VersionChangeType = Literal[
+    "manual",
+    "ai_generate",
+    "ai_rewrite",
+    "ai_append",
+    "selection_expand",
+    "selection_polish",
+    "rollback",
+]
 
 
 class User(Base):
@@ -73,6 +84,24 @@ class Chapter(Base):
     )
 
     novel: Mapped["Novel"] = relationship("Novel", back_populates="chapters")
+    versions: Mapped[list["ChapterVersion"]] = relationship(
+        "ChapterVersion", back_populates="chapter", cascade="all, delete-orphan"
+    )
+
+
+class ChapterVersion(Base):
+    __tablename__ = "chapter_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), index=True)
+    version_number: Mapped[int] = mapped_column(Integer, default=1)
+    title: Mapped[str] = mapped_column(String(512), default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    change_type: Mapped[str] = mapped_column(String(32), default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chapter: Mapped["Chapter"] = relationship("Chapter", back_populates="versions")
 
 
 class Character(Base):

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useParams } from "react-router-dom";
 import {
   apiErrorMessage,
+  compareVersionWithCurrent,
   createChapter,
   deleteChapter,
   chapterSelectionAi,
   evaluateChapter,
+  fetchChapterVersions,
   fetchChapters,
   fetchLlmProviders,
   generateChapter,
@@ -14,14 +16,16 @@ import {
   novelAiChapterSummaryInspire,
   novelAiNaming,
   reviseChapter,
+  rollbackChapterToVersion,
   updateChapter,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
-import type { Chapter } from "@/types";
+import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 
-type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate";
+type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate" | "versions";
+
 type GenerateTab = "single" | "batch";
 
 const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
@@ -31,6 +35,7 @@ const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
   { key: "naming", line2: "起名" },
   { key: "ask", line2: "提问" },
   { key: "evaluate", line2: "评估" },
+  { key: "versions", line2: "版本" },
 ];
 
 const WRITE_BODY_FONT_KEY = "inkmind_write_body_font";
@@ -300,6 +305,13 @@ export default function NovelWrite() {
   const selectionRangeRef = useRef<{ start: number; end: number } | null>(null);
   selectionRangeRef.current = selectionRange;
   const [err, setErr] = useState("");
+  
+  const [versions, setVersions] = useState<ChapterVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState<ChapterVersion | null>(null);
+  const [versionDiff, setVersionDiff] = useState<ChapterVersionDiff | null>(null);
+  const [versionDiffLoading, setVersionDiffLoading] = useState(false);
+  const [versionActionLoading, setVersionActionLoading] = useState(false);
   const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
   activeIdRef.current = activeId;
@@ -635,6 +647,76 @@ export default function NovelWrite() {
     }
   }
 
+  async function loadVersions() {
+    if (activeId === null) return;
+    setVersionsLoading(true);
+    setErr("");
+    try {
+      const list = await fetchChapterVersions(id, activeId);
+      setVersions(list);
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setVersionsLoading(false);
+    }
+  }
+
+  async function loadVersionDetail(versionId: number) {
+    if (activeId === null) return;
+    setErr("");
+    try {
+      const v = await fetchChapterVersionDetail(id, activeId, versionId);
+      setSelectedVersion(v);
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    }
+  }
+
+  async function compareSelectedVersionWithCurrent(versionId: number) {
+    if (activeId === null) return;
+    setVersionDiffLoading(true);
+    setErr("");
+    try {
+      const diff = await compareVersionWithCurrent(id, activeId, versionId);
+      setVersionDiff(diff);
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setVersionDiffLoading(false);
+    }
+  }
+
+  async function handleRollback(versionId: number, saveCurrent: boolean = true) {
+    if (activeId === null) return;
+    const confirmMsg = saveCurrent
+      ? "确定要回滚到该版本吗？当前内容将被保存为历史版本。"
+      : "确定要回滚到该版本吗？当前内容将被丢弃。";
+    if (!window.confirm(confirmMsg)) return;
+    
+    setVersionActionLoading(true);
+    setErr("");
+    try {
+      const ch = await rollbackChapterToVersion(id, activeId, versionId, saveCurrent);
+      setTitle(ch.title);
+      setSummary(ch.summary);
+      setContent(normalizeBodyParagraphIndent(ch.content));
+      setChapters((prev) => prev.map((x) => (x.id === ch.id ? ch : x)));
+      setSelectedVersion(null);
+      setVersionDiff(null);
+      await loadVersions();
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setVersionActionLoading(false);
+    }
+  }
+
+  function clearVersionState() {
+    setVersions([]);
+    setSelectedVersion(null);
+    setVersionDiff(null);
+  }
+
   const showSelectionBar =
     Boolean(activeId) &&
     Boolean(selectionRange && selectionRange.start !== selectionRange.end) &&
@@ -671,10 +753,13 @@ export default function NovelWrite() {
   }, [showSelectionBar, selectionRange, content, bodyFontSizePx, bodyFontId]);
 
   function needsChapter(tool: AiTool): boolean {
-    return tool === "generate" || tool === "rewrite" || tool === "append" || tool === "evaluate";
+    return tool === "generate" || tool === "rewrite" || tool === "append" || tool === "evaluate" || tool === "versions";
   }
 
   function canOpenTool(tool: AiTool): boolean {
+    if (tool === "versions") {
+      return activeId !== null;
+    }
     if (!hasLlm) return false;
     if (needsChapter(tool)) return activeId !== null;
     return true;
@@ -705,8 +790,15 @@ export default function NovelWrite() {
       return;
     }
     setActiveId(cid);
+    clearVersionState();
     if (narrow) setSidebarOpen(false);
   }
+
+  useEffect(() => {
+    if (rightTool === "versions" && activeId !== null) {
+      loadVersions();
+    }
+  }, [rightTool, activeId]);
 
   useEffect(() => {
     if (activeId === null) return;
@@ -1592,6 +1684,7 @@ export default function NovelWrite() {
               {rightTool === "naming" && "AI 起名"}
               {rightTool === "ask" && "AI 提问"}
               {rightTool === "evaluate" && "AI 评估"}
+              {rightTool === "versions" && "版本历史"}
             </span>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
               关闭
@@ -1890,6 +1983,183 @@ export default function NovelWrite() {
                     )}
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+
+            {rightTool === "versions" && activeId ? (
+              <div className="write-ai-section">
+                <div style={{ marginBottom: "1rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <span className="muted" style={{ fontSize: "0.85rem" }}>
+                      本章节共有 {versions.length} 个历史版本
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                      disabled={versionsLoading}
+                      onClick={() => loadVersions()}
+                    >
+                      刷新
+                    </button>
+                  </div>
+                  
+                  {versionsLoading ? (
+                    <p className="muted" style={{ textAlign: "center", padding: "1rem" }}>
+                      加载版本列表中…
+                    </p>
+                  ) : versions.length === 0 ? (
+                    <p className="muted" style={{ textAlign: "center", padding: "1rem" }}>
+                      暂无历史版本。当您修改章节内容后，系统会自动保存历史版本。
+                    </p>
+                  ) : (
+                    <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                      <div className="stack-sm">
+                        {versions.map((v) => (
+                          <div
+                            key={v.id}
+                            className={`card version-item${selectedVersion?.id === v.id ? " version-item--active" : ""}`}
+                            style={{ padding: "0.75rem", cursor: "pointer" }}
+                            onClick={() => {
+                              setSelectedVersion(v);
+                              setVersionDiff(null);
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                                  <strong style={{ fontSize: "0.9rem" }}>
+                                    版本 {v.version_number}
+                                  </strong>
+                                  <span
+                                    className="version-type-badge"
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      padding: "0.125rem 0.375rem",
+                                      borderRadius: "4px",
+                                      backgroundColor: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#e3f2fd" : "#f5f5f5",
+                                      color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#1976d2" : "#666",
+                                    }}
+                                  >
+                                    {v.change_type === "manual" && "手动修改"}
+                                    {v.change_type === "ai_generate" && "AI生成"}
+                                    {v.change_type === "ai_rewrite" && "AI改写"}
+                                    {v.change_type === "ai_append" && "AI追加"}
+                                    {v.change_type === "selection_expand" && "AI扩写"}
+                                    {v.change_type === "selection_polish" && "AI润色"}
+                                    {v.change_type === "rollback" && "版本回滚"}
+                                  </span>
+                                </div>
+                                {v.title && (
+                                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                                    标题: {v.title.length > 30 ? v.title.slice(0, 30) + "…" : v.title}
+                                  </p>
+                                )}
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "#888" }}>
+                                  {new Date(v.created_at).toLocaleString("zh-CN")}
+                                </p>
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "#aaa" }}>
+                                  {v.content.replace(/\s/g, "").length} 字
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {selectedVersion?.id === v.id && (
+                              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
+                                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                                    disabled={versionDiffLoading || versionActionLoading}
+                                    onClick={() => compareSelectedVersionWithCurrent(v.id)}
+                                  >
+                                    {versionDiffLoading ? "对比中…" : "与当前对比"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn"
+                                    style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                                    disabled={versionActionLoading}
+                                    onClick={() => handleRollback(v.id, true)}
+                                  >
+                                    回滚（保存当前）
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                                    disabled={versionActionLoading}
+                                    onClick={() => handleRollback(v.id, false)}
+                                  >
+                                    直接回滚
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {versionDiff && (
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>差异对比</h4>
+                      <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", fontSize: "0.8rem" }}>
+                        <span style={{ color: "#4caf50" }}>+ 新增: {versionDiff.added_count} 行</span>
+                        <span style={{ color: "#f44336" }}>- 删除: {versionDiff.removed_count} 行</span>
+                        <span style={{ color: "#ff9800" }}>~ 修改: {versionDiff.changed_count} 行</span>
+                      </div>
+                      <div
+                        className="version-diff-container"
+                        style={{
+                          maxHeight: "300px",
+                          overflowY: "auto",
+                          padding: "0.75rem",
+                          backgroundColor: "#fafafa",
+                          borderRadius: "4px",
+                          fontFamily: "monospace",
+                          fontSize: "0.8rem",
+                          lineHeight: "1.5",
+                        }}
+                        dangerouslySetInnerHTML={{ __html: versionDiff.diff_html }}
+                      />
+                    </div>
+                  )}
+                  
+                  {selectedVersion && !versionDiff && (
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>版本内容预览</h4>
+                      {selectedVersion.summary && (
+                        <div style={{ marginBottom: "0.5rem" }}>
+                          <strong style={{ fontSize: "0.85rem" }}>概要:</strong>
+                          <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                            {selectedVersion.summary}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <strong style={{ fontSize: "0.85rem" }}>正文:</strong>
+                        <pre
+                          style={{
+                            margin: "0.25rem 0",
+                            padding: "0.75rem",
+                            backgroundColor: "#fafafa",
+                            borderRadius: "4px",
+                            fontSize: "0.8rem",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            maxHeight: "200px",
+                            overflowY: "auto",
+                          }}
+                        >
+                          {selectedVersion.content}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : null}
 

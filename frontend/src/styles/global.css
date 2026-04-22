@@ -2011,3 +2011,45 @@ select {
   color: var(--muted);
   font-weight: 600;
 }
+
+.version-item {
+  transition: all 0.15s ease;
+}
+
+.version-item:hover {
+  box-shadow: 0 2px 8px rgba(28, 25, 23, 0.08);
+}
+
+.version-item--active {
+  border-color: var(--accent-soft) !important;
+  background: color-mix(in oklab, var(--accent-soft) 8%, transparent) !important;
+}
+
+.version-diff-container .diff-equal {
+  color: var(--ink);
+  background: transparent;
+}
+
+.version-diff-container .diff-insert {
+  color: #16a34a;
+  background: color-mix(in oklab, #16a34a 10%, transparent);
+}
+
+.version-diff-container .diff-delete {
+  color: #dc2626;
+  background: color-mix(in oklab, #dc2626 10%, transparent);
+}
+
+.write-theme--dark .version-diff-container .diff-equal {
+  color: var(--theme-ink);
+}
+
+.write-theme--dark .version-diff-container .diff-insert {
+  color: #4ade80;
+  background: color-mix(in oklab, #4ade80 15%, transparent);
+}
+
+.write-theme--dark .version-diff-container .diff-delete {
+  color: #f87171;
+  background: color-mix(in oklab, #f87171 15%, transparent);
+}

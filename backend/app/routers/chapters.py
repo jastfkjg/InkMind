@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from app.deps import CurrentUser
 from app.llm.llm_errors import LLMRequestError
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
-from app.models import Chapter
+from app.models import Chapter, ChapterVersion
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
     ChapterBatchGenerateIn,
@@ -19,9 +19,12 @@ from app.schemas.chapter import (
     ChapterGenerateIn,
     ChapterOut,
     ChapterReviseIn,
+    ChapterRollbackIn,
     ChapterSelectionAiIn,
     ChapterSuggestTitleIn,
     ChapterUpdate,
+    ChapterVersionDiffOut,
+    ChapterVersionOut,
 )
 from app.services.chapter_eval import parse_evaluation_json, stream_evaluate_tokens
 from app.observability.otel_ai import ai_span
@@ -39,6 +42,15 @@ from app.services.chapter_llm import (
     messages_revise_chapter_body,
     messages_selection_ai,
     messages_suggest_chapter_title,
+)
+from app.services.chapter_version import (
+    compare_versions,
+    compare_version_with_current,
+    create_chapter_version,
+    get_chapter_version,
+    get_chapter_versions,
+    rollback_to_version,
+    save_version_before_change,
 )
 
 router = APIRouter(prefix="/novels/{novel_id}/chapters", tags=["chapters"])
@@ -93,6 +105,9 @@ def generate_chapter(
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
+        
+        if target is not None and target.content:
+            save_version_before_change(db, target, "ai_generate")
 
         try:
             with ai_span("chapter.generate.react_agent", novel_id=novel_id):
@@ -396,12 +411,18 @@ def selection_ai(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="章节正文为空")
     _verify_unique_selection(body.chapter_content, body.selected_text)
 
+    change_type = "selection_expand" if body.mode == "expand" else "selection_polish"
+
     def gen():
         try:
             llm = resolve_llm_for_user(user, body.llm_provider, db=db, action=("AI扩写" if body.mode == "expand" else "AI润色"))
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
+        
+        if ch.content:
+            save_version_before_change(db, ch, change_type)
+        
         sys_m, usr_m = messages_selection_ai(
             novel,
             ch,
@@ -467,6 +488,7 @@ def revise_chapter(
         )
 
     mode_eff = mode
+    change_type = "ai_append" if mode_eff == "append" else "ai_rewrite"
 
     def gen():
         try:
@@ -474,6 +496,9 @@ def revise_chapter(
         except ValueError as e:
             yield ndjson_line({"error": str(e)})
             return
+        
+        save_version_before_change(db, ch, change_type)
+        
         try:
             if mode_eff == "append":
                 sys_a, usr_a = messages_append_chapter_body(novel, ch, body.instruction)
@@ -576,6 +601,16 @@ def update_chapter(
     if ch is None or ch.novel_id != novel_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
     data = body.model_dump(exclude_unset=True)
+    
+    has_changes = False
+    for k, v in data.items():
+        if getattr(ch, k) != v:
+            has_changes = True
+            break
+    
+    if has_changes:
+        save_version_before_change(db, ch, "manual")
+    
     for k, v in data.items():
         setattr(ch, k, v)
     db.add(ch)
@@ -597,3 +632,97 @@ def delete_chapter(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
     db.delete(ch)
     db.commit()
+
+
+@router.get("/{chapter_id}/versions", response_model=list[ChapterVersionOut])
+def list_chapter_versions(
+    novel_id: int,
+    chapter_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[ChapterVersion]:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    return get_chapter_versions(db, chapter_id, limit=limit)
+
+
+@router.get("/{chapter_id}/versions/{version_id}", response_model=ChapterVersionOut)
+def get_chapter_version_detail(
+    novel_id: int,
+    chapter_id: int,
+    version_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ChapterVersion:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    
+    version = get_chapter_version(db, chapter_id, version_id)
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
+    return version
+
+
+@router.get("/{chapter_id}/versions/compare")
+def compare_two_versions(
+    novel_id: int,
+    chapter_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+    version_id_1: int = Query(..., description="第一个版本ID"),
+    version_id_2: int = Query(..., description="第二个版本ID"),
+) -> dict[str, str | int]:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    
+    result = compare_versions(db, chapter_id, version_id_1, version_id_2)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
+    return result
+
+
+@router.get("/{chapter_id}/versions/{version_id}/compare-current")
+def compare_version_with_current_chapter(
+    novel_id: int,
+    chapter_id: int,
+    version_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict[str, str | int]:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    
+    result = compare_version_with_current(db, ch, version_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
+    return result
+
+
+@router.post("/{chapter_id}/rollback", response_model=ChapterOut)
+def rollback_chapter_to_version(
+    novel_id: int,
+    chapter_id: int,
+    body: ChapterRollbackIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> Chapter:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+    
+    updated_ch = rollback_to_version(
+        db, ch, body.version_id, save_current=body.save_current
+    )
+    if updated_ch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
+    return updated_ch
