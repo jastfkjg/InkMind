@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.llm.base import LLMProvider
 from app.llm.anthropic_llm import AnthropicLLM
-from app.llm.metered_llm import MeteredLLM
+from app.llm.metered_llm import LLMUsageAccumulator, MeteredLLM
 from app.llm.openai_llm import DeepSeekLLM, KimiLLM, MiniMaxLLM, OpenAILLM, QwenLLM
 
 
@@ -53,7 +53,7 @@ def get_llm(provider: str | None) -> LLMProvider:
     raise ValueError(f"不支持的模型提供方: {name}")
 
 
-def _normalize_provider_name(provider: str | None, user: object | None) -> str:
+def normalize_provider_name(provider: str | None, user: object | None) -> str:
     name = (provider or "").strip().lower()
     if not name and user is not None:
         pref = getattr(user, "preferred_llm_provider", None)
@@ -65,15 +65,24 @@ def _normalize_provider_name(provider: str | None, user: object | None) -> str:
     return name
 
 
+def _normalize_provider_name(provider: str | None, user: object | None) -> str:
+    return normalize_provider_name(provider, user)
+
+
 def resolve_llm_for_user(
     user: object | None,
     explicit_provider: str | None,
     *,
     db: Session | None = None,
     action: str = "LLM调用",
+    accumulator: LLMUsageAccumulator | None = None,
 ) -> LLMProvider:
     """请求体中的 llm_provider 优先，否则使用用户偏好，再否则 settings.default_llm_provider。
-    传入 db 且 user 有 id 时，返回带调用次数统计的包装器（按完整流式请求计 1 次）。"""
+    传入 db 且 user 有 id 时，返回带调用次数统计的包装器（按完整流式请求计 1 次）。
+    
+    如果提供了 accumulator，则所有 LLM 调用的 token 用量会被累积到该 accumulator，
+    最后由调用者统一 flush，这样一次业务操作中多次 LLM 调用只会创建一条记录。
+    """
     provider_name = _normalize_provider_name(explicit_provider, user)
     llm = get_llm(provider_name)
     if db is not None and user is not None:
@@ -85,5 +94,6 @@ def resolve_llm_for_user(
                 int(uid),
                 provider=provider_name,
                 action=action,
+                accumulator=accumulator,
             )
     return llm
