@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Chapter, ChapterVersion, VersionChangeType
+from app.schemas.chapter import ChapterVersionOut
 
 
 def get_next_version_number(db: Session, chapter_id: int) -> int:
@@ -148,7 +149,7 @@ def compare_versions(
     chapter_id: int,
     version_id_1: int,
     version_id_2: int,
-) -> dict[str, str | int] | None:
+) -> dict[str, str | int | ChapterVersionOut | None] | None:
     v1 = get_chapter_version(db, chapter_id, version_id_1)
     v2 = get_chapter_version(db, chapter_id, version_id_2)
     
@@ -168,24 +169,8 @@ def compare_versions(
         "added_count": added_count,
         "removed_count": removed_count,
         "changed_count": changed_count,
-        "old_version": {
-            "id": v1.id,
-            "version_number": v1.version_number,
-            "title": v1.title,
-            "summary": v1.summary,
-            "content": v1.content,
-            "change_type": v1.change_type,
-            "created_at": v1.created_at,
-        },
-        "new_version": {
-            "id": v2.id,
-            "version_number": v2.version_number,
-            "title": v2.title,
-            "summary": v2.summary,
-            "content": v2.content,
-            "change_type": v2.change_type,
-            "created_at": v2.created_at,
-        },
+        "old_version": ChapterVersionOut.model_validate(v1),
+        "new_version": ChapterVersionOut.model_validate(v2),
     }
 
 
@@ -193,7 +178,7 @@ def compare_version_with_current(
     db: Session,
     chapter: Chapter,
     version_id: int,
-) -> dict[str, str | int] | None:
+) -> dict[str, str | int | ChapterVersionOut | dict | None] | None:
     v = get_chapter_version(db, chapter.id, version_id)
     
     if not v:
@@ -209,21 +194,13 @@ def compare_version_with_current(
         "added_count": added_count,
         "removed_count": removed_count,
         "changed_count": changed_count,
-        "old_version": {
-            "id": v.id,
-            "version_number": v.version_number,
-            "title": v.title,
-            "summary": v.summary,
-            "content": v.content,
-            "change_type": v.change_type,
-            "created_at": v.created_at,
-        },
+        "old_version": ChapterVersionOut.model_validate(v),
         "current_version": {
             "id": chapter.id,
             "title": chapter.title,
             "summary": chapter.summary,
             "content": chapter.content,
-            "updated_at": chapter.updated_at,
+            "updated_at": chapter.updated_at.isoformat() if chapter.updated_at else None,
         },
     }
 

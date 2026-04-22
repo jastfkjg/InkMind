@@ -170,6 +170,9 @@ class ChapterVersionDiffOut(BaseModel):
     added_count: int
     removed_count: int
     changed_count: int
+    old_version: ChapterVersionOut | None = None
+    new_version: ChapterVersionOut | None = None
+    current_version: dict | None = None
 
 
 class ChapterRollbackIn(BaseModel):
