@@ -135,10 +135,13 @@ class GenerateChapterTool(BaseTool):
         db: Session,
         novel: Novel,
         llm: "LLMProvider",
+        *,
+        word_count: int | None = None,
     ) -> None:
         self._db = db
         self._novel = novel
         self._llm = llm
+        self._word_count = word_count
 
     def run(self, chapter_summary: str = "", fixed_title: str | None = None) -> str:
         """执行章节生成，返回 JSON 格式的完整内容。"""
@@ -147,7 +150,7 @@ class GenerateChapterTool(BaseTool):
         memory = NovelMemory(self._db, self._novel)
         context = memory.build_context(chapter_summary)
 
-        system, user = _build_generate_system_user(context, fixed_title)
+        system, user = _build_generate_system_user(context, fixed_title, word_count=self._word_count)
 
         return self._llm.complete(system, user)
 
@@ -158,13 +161,16 @@ class GenerateChapterTool(BaseTool):
         memory = NovelMemory(self._db, self._novel)
         context = memory.build_context(chapter_summary)
 
-        # 流式输出时，直接输出正文而非 JSON，方便前端直接显示
-        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+        word_count_req = ""
+        if self._word_count and 500 <= self._word_count <= 4000:
+            word_count_req = f"\n4. 正文长度尽量控制在 {self._word_count} 字左右（允许上下浮动 10%）。"
+
+        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章正文。
 
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 只输出正文内容，不要任何解释、标签或结构标记。
-3. 情节需与前文衔接自然，人物言行符合其设定。"""
+3. 情节需与前文衔接自然，人物言行符合其设定。{word_count_req}"""
 
         if fixed_title:
             title_line = f"（本章标题：{fixed_title}）"
@@ -179,23 +185,28 @@ class GenerateChapterTool(BaseTool):
         return self._llm.stream_complete(system, user)
 
 
-def _build_generate_system_user(context: str, fixed_title: str | None) -> tuple[str, str]:
+def _build_generate_system_user(context: str, fixed_title: str | None, word_count: int | None = None) -> tuple[str, str]:
     """构建生成章节的 system 和 user prompt。"""
+    
+    word_count_req = ""
+    if word_count and 500 <= word_count <= 4000:
+        word_count_req = f"\n5. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+    
     if fixed_title:
-        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章正文。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 只能有一个键 body，值为字符串：本章完整正文。
-4. 正文中不要写章节标题、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。{word_count_req}"""
         title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
     else:
-        system = """你是一位专业中文小说作者。请根据上下文，创作本章。
+        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
-4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。{word_count_req}"""
         title_line = ""
 
     user = f"""{context}
@@ -212,23 +223,29 @@ def build_generation_prompt(
     context: str,
     *,
     fixed_title: str | None = None,
+    word_count: int | None = None,
 ) -> tuple[str, str]:
     """构建章节生成的 system prompt 和 user prompt（供 GenerateChapterTool 内部调用）。"""
+    
+    word_count_req = ""
+    if word_count and 500 <= word_count <= 4000:
+        word_count_req = f"\n5. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+    
     if fixed_title:
-        system = """你是一位专业中文小说作者。请根据上下文，创作本章正文。
+        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章正文。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 只能有一个键 body，值为字符串：本章完整正文。
-4. 正文中不要写章节标题、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。{word_count_req}"""
         title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
     else:
-        system = """你是一位专业中文小说作者。请根据上下文，创作本章。
+        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
-4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。{word_count_req}"""
         title_line = ""
 
     user = f"""{context}

@@ -72,6 +72,7 @@ def build_generation_prompt(
     target_chapter: Chapter | None,
     *,
     fixed_title: str | None = None,
+    word_count: int | None = None,
 ) -> tuple[str, str]:
     """构建章节生成的 system prompt 和 user prompt。
 
@@ -79,22 +80,26 @@ def build_generation_prompt(
     """
     memory = NovelMemory(db, novel)
 
+    word_count_req = ""
+    if word_count and 500 <= word_count <= 4000:
+        word_count_req = f"\n5. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+
     if fixed_title:
-        system = """你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章正文。
+        system = f"""你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章正文。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 只能有一个键 body，值为字符串：本章完整正文。
-4. 正文中不要写章节标题、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。{word_count_req}"""
 
         title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
     else:
-        system = """你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章。
+        system = f"""你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章。
 要求：
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
-4. 正文中不要写章节标题行、章节号或「本章」等结构标签。"""
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。{word_count_req}"""
         title_line = ""
         if target_chapter and (target_chapter.title or "").strip():
             title_line = f"\n【当前章节已有标题（可改写或沿用模型生成的 title）】{target_chapter.title.strip()}"
@@ -122,6 +127,7 @@ def run_react_chapter_generation(
     fixed_title: str | None = None,
     max_iterations: int = 8,
     new_sort_order: int | None = None,
+    word_count: int | None = None,
 ):
     """使用 ReAct Agent 执行章节生成（推理-工具-生成循环）。
 
@@ -142,10 +148,10 @@ def run_react_chapter_generation(
         GetPreviousChaptersTool(db, novel),
         GetCharacterProfilesTool(db, novel),
         GetNovelContextTool(db, novel),
-        GenerateChapterTool(db, novel, llm),
+        GenerateChapterTool(db, novel, llm, word_count=word_count),
     ]
 
-    task = _build_react_task(chapter_summary, fixed_title)
+    task = _build_react_task(chapter_summary, fixed_title, word_count=word_count)
 
     agent = ReActAgent(llm, tools, max_iterations=max_iterations)
 
@@ -155,7 +161,7 @@ def run_react_chapter_generation(
         agent.run(
             task,
             stream=True,
-            fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title},
+            fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count},
         )
     ):
         result_chunks.append(chunk)
@@ -200,9 +206,14 @@ def run_react_chapter_generation(
     yield ch
 
 
-def _build_react_task(chapter_summary: str, fixed_title: str | None) -> str:
+def _build_react_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None) -> str:
     """构建 ReAct Agent 的任务描述。"""
     title_req = f"本章标题已指定为「{fixed_title}」，请在生成正文时不要写入标题。" if fixed_title else "标题将在生成后自动提取或由用户指定。"
+    
+    word_count_req = ""
+    if word_count and 500 <= word_count <= 4000:
+        word_count_req = f"\n6. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+    
     return f"""请为小说创作本章正文。
 
 【本章概要】
@@ -213,7 +224,7 @@ def _build_react_task(chapter_summary: str, fixed_title: str | None) -> str:
 2. 正文应符合作品设定、文风和类型。
 3. 情节需与前文衔接自然，人物言行符合其设定。
 4. 请先使用工具获取必要的上下文信息（作品设定、前文情节、人物设定），然后生成正文。
-5. 最终输出直接是小说正文内容，不需要任何 JSON 包装。"""
+5. 最终输出直接是小说正文内容，不需要任何 JSON 包装。{word_count_req}"""
 
 
 def _sanitize_generated_body(raw: str) -> str:

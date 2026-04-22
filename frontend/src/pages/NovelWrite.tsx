@@ -289,6 +289,7 @@ export default function NovelWrite() {
   const [generateTab, setGenerateTab] = useState<GenerateTab>("single");
   const [singleGenerateTitle, setSingleGenerateTitle] = useState("");
   const [singleGenerateLockTitle, setSingleGenerateLockTitle] = useState(false);
+  const [generateWordCount, setGenerateWordCount] = useState<number | null>(null);
   const [batchChapterCountInput, setBatchChapterCountInput] = useState("3");
   const [batchSummary, setBatchSummary] = useState("");
   const [batchStreaming, setBatchStreaming] = useState("");
@@ -987,6 +988,7 @@ export default function NovelWrite() {
         chapterId: activeId,
         title: singleGenerateTitle.trim() || null,
         lockTitle: singleGenerateLockTitle,
+        wordCount: generateWordCount,
         onToken: (t) => {
           if (novelIdRef.current === nid) setContent((p) => p + t);
         },
@@ -1002,6 +1004,7 @@ export default function NovelWrite() {
       setContent(normalizeBodyParagraphIndent(ch.content));
       setSingleGenerateTitle("");
       setSingleGenerateLockTitle(false);
+      setGenerateWordCount(null);
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
@@ -1041,6 +1044,7 @@ export default function NovelWrite() {
           chapter_count: batchChapterCount,
           total_summary: total,
           after_chapter_id: activeId,
+          word_count: generateWordCount,
         },
         {
           onToken: (t) => {
@@ -1056,6 +1060,7 @@ export default function NovelWrite() {
         setActiveId(created[0].id);
       }
       setGenerateTab("single");
+      setGenerateWordCount(null);
       setBatchStreaming((prev) => prev + `已完成，共生成 ${created.length} 章。`);
     } catch (e) {
       if (novelIdRef.current === nid) {
@@ -1778,6 +1783,31 @@ export default function NovelWrite() {
                       />
                       <span>固定使用上方标题，不让 AI 改题</span>
                     </label>
+                    <div className="field">
+                      <label htmlFor="write-ai-word-count">目标正文字数（可选）</label>
+                      <select
+                        id="write-ai-word-count"
+                        className="select"
+                        value={generateWordCount ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGenerateWordCount(val ? parseInt(val, 10) : null);
+                        }}
+                      >
+                        <option value="">不指定（AI 自行决定）</option>
+                        <option value="500">500 字</option>
+                        <option value="1000">1000 字</option>
+                        <option value="1500">1500 字</option>
+                        <option value="2000">2000 字</option>
+                        <option value="2500">2500 字</option>
+                        <option value="3000">3000 字</option>
+                        <option value="3500">3500 字</option>
+                        <option value="4000">4000 字</option>
+                      </select>
+                      <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
+                        AI 会尽量接近指定字数，但不保证严格符合
+                      </p>
+                    </div>
                     <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
                       {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
                     </button>
@@ -1808,6 +1838,31 @@ export default function NovelWrite() {
                         为避免影响既有章节顺序，批量生成仅在最新章节可用。
                       </p>
                     ) : null}
+                    <div className="field">
+                      <label htmlFor="write-ai-batch-word-count">每章目标正文字数（可选）</label>
+                      <select
+                        id="write-ai-batch-word-count"
+                        className="select"
+                        value={generateWordCount ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGenerateWordCount(val ? parseInt(val, 10) : null);
+                        }}
+                      >
+                        <option value="">不指定（AI 自行决定）</option>
+                        <option value="500">500 字</option>
+                        <option value="1000">1000 字</option>
+                        <option value="1500">1500 字</option>
+                        <option value="2000">2000 字</option>
+                        <option value="2500">2500 字</option>
+                        <option value="3000">3000 字</option>
+                        <option value="3500">3500 字</option>
+                        <option value="4000">4000 字</option>
+                      </select>
+                      <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
+                        AI 会尽量接近指定字数，但不保证严格符合
+                      </p>
+                    </div>
                     <div className="field">
                       <div className="write-ai-field-label">
                         <label htmlFor="write-ai-batch-summary">后续总概要</label>
