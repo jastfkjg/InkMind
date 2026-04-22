@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import CurrentUser
 from app.llm.llm_errors import LLMRequestError
+from app.llm.metered_llm import llm_usage_session
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
-from app.llm.providers import list_available_providers, resolve_llm_for_user
+from app.llm.providers import list_available_providers, normalize_provider_name, resolve_llm_for_user
 from app.models import Chapter, ChapterVersion
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
@@ -99,40 +100,39 @@ def generate_chapter(
     req_title = (body.title or "").strip()
     fixed_title = req_title if body.lock_title and req_title else None
     word_count = body.word_count if body.word_count and 500 <= body.word_count <= 4000 else None
+    provider_name = normalize_provider_name(None, user)
 
     def gen():
-        try:
-            llm = resolve_llm_for_user(user, None, db=db, action="AI生成")
-        except ValueError as e:
-            yield ndjson_line({"error": str(e)})
-            return
-        
-        if target is not None and target.content:
-            save_version_before_change(db, target, "ai_generate")
+        with llm_usage_session(db, user.id, provider_name, "AI生成") as accumulator:
+            try:
+                llm = resolve_llm_for_user(user, None, db=db, action="AI生成", accumulator=accumulator)
+            except ValueError as e:
+                yield ndjson_line({"error": str(e)})
+                return
+            
+            if target is not None and target.content:
+                save_version_before_change(db, target, "ai_generate")
 
-        try:
-            with ai_span("chapter.generate.react_agent", novel_id=novel_id):
-                result = run_react_chapter_generation(
-                    db, novel, body.summary.strip(), target,
-                    llm, fixed_title=fixed_title, word_count=word_count
-                )
-            # 迭代生成器：前部分是文本 chunks，最后是 Chapter 对象
-            ch = None
-            for item in result:
-                if isinstance(item, Chapter):
-                    ch = item
-                else:
-                    # 文本 chunk，直接转发
-                    if item:
-                        yield ndjson_line({"t": item})
-            # 最后返回章节元数据
-            if ch is not None:
-                yield ndjson_line({"chapter": ChapterOut.model_validate(ch).model_dump(mode="json")})
-        except LLMRequestError as e:
-            yield ndjson_line({"error": e.message})
-        except Exception as e:
-            db.rollback()
-            yield ndjson_line({"error": str(e) or "生成失败"})
+            try:
+                with ai_span("chapter.generate.react_agent", novel_id=novel_id):
+                    result = run_react_chapter_generation(
+                        db, novel, body.summary.strip(), target,
+                        llm, fixed_title=fixed_title, word_count=word_count
+                    )
+                ch = None
+                for item in result:
+                    if isinstance(item, Chapter):
+                        ch = item
+                    else:
+                        if item:
+                            yield ndjson_line({"t": item})
+                if ch is not None:
+                    yield ndjson_line({"chapter": ChapterOut.model_validate(ch).model_dump(mode="json")})
+            except LLMRequestError as e:
+                yield ndjson_line({"error": e.message})
+            except Exception as e:
+                db.rollback()
+                yield ndjson_line({"error": str(e) or "生成失败"})
 
     return StreamingResponse(
         gen(),
@@ -172,73 +172,75 @@ def generate_chapter_batch(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="批量生成仅支持从最新章节开始")
 
     word_count = body.word_count if body.word_count and 500 <= body.word_count <= 4000 else None
+    provider_name = normalize_provider_name(None, user)
 
     def gen():
-        try:
-            llm = resolve_llm_for_user(user, None, db=db, action="AI批量生成")
-        except ValueError as e:
-            yield ndjson_line({"error": str(e)})
-            return
+        with llm_usage_session(db, user.id, provider_name, "AI批量生成") as accumulator:
+            try:
+                llm = resolve_llm_for_user(user, None, db=db, action="AI批量生成", accumulator=accumulator)
+            except ValueError as e:
+                yield ndjson_line({"error": str(e)})
+                return
 
-        generated: list[Chapter] = []
-        try:
-            yield ndjson_line({"t": f"正在规划接下来 {body.chapter_count} 章...\n"})
-            start_from_current = anchor is not None and not (anchor.content or "").strip()
-            plan_anchor = None if start_from_current else anchor
-            with ai_span("chapter.generate_batch.plan", novel_id=novel_id):
-                plan = plan_batch_chapters(
-                    db,
-                    novel,
-                    llm,
-                    total_summary=body.total_summary.strip(),
-                    chapter_count=body.chapter_count,
-                    after_chapter=plan_anchor,
+            generated: list[Chapter] = []
+            try:
+                yield ndjson_line({"t": f"正在规划接下来 {body.chapter_count} 章...\n"})
+                start_from_current = anchor is not None and not (anchor.content or "").strip()
+                plan_anchor = None if start_from_current else anchor
+                with ai_span("chapter.generate_batch.plan", novel_id=novel_id):
+                    plan = plan_batch_chapters(
+                        db,
+                        novel,
+                        llm,
+                        total_summary=body.total_summary.strip(),
+                        chapter_count=body.chapter_count,
+                        after_chapter=plan_anchor,
+                    )
+
+                insert_order = (anchor.sort_order + (0 if start_from_current else 1)) if anchor is not None else (
+                    (ordered[-1].sort_order + 1) if ordered else 0
                 )
+                shift_count = body.chapter_count - 1 if start_from_current else body.chapter_count
+                if shift_count > 0 and anchor is not None:
+                    for later in ordered:
+                        if later.id == anchor.id:
+                            continue
+                        if later.sort_order >= insert_order + (1 if start_from_current else 0):
+                            later.sort_order += shift_count
+                            db.add(later)
+                    db.commit()
 
-            insert_order = (anchor.sort_order + (0 if start_from_current else 1)) if anchor is not None else (
-                (ordered[-1].sort_order + 1) if ordered else 0
-            )
-            shift_count = body.chapter_count - 1 if start_from_current else body.chapter_count
-            if shift_count > 0 and anchor is not None:
-                for later in ordered:
-                    if later.id == anchor.id:
-                        continue
-                    if later.sort_order >= insert_order + (1 if start_from_current else 0):
-                        later.sort_order += shift_count
-                        db.add(later)
-                db.commit()
+                for idx, item in enumerate(plan, start=1):
+                    yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 正在生成《{item['title']}》...\n"})
+                    target_chapter = anchor if start_from_current and idx == 1 else None
+                    sort_order = None if target_chapter is not None else insert_order + idx - (1 if start_from_current else 0)
+                    result = run_react_chapter_generation(
+                        db,
+                        novel,
+                        item["summary"],
+                        target_chapter,
+                        llm,
+                        fixed_title=item["title"],
+                        new_sort_order=sort_order,
+                        word_count=word_count,
+                    )
+                    created: Chapter | None = None
+                    for piece in result:
+                        if isinstance(piece, Chapter):
+                            created = piece
+                    if created is not None:
+                        generated.append(created)
+                        yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 已完成《{created.title}》\n"})
 
-            for idx, item in enumerate(plan, start=1):
-                yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 正在生成《{item['title']}》...\n"})
-                target_chapter = anchor if start_from_current and idx == 1 else None
-                sort_order = None if target_chapter is not None else insert_order + idx - (1 if start_from_current else 0)
-                result = run_react_chapter_generation(
-                    db,
-                    novel,
-                    item["summary"],
-                    target_chapter,
-                    llm,
-                    fixed_title=item["title"],
-                    new_sort_order=sort_order,
-                    word_count=word_count,
+                yield ndjson_line(
+                    {"chapters": [ChapterOut.model_validate(ch).model_dump(mode="json") for ch in generated]}
                 )
-                created: Chapter | None = None
-                for piece in result:
-                    if isinstance(piece, Chapter):
-                        created = piece
-                if created is not None:
-                    generated.append(created)
-                    yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 已完成《{created.title}》\n"})
-
-            yield ndjson_line(
-                {"chapters": [ChapterOut.model_validate(ch).model_dump(mode="json") for ch in generated]}
-            )
-        except ValueError as e:
-            yield ndjson_line({"error": str(e)})
-        except LLMRequestError as e:
-            yield ndjson_line({"error": e.message})
-        except Exception as e:
-            yield ndjson_line({"error": str(e) or "批量生成失败"})
+            except ValueError as e:
+                yield ndjson_line({"error": str(e)})
+            except LLMRequestError as e:
+                yield ndjson_line({"error": e.message})
+            except Exception as e:
+                yield ndjson_line({"error": str(e) or "批量生成失败"})
 
     return StreamingResponse(
         gen(),
