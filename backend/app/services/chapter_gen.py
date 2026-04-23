@@ -4,9 +4,11 @@ from typing import Annotated, Any
 
 from sqlalchemy.orm import Session
 
+from app.agent.flexible_agent import FlexibleNovelAgent
 from app.agent.memory import NovelMemory
 from app.agent.react import ReActAgent
 from app.agent.tools import (
+    FinishTool,
     GenerateChapterTool,
     GetCharacterProfilesTool,
     GetNovelContextTool,
@@ -238,6 +240,160 @@ def _sanitize_generated_body(raw: str) -> str:
         lines.pop(0)
 
     return "\n".join(lines).strip()
+
+
+def _filter_flexible_agent_output(chunks: list[str]) -> tuple[list[str], list[str]]:
+    """过滤 FlexibleNovelAgent 的输出，分离正文内容和状态信息。
+    
+    返回: (正文内容 chunks, 状态信息列表)
+    """
+    body_chunks: list[str] = []
+    status_messages: list[str] = []
+    
+    for chunk in chunks:
+        if chunk.startswith("[思考]") or chunk.startswith("[调用工具]") or chunk.startswith("[工具结果]") or chunk.startswith("[完成]") or chunk.startswith("[开始生成正文]") or chunk.startswith("[系统]") or chunk.startswith("[错误]"):
+            status_messages.append(chunk.strip())
+        else:
+            body_chunks.append(chunk)
+    
+    return body_chunks, status_messages
+
+
+def run_flexible_chapter_generation(
+    db: Session,
+    novel: Novel,
+    chapter_summary: str,
+    target_chapter: Chapter | None,
+    llm: LLMProvider,
+    *,
+    fixed_title: str | None = None,
+    max_iterations: int = 12,
+    timeout_seconds: float = 180.0,
+    new_sort_order: int | None = None,
+    word_count: int | None = None,
+):
+    """使用 FlexibleNovelAgent 执行章节生成。
+
+    核心特点：
+    1. 让模型自己决定如何行动（调用哪个工具、调用多少次、何时停止）
+    2. 使用 JSON 结构化输出，让模型清晰地表达意图
+    3. 保留最大迭代次数和超时控制，确保前端响应时间可控
+    4. 添加 finish 工具，让模型自己决定何时完成任务
+
+    与旧版 ReActAgent 的区别：
+    - 不再硬编码 ReAct 格式（Thought: ...\nAction: ...）
+    - 不再硬编码 GenerateChapterTool 调用后直接返回
+    - 让模型通过 finish 工具自己决定何时停止
+    - 使用 JSON 格式，更清晰、更易于解析
+
+    Yields:
+        str: 正文 chunks（实时流式输出）
+        Chapter: 最终章节对象（生成完毕后）
+    """
+    from app.models import Chapter as ChapterModel
+    from sqlalchemy import func, select
+
+    tools = [
+        GetPreviousChaptersTool(db, novel),
+        GetCharacterProfilesTool(db, novel),
+        GetNovelContextTool(db, novel),
+        GenerateChapterTool(db, novel, llm, word_count=word_count),
+        FinishTool(),
+    ]
+
+    task = _build_flexible_task(chapter_summary, fixed_title, word_count=word_count)
+
+    agent = FlexibleNovelAgent(
+        llm, 
+        tools, 
+        max_iterations=max_iterations,
+        timeout_seconds=timeout_seconds,
+    )
+
+    all_chunks: list[str] = []
+    for chunk in agent.run(
+        task,
+        stream=True,
+        fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count},
+    ):
+        all_chunks.append(chunk)
+        if not (chunk.startswith("[思考]") or chunk.startswith("[调用工具]") or chunk.startswith("[工具结果]") or chunk.startswith("[完成]") or chunk.startswith("[开始生成正文]") or chunk.startswith("[系统]") or chunk.startswith("[错误]")):
+            yield chunk
+
+    body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
+    
+    body_text = _sanitize_generated_body("".join(body_chunks))
+    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
+        db,
+        llm,
+        novel,
+        target_chapter,
+        chapter_summary=chapter_summary,
+        body_text=body_text,
+    )
+
+    if target_chapter is None:
+        if new_sort_order is not None:
+            next_order = new_sort_order
+        else:
+            max_order = db.scalar(
+                select(func.max(ChapterModel.sort_order)).where(ChapterModel.novel_id == novel.id)
+            )
+            next_order = (max_order or 0) + 1
+        ch = ChapterModel(
+            novel_id=novel.id,
+            title=title_out,
+            summary=chapter_summary.strip(),
+            content=body_text,
+            sort_order=next_order,
+        )
+        db.add(ch)
+    else:
+        target_chapter.summary = chapter_summary.strip()
+        target_chapter.content = body_text
+        target_chapter.title = title_out
+        db.add(target_chapter)
+        ch = target_chapter
+
+    db.commit()
+    db.refresh(ch)
+    yield ch
+
+
+def _build_flexible_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None) -> str:
+    """构建 FlexibleNovelAgent 的任务描述。"""
+    title_req = f"本章标题已指定为「{fixed_title}」，请在生成正文时不要写入标题。" if fixed_title else "标题将在生成后自动提取或由用户指定。"
+    
+    word_count_req = ""
+    if word_count and 500 <= word_count <= 4000:
+        word_count_req = f"\n- 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+    
+    return f"""请为小说创作本章正文。
+
+【本章概要】
+{chapter_summary}
+
+【任务目标】
+1. {title_req}
+2. 正文应符合作品设定、文风和类型。
+3. 情节需与前文衔接自然，人物言行符合其设定。
+4. 请根据需要调用工具获取必要的上下文信息（作品设定、前文情节、人物设定）。
+5. 在收集到足够的上下文信息后，调用 generate_chapter 工具生成正文。
+6. 生成正文后，调用 finish 工具完成任务。{word_count_req}
+
+【工作流程建议】
+虽然你可以自由决定行动顺序，但建议遵循以下流程：
+1. 调用 get_novel_context 获取作品基础设定
+2. 调用 get_previous_chapters 获取前文情节
+3. 调用 get_character_profiles 获取相关人物设定
+4. 调用 generate_chapter 生成章节正文
+5. 调用 finish 完成任务
+
+【重要规则】
+1. 只有在调用 generate_chapter 生成正文后，才能调用 finish
+2. 不要在没有生成正文的情况下就调用 finish
+3. 你最多可以调用 {max_iterations} 次工具，请合理规划
+4. 请确保你的输出始终是有效的 JSON 格式"""
 
 
 def _generate_chapter_title(
