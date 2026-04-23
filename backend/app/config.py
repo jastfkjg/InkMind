@@ -64,6 +64,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT",
     )
+    
+    # Prometheus 指标端点（用于监控关键性能指标）
+    prometheus_enabled: bool = Field(default=False, validation_alias="PROMETHEUS_ENABLED")
+    # Prometheus 端点端口（如果在不同端口启动）
+    prometheus_port: int = Field(default=9090, validation_alias="PROMETHEUS_PORT")
 
     @field_validator("otel_enabled", mode="before")
     @classmethod
