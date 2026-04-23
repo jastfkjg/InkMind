@@ -227,12 +227,51 @@ def _build_tool_description(tool: BaseTool) -> str:
     return f"- **{tool.name}**\n  描述：{tool.description}\n  参数：{params_str}"
 
 
-def _build_history_summary(history: list[str]) -> str:
-    """构建历史摘要字符串。"""
+def _build_history_summary(history: list[dict]) -> str:
+    """构建历史摘要字符串。
+    
+    history 中的每个元素是一个字典，包含：
+    - type: "tool_call", "tool_result", "thought", "finish", "error"
+    - tool_name: 工具名（如果是工具调用）
+    - params: 参数（如果是工具调用）
+    - result: 结果（如果是工具结果）
+    - content: 内容（如果是思考、完成或错误）
+    """
     if not history:
         return "尚未执行任何步骤。"
     
-    return "\n".join(f"步骤 {i+1}: {item}" for i, item in enumerate(history))
+    lines = []
+    for i, item in enumerate(history):
+        step_num = i + 1
+        item_type = item.get("type", "")
+        
+        if item_type == "tool_call":
+            tool_name = item.get("tool_name", "unknown")
+            params = item.get("params", {})
+            if params:
+                params_str = json.dumps(params, ensure_ascii=False)
+                lines.append(f"步骤 {step_num}: 调用工具 {tool_name}，参数: {params_str}")
+            else:
+                lines.append(f"步骤 {step_num}: 调用工具 {tool_name}")
+        
+        elif item_type == "tool_result":
+            tool_name = item.get("tool_name", "unknown")
+            result = item.get("result", "")
+            result_preview = result[:200] + "..." if len(result) > 200 else result
+            lines.append(f"步骤 {step_num}: 工具 {tool_name} 返回结果（预览）: {result_preview}")
+        
+        elif item_type == "thought":
+            content = item.get("content", "")
+            lines.append(f"步骤 {step_num}: 思考: {content}")
+        
+        elif item_type == "error":
+            content = item.get("content", "")
+            lines.append(f"步骤 {step_num}: 错误: {content}")
+        
+        else:
+            lines.append(f"步骤 {step_num}: {item}")
+    
+    return "\n".join(lines)
 
 
 class FlexibleNovelAgent:
@@ -299,7 +338,7 @@ class FlexibleNovelAgent:
         Yields:
             str: 思考过程、工具调用信息或生成的正文内容
         """
-        history: list[str] = []
+        history: list[dict] = []
         iteration = 0
         start_time = time.time()
         has_generated_content = False
@@ -338,17 +377,27 @@ class FlexibleNovelAgent:
 
             if action is None:
                 log.warning("无法解析模型响应，重试。响应: %s", response[:200] if response else "(空)")
-                history.append(f"[无法解析响应，将重试]")
+                history.append({
+                    "type": "error",
+                    "content": "无法解析模型响应，将重试"
+                })
                 continue
 
             if action.thought:
                 yield f"[思考] {action.thought}\n"
+                history.append({
+                    "type": "thought",
+                    "content": action.thought
+                })
 
             if action.action_type == "finish":
                 if not has_generated_content:
                     log.warning("模型在未生成内容的情况下尝试完成任务。要求继续。")
                     yield "[系统] 检测到你还没有生成章节正文。请先调用 generate_chapter 工具生成正文，然后再调用 finish。\n"
-                    history.append("[尝试在未生成内容时完成任务，被要求继续]")
+                    history.append({
+                        "type": "error",
+                        "content": "尝试在未生成内容时完成任务，被要求继续"
+                    })
                     continue
 
                 if action.finish_reason:
@@ -360,14 +409,20 @@ class FlexibleNovelAgent:
             if action.action_type == "tool_call":
                 tool_name = action.tool_name
                 if tool_name is None:
-                    history.append("[无效的工具调用]")
+                    history.append({
+                        "type": "error",
+                        "content": "无效的工具调用"
+                    })
                     continue
 
                 if tool_name == "finish":
                     if not has_generated_content:
                         log.warning("模型在未生成内容的情况下尝试调用 finish 工具。要求继续。")
                         yield "[系统] 检测到你还没有生成章节正文。请先调用 generate_chapter 工具生成正文。\n"
-                        history.append("[尝试在未生成内容时调用 finish，被要求继续]")
+                        history.append({
+                            "type": "error",
+                            "content": "尝试在未生成内容时调用 finish，被要求继续"
+                        })
                         continue
                     
                     if action.tool_params and "reason" in action.tool_params:
@@ -381,7 +436,10 @@ class FlexibleNovelAgent:
                     error_msg = f"未知工具: {tool_name}"
                     log.warning(error_msg)
                     yield f"[错误] {error_msg}\n"
-                    history.append(f"[调用未知工具 {tool_name}]")
+                    history.append({
+                        "type": "error",
+                        "content": f"调用未知工具 {tool_name}"
+                    })
                     continue
 
                 if isinstance(tool, GenerateChapterTool):
@@ -389,11 +447,21 @@ class FlexibleNovelAgent:
                     chapter_summary = action.tool_params.get("chapter_summary", "")
                     fixed_title = action.tool_params.get("fixed_title")
 
+                    history.append({
+                        "type": "tool_call",
+                        "tool_name": tool_name,
+                        "params": action.tool_params
+                    })
+
                     try:
                         for chunk in tool.run_stream(chapter_summary, fixed_title):
                             yield chunk
                         has_generated_content = True
-                        history.append(f"[调用 generate_chapter 生成正文]")
+                        history.append({
+                            "type": "tool_result",
+                            "tool_name": tool_name,
+                            "result": "正文已生成（流式输出）"
+                        })
                         continue
                     except Exception as e:
                         log.exception("generate_chapter 工具执行失败")
@@ -401,7 +469,10 @@ class FlexibleNovelAgent:
                         if has_generated_content:
                             yield "[系统] 已生成部分内容，任务结束。\n"
                             return
-                        history.append(f"[generate_chapter 执行失败: {e}]")
+                        history.append({
+                            "type": "error",
+                            "content": f"generate_chapter 执行失败: {e}"
+                        })
                         continue
 
                 try:
@@ -411,21 +482,37 @@ class FlexibleNovelAgent:
                     else:
                         yield f"[调用工具] {tool_name}\n"
 
+                    history.append({
+                        "type": "tool_call",
+                        "tool_name": tool_name,
+                        "params": action.tool_params
+                    })
+
                     observation = tool.run(**action.tool_params)
 
                     yield f"[工具结果] {tool_name} 执行完成\n"
 
-                    history.append(f"[调用 {tool_name}]")
+                    history.append({
+                        "type": "tool_result",
+                        "tool_name": tool_name,
+                        "result": observation
+                    })
 
                 except Exception as e:
                     log.exception("工具 %s 执行失败", tool_name)
                     error_msg = f"工具 {tool_name} 执行失败: {e}"
                     yield f"[错误] {error_msg}\n"
-                    history.append(f"[{tool_name} 执行失败: {e}]")
+                    history.append({
+                        "type": "error",
+                        "content": f"{tool_name} 执行失败: {e}"
+                    })
 
             else:
                 log.warning("未知的行动类型: %s", action.action_type)
-                history.append(f"[未知行动类型: {action.action_type}]")
+                history.append({
+                    "type": "error",
+                    "content": f"未知行动类型: {action.action_type}"
+                })
 
         log.warning("Agent 超过最大迭代次数，强制完成。已执行 %d 次迭代", iteration)
         yield f"[系统] 超过最大工具调用次数({self._max_iterations})，强制完成。\n"

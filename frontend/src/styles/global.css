@@ -1251,22 +1251,6 @@ select {
   margin: 0 !important;
 }
 
-.editor-body--line-height-compact {
-  line-height: 1.6;
-}
-
-.editor-body--line-height-normal {
-  line-height: 1.85;
-}
-
-.editor-body--line-height-relaxed {
-  line-height: 2.0;
-}
-
-.editor-body--line-height-loose {
-  line-height: 2.2;
-}
-
 .write-editor-footer {
   display: flex;
   justify-content: space-between;
@@ -1561,6 +1545,22 @@ select {
 }
 .editor-body--mono {
   font-family: ui-monospace, "Cascadia Code", "Sarasa Mono SC", "Noto Sans Mono CJK SC", monospace;
+}
+
+.editor-body--line-height-compact {
+  line-height: 1.6;
+}
+
+.editor-body--line-height-normal {
+  line-height: 1.85;
+}
+
+.editor-body--line-height-relaxed {
+  line-height: 2.0;
+}
+
+.editor-body--line-height-loose {
+  line-height: 2.2;
 }
 
 .stack-sm > * + * {
