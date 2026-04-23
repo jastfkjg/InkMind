@@ -254,3 +254,25 @@ def build_generation_prompt(
 请严格按 system 要求的 JSON 结构输出。"""
 
     return system, user
+
+
+class FinishTool(BaseTool):
+    """完成任务工具。让模型自己决定何时完成任务。"""
+
+    name = "finish"
+    description = (
+        "完成任务。当你已经完成所有必要的步骤并准备好返回最终结果时，使用这个工具。"
+        "注意：只有在你已经收集到足够的上下文信息并生成了章节正文后，才应该使用这个工具。"
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "完成任务的原因说明（可选）",
+            },
+        },
+    }
+
+    def run(self, reason: str = "") -> str:
+        return f"任务已完成。原因：{reason or '模型决定完成任务。'}"
