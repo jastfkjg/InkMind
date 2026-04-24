@@ -1,4 +1,7 @@
-"""OpenTelemetry：HTTP 自动插桩 + 导出（控制台或 OTLP）。由 OTEL_ENABLED 控制。"""
+"""OpenTelemetry：HTTP 自动插桩 + 导出（控制台或 OTLP）。由 OTEL_ENABLED 控制。
+
+Prometheus：指标端点，监控关键性能指标。由 PROMETHEUS_ENABLED 控制。
+"""
 
 from __future__ import annotations
 
@@ -15,6 +18,10 @@ if TYPE_CHECKING:
 
 def setup_otel(app: "FastAPI") -> None:
     from app.config import settings
+
+    if settings.prometheus_enabled:
+        from app.observability.metrics import start_prometheus_server
+        start_prometheus_server()
 
     if not settings.otel_enabled:
         return
@@ -41,6 +48,20 @@ def setup_otel(app: "FastAPI") -> None:
 
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+    try:
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+        from app.database import engine
+        
+        SQLAlchemyInstrumentor().instrument(
+            engine=engine,
+            service=settings.otel_service_name,
+        )
+        print("SQLAlchemy instrumentation enabled")
+    except ImportError:
+        print("SQLAlchemy instrumentation not available (opentelemetry-instrumentation-sqlalchemy not installed)")
+    except Exception as e:
+        print(f"Failed to enable SQLAlchemy instrumentation: {e}")
 
     FastAPIInstrumentor().instrument_app(app)
     HTTPXClientInstrumentor().instrument()
