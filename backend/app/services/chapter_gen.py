@@ -171,14 +171,23 @@ def run_react_chapter_generation(
 
     # run_stream() 输出纯正文，无需 JSON 解析
     body_text = _sanitize_generated_body("".join(result_chunks))
-    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
-        db,
-        llm,
-        novel,
-        target_chapter,
-        chapter_summary=chapter_summary,
-        body_text=body_text,
-    )
+    
+    if fixed_title is not None:
+        # 用户手动填写并锁定了标题
+        title_out = fixed_title
+    elif target_chapter and (target_chapter.title or "").strip():
+        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
+        title_out = target_chapter.title.strip()
+    else:
+        # 章节没有标题，需要生成
+        title_out = _generate_chapter_title(
+            db,
+            llm,
+            novel,
+            target_chapter,
+            chapter_summary=chapter_summary,
+            body_text=body_text,
+        )
 
     if target_chapter is None:
         if new_sort_order is not None:
@@ -323,14 +332,23 @@ def run_flexible_chapter_generation(
     body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
     
     body_text = _sanitize_generated_body("".join(body_chunks))
-    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
-        db,
-        llm,
-        novel,
-        target_chapter,
-        chapter_summary=chapter_summary,
-        body_text=body_text,
-    )
+    
+    if fixed_title is not None:
+        # 用户手动填写并锁定了标题
+        title_out = fixed_title
+    elif target_chapter and (target_chapter.title or "").strip():
+        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
+        title_out = target_chapter.title.strip()
+    else:
+        # 章节没有标题，需要生成
+        title_out = _generate_chapter_title(
+            db,
+            llm,
+            novel,
+            target_chapter,
+            chapter_summary=chapter_summary,
+            body_text=body_text,
+        )
 
     if target_chapter is None:
         if new_sort_order is not None:
