@@ -171,14 +171,23 @@ def run_react_chapter_generation(
 
     # run_stream() 输出纯正文，无需 JSON 解析
     body_text = _sanitize_generated_body("".join(result_chunks))
-    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
-        db,
-        llm,
-        novel,
-        target_chapter,
-        chapter_summary=chapter_summary,
-        body_text=body_text,
-    )
+    
+    if fixed_title is not None:
+        # 用户手动填写并锁定了标题
+        title_out = fixed_title
+    elif target_chapter and (target_chapter.title or "").strip():
+        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
+        title_out = target_chapter.title.strip()
+    else:
+        # 章节没有标题，需要生成
+        title_out = _generate_chapter_title(
+            db,
+            llm,
+            novel,
+            target_chapter,
+            chapter_summary=chapter_summary,
+            body_text=body_text,
+        )
 
     if target_chapter is None:
         if new_sort_order is not None:
@@ -214,19 +223,21 @@ def _build_react_task(chapter_summary: str, fixed_title: str | None, word_count:
     
     word_count_req = ""
     if word_count and 500 <= word_count <= 4000:
-        word_count_req = f"\n6. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+        word_count_req = f"\n- 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
     
-    return f"""请为小说创作本章正文。
+    return f"""请根据以下信息创作小说章节正文。
 
 【本章概要】
 {chapter_summary}
 
-【要求】
-1. {title_req}
-2. 正文应符合作品设定、文风和类型。
-3. 情节需与前文衔接自然，人物言行符合其设定。
-4. 请先使用工具获取必要的上下文信息（作品设定、前文情节、人物设定），然后生成正文。
-5. 最终输出直接是小说正文内容，不需要任何 JSON 包装。{word_count_req}"""
+【核心要求】
+- {title_req}
+- 正文应符合作品设定、文风和类型
+- 情节需与前文衔接自然，人物言行符合其设定
+- 请使用工具获取必要的上下文信息（作品设定、前文情节、人物设定）{word_count_req}
+
+【下一步】
+请调用工具获取上下文信息，然后生成正文。不要直接输出 Final。"""
 
 
 def _sanitize_generated_body(raw: str) -> str:
@@ -323,14 +334,23 @@ def run_flexible_chapter_generation(
     body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
     
     body_text = _sanitize_generated_body("".join(body_chunks))
-    title_out = fixed_title if fixed_title is not None else _generate_chapter_title(
-        db,
-        llm,
-        novel,
-        target_chapter,
-        chapter_summary=chapter_summary,
-        body_text=body_text,
-    )
+    
+    if fixed_title is not None:
+        # 用户手动填写并锁定了标题
+        title_out = fixed_title
+    elif target_chapter and (target_chapter.title or "").strip():
+        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
+        title_out = target_chapter.title.strip()
+    else:
+        # 章节没有标题，需要生成
+        title_out = _generate_chapter_title(
+            db,
+            llm,
+            novel,
+            target_chapter,
+            chapter_summary=chapter_summary,
+            body_text=body_text,
+        )
 
     if target_chapter is None:
         if new_sort_order is not None:
@@ -392,8 +412,7 @@ def _build_flexible_task(chapter_summary: str, fixed_title: str | None, word_cou
 【重要规则】
 1. 只有在调用 generate_chapter 生成正文后，才能调用 finish
 2. 不要在没有生成正文的情况下就调用 finish
-3. 你最多可以调用 {max_iterations} 次工具，请合理规划
-4. 请确保你的输出始终是有效的 JSON 格式"""
+3. 请确保你的输出始终是有效的 JSON 格式"""
 
 
 def _generate_chapter_title(
