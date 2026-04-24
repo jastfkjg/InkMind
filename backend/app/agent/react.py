@@ -15,23 +15,35 @@ log = logging.getLogger(__name__)
 
 _REACT_SYSTEM = """你是一个专注于小说创作的 AI 助手。你可以使用工具来获取信息并完成任务。
 
-可用工具：
+【可用工具】
 {tool_descriptions}
 
-每次回复必须严格按以下两种格式之一：
+【重要规则】
+1. 你必须先调用工具获取必要的上下文信息，然后才能生成正文。
+2. 工具调用总是可用的，不要认为工具不可用。
+3. 你可以自由决定调用哪些工具、调用多少次。
 
-**需要更多信息时：**
-Thought: <思考接下来需要调用哪个工具，以及传入什么参数>
+【工作流程】
+1. 调用 `get_novel_context` 获取作品基础设定（标题、类型、写作风格、世界观背景）
+2. 调用 `get_previous_chapters(limit=3)` 获取前文情节概要
+3. 调用 `get_character_profiles(chapter_summary="...")` 根据本章概要召回相关人物设定
+4. 调用 `generate_chapter(chapter_summary="...", fixed_title=null)` 生成章节正文
+
+【回复格式】
+每次回复必须严格按以下格式之一：
+
+**需要调用工具时：**
+Thought: <解释你为什么要调用这个工具>
 Action: <工具名>:<JSON参数对象>
-（等待 Observation 后继续）
+（例如：Action: get_novel_context:{{}} 或 Action: get_previous_chapters:{{"limit": 3}}）
 
 **信息足够，可以生成正文时：**
-Final: <你认为应该直接输出的最终内容>
+直接调用 `generate_chapter` 工具，不要输出 Final。
 
-注意事项：
-- 只有在收集到足够的上下文（作品设定、前文情节概要、人物设定、本章概要）后，才输出 Final
-- Final 应该是小说正文内容，直接输出，不要加任何格式标记
-- 如果无法完成任务，说明原因并输出 Final: <说明>
+【注意】
+- 不要输出 "Final: ..." 格式，应该调用 `generate_chapter` 工具来生成正文。
+- 如果觉得信息不够，继续调用其他工具，不要放弃。
+- 工具调用的 JSON 参数必须是有效的 JSON 格式。
 """
 
 _REACT_USER_TEMPLATE = """任务：{task}
@@ -69,6 +81,50 @@ def _parse_response(text: str) -> tuple[str | None, str | None, str | None]:
         return thought, tool_name, json.dumps({"tool": tool_name, "params": params}, ensure_ascii=False)
 
     return None, None, None
+
+
+_ERROR_KEYWORDS = [
+    "工具", "错误", "失败", "无法", "不可用", "请提供", "确认工具",
+    "缺乏", "概要", "人物资料", "世界观", "主要人物", "前情提要",
+    "重试", "调用失败", "执行失败",
+]
+
+
+def _is_valid_final_content(content: str) -> bool:
+    """检查 Final 内容是否看起来像是有效的小说正文。
+    
+    返回 True 表示内容有效，应该直接返回。
+    返回 False 表示内容可能是错误信息，应该 fallback 到直接生成模式。
+    """
+    if not content or not content.strip():
+        return False
+    
+    clean = content.strip()
+    
+    # 太短的内容很可能是错误信息
+    if len(clean) < 100:
+        # 检查是否包含错误关键词
+        for keyword in _ERROR_KEYWORDS:
+            if keyword in clean:
+                return False
+        # 短内容但不包含错误关键词，可能是有效的短篇开头
+        return True
+    
+    # 较长的内容，检查是否包含太多错误关键词
+    error_count = 0
+    for keyword in _ERROR_KEYWORDS:
+        if keyword in clean:
+            error_count += 1
+            if error_count >= 3:
+                return False
+    
+    # 检查是否看起来像是小说正文（包含中文句子）
+    # 如果大部分是中文，认为是有效内容
+    chinese_count = len(re.findall(r"[\u4e00-\u9fff]", clean))
+    if chinese_count < len(clean) * 0.3:
+        return False
+    
+    return True
 
 
 class ReActAgent:
@@ -120,9 +176,15 @@ class ReActAgent:
             thought, action_str, final_content = _parse_response(response)
 
             if final_content is not None and action_str is None:
-                # Final 模式，直接返回结果
-                yield final_content
-                return
+                # 检查 Final 内容是否看起来像有效的正文
+                # 如果内容太短或包含错误关键词，fallback 到直接生成模式
+                if _is_valid_final_content(final_content):
+                    yield final_content
+                    return
+                else:
+                    log.warning("Final 内容看起来不像是有效的正文，fallback 到直接生成模式。内容预览: %s", final_content[:200] if final_content else "(空)")
+                    yield from self._fallback_generate(fallback_params)
+                    return
 
             if action_str is not None:
                 try:
