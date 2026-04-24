@@ -62,15 +62,13 @@ const LINE_HEIGHTS: { id: LineHeightId; label: string; value: number }[] = [
 
 const WRITE_LINE_HEIGHT_KEY = "inkmind_write_line_height";
 
-type LineWidthId = "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+type LineWidthId = "sm" | "md" | "lg" | "xl" | "full";
 
 const LINE_WIDTHS: { id: LineWidthId; label: string; maxWidth: string | null }[] = [
-  { id: "xs", label: "极窄 (35ch)", maxWidth: "35ch" },
-  { id: "sm", label: "窄 (42ch)", maxWidth: "42ch" },
-  { id: "md", label: "适中 (50ch)", maxWidth: "50ch" },
-  { id: "lg", label: "宽 (60ch)", maxWidth: "60ch" },
-  { id: "xl", label: "很宽 (72ch)", maxWidth: "72ch" },
-  { id: "2xl", label: "超宽 (85ch)", maxWidth: "85ch" },
+  { id: "sm", label: "窄", maxWidth: "42ch" },
+  { id: "md", label: "适中", maxWidth: "55ch" },
+  { id: "lg", label: "宽", maxWidth: "68ch" },
+  { id: "xl", label: "很宽", maxWidth: "80ch" },
   { id: "full", label: "铺满", maxWidth: null },
 ];
 
@@ -105,6 +103,8 @@ const LEGACY_LINE_WIDTH_MAP: Record<string, LineWidthId> = {
   medium: "md",
   wide: "lg",
   full: "full",
+  xs: "sm",
+  "2xl": "xl",
 };
 
 function readStoredLineWidth(): LineWidthId {
