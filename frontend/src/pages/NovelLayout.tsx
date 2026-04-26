@@ -90,6 +90,12 @@ export default function NovelLayout() {
 
   const userMenuItems = [
     {
+      key: "settings",
+      icon: <SettingOutlined />,
+      label: "AI 设置",
+      onClick: () => nav("/settings"),
+    },
+    {
       key: "usage",
       icon: <BarChartOutlined />,
       label: "Token 用量",

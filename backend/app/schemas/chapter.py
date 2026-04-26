@@ -193,3 +193,27 @@ class ChapterRollbackIn(BaseModel):
         default=True,
         description="是否保存当前版本作为历史版本后再回滚",
     )
+
+
+class ChapterPreviewOut(BaseModel):
+    title: str = Field(..., description="生成的章节标题")
+    content: str = Field(..., description="生成的章节正文")
+    summary: str = Field(..., description="本章概要")
+    evaluate_result: ChapterEvaluateOut | None = Field(
+        default=None,
+        description="自动审核结果（如果启用了自动审核）",
+    )
+    needs_revision: bool = Field(
+        default=False,
+        description="是否需要修改（自动审核分数低于阈值时为 True）",
+    )
+
+
+class ChapterConfirmIn(BaseModel):
+    chapter_id: int | None = Field(
+        default=None,
+        description="若提供则写入该章节；否则新建一章",
+    )
+    title: str = Field(..., description="章节标题")
+    content: str = Field(..., description="章节正文")
+    summary: str = Field(..., description="本章概要")

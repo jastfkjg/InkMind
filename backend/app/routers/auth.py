@@ -36,6 +36,7 @@ def me(user: CurrentUser) -> User:
 @router.patch("/me", response_model=UserOut)
 def update_me(body: UserUpdate, user: CurrentUser, db: Session = Depends(get_db)) -> User:
     data = body.model_dump(exclude_unset=True)
+
     if "preferred_llm_provider" in data:
         v = data["preferred_llm_provider"]
         if v is None or (isinstance(v, str) and not str(v).strip()):
@@ -49,6 +50,50 @@ def update_me(body: UserUpdate, user: CurrentUser, db: Session = Depends(get_db)
                     detail=f"该模型未配置或不可用。当前可用: {', '.join(avail) or '无'}",
                 )
             user.preferred_llm_provider = low
+
+    if "agent_mode" in data:
+        v = data["agent_mode"]
+        valid_modes = ["flexible", "react", "direct"]
+        if v not in valid_modes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"agent_mode 必须是以下之一: {', '.join(valid_modes)}",
+            )
+        user.agent_mode = v
+
+    if "max_llm_iterations" in data:
+        v = data["max_llm_iterations"]
+        if v is not None and (v < 1 or v > 50):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="max_llm_iterations 必须在 1-50 之间",
+            )
+        user.max_llm_iterations = v or 10
+
+    if "max_tokens_per_task" in data:
+        v = data["max_tokens_per_task"]
+        if v is not None and (v < 1000 or v > 500000):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="max_tokens_per_task 必须在 1000-500000 之间",
+            )
+        user.max_tokens_per_task = v or 50000
+
+    if "enable_auto_audit" in data:
+        user.enable_auto_audit = bool(data["enable_auto_audit"])
+
+    if "preview_before_save" in data:
+        user.preview_before_save = bool(data["preview_before_save"])
+
+    if "auto_audit_min_score" in data:
+        v = data["auto_audit_min_score"]
+        if v is not None and (v < 0 or v > 100):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="auto_audit_min_score 必须在 0-100 之间",
+            )
+        user.auto_audit_min_score = v or 60
+
     db.add(user)
     db.commit()
     db.refresh(user)

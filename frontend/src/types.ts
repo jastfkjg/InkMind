@@ -5,6 +5,13 @@ export type User = {
   preferred_llm_provider?: string | null;
   /** 累计 LLM 流式调用成功次数（非 token） */
   llm_call_count?: number;
+
+  agent_mode?: string;
+  max_llm_iterations?: number;
+  max_tokens_per_task?: number;
+  enable_auto_audit?: boolean;
+  preview_before_save?: boolean;
+  auto_audit_min_score?: number;
 };
 
 export type Novel = {

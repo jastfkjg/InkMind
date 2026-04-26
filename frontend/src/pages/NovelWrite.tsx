@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import {
   apiErrorMessage,
   compareVersionWithCurrent,
+  confirmChapterGeneration,
   createChapter,
   deleteChapter,
   chapterSelectionAi,
@@ -18,6 +19,7 @@ import {
   reviseChapter,
   rollbackChapterToVersion,
   updateChapter,
+  type ChapterPreviewResult,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
@@ -281,7 +283,11 @@ export default function NovelWrite() {
   const selectionRangeRef = useRef<{ start: number; end: number } | null>(null);
   selectionRangeRef.current = selectionRange;
   const [err, setErr] = useState("");
-  
+
+  const [previewResult, setPreviewResult] = useState<ChapterPreviewResult | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
   const [versions, setVersions] = useState<ChapterVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<ChapterVersion | null>(null);
@@ -297,6 +303,7 @@ export default function NovelWrite() {
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorSnapshotRef = useRef({ title: "", summary: "", content: "" });
   editorSnapshotRef.current = { title, summary, content };
+  const preGenerateSnapshotRef = useRef({ title: "", summary: "", content: "" });
 
   const loadChapters = useCallback(async () => {
     const list = await fetchChapters(id);
@@ -755,6 +762,7 @@ export default function NovelWrite() {
 
   useEffect(() => {
     if (activeId === null) return;
+    if (isPreviewMode) return;
     const snap = chapters.find((c) => c.id === activeId);
     if (!snap) return;
     if (snap.title === title && snap.summary === summary && snap.content === content) return;
@@ -781,7 +789,7 @@ export default function NovelWrite() {
         debounceTimerRef.current = null;
       }
     };
-  }, [title, summary, content, activeId, id, chapters]);
+  }, [title, summary, content, activeId, id, chapters, isPreviewMode]);
 
   function toggleTool(t: AiTool) {
     if (!canOpenTool(t)) return;
@@ -930,13 +938,16 @@ export default function NovelWrite() {
       const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，标题也可能随内容一起更新，是否继续？");
       if (!ok) return;
     }
+    preGenerateSnapshotRef.current = { title, summary, content };
     const savedContent = content;
     const savedTitle = title;
     setBusy(true);
     setErr("");
     setContent("");
+    setPreviewResult(null);
+    setIsPreviewMode(false);
     try {
-      const ch = await generateChapter(nid, s, {
+      const result = await generateChapter(nid, s, {
         chapterId: activeId,
         title: singleGenerateTitle.trim() || null,
         lockTitle: singleGenerateLockTitle,
@@ -944,6 +955,56 @@ export default function NovelWrite() {
         onToken: (t) => {
           if (novelIdRef.current === nid) setContent((p) => p + t);
         },
+      });
+      if (novelIdRef.current !== nid) return;
+
+      if (result.preview) {
+        setIsPreviewMode(true);
+        setPreviewResult(result.preview);
+        setTitle(result.preview.title);
+        setContent(normalizeBodyParagraphIndent(result.preview.content));
+        setSummary(result.preview.summary);
+        if (result.preview.evaluate_result) {
+          setEvaluateResult(result.preview.evaluate_result);
+        }
+      } else if (result.chapter) {
+        const ch = result.chapter;
+        const full = await loadChapters();
+        if (novelIdRef.current !== nid) return;
+        setChapters(full);
+        setActiveId(ch.id);
+        lastLoadedChapterIdRef.current = null;
+        setTitle(ch.title);
+        setSummary(ch.summary);
+        setContent(normalizeBodyParagraphIndent(ch.content));
+        setSingleGenerateTitle("");
+        setSingleGenerateLockTitle(false);
+        setGenerateWordCount(null);
+      } else {
+        throw new Error("未收到生成结果");
+      }
+    } catch (e) {
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+        setTitle(savedTitle);
+        setContent(savedContent);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onConfirmPreview() {
+    if (!previewResult || !activeId) return;
+    const nid = id;
+    setPreviewLoading(true);
+    setErr("");
+    try {
+      const ch = await confirmChapterGeneration(nid, {
+        chapter_id: activeId,
+        title: previewResult.title,
+        content: previewResult.content,
+        summary: previewResult.summary,
       });
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
@@ -954,18 +1015,20 @@ export default function NovelWrite() {
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(normalizeBodyParagraphIndent(ch.content));
+      setPreviewResult(null);
       setSingleGenerateTitle("");
       setSingleGenerateLockTitle(false);
       setGenerateWordCount(null);
     } catch (e) {
-      if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
-        setTitle(savedTitle);
-        setContent(savedContent);
-      }
+      setErr(apiErrorMessage(e));
     } finally {
-      setBusy(false);
+      setPreviewLoading(false);
     }
+  }
+
+  function onCancelPreview() {
+    setPreviewResult(null);
+    setEvaluateResult(null);
   }
 
   async function onBatchGenerate() {
@@ -1718,6 +1781,49 @@ export default function NovelWrite() {
                     <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
                       {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
                     </button>
+
+                    {previewResult ? (
+                      <div className="stack-sm" style={{ marginTop: "1rem" }}>
+                        <div
+                          className={`card ${
+                            previewResult.needs_revision ? "border-warning" : "border-success"
+                          }`}
+                          style={{ padding: "0.75rem", borderRadius: "0.5rem", borderLeft: "4px solid" }}
+                        >
+                          <p style={{ margin: 0, fontWeight: 500 }}>
+                            {previewResult.needs_revision
+                              ? "⚠️ 内容评分较低，建议修改后保存"
+                              : "✅ 内容已生成，请预览"}
+                          </p>
+                          {previewResult.evaluate_result && (
+                            <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem" }}>
+                              去 AI 化评分：<strong>{previewResult.evaluate_result.de_ai_score}</strong> 分
+                              {previewResult.evaluate_result.issues.length > 0 && (
+                                <span>（发现 {previewResult.evaluate_result.issues.length} 个问题点）</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <div className="write-preview-actions" style={{ display: "flex", gap: "0.5rem" }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={previewLoading}
+                            onClick={() => void onConfirmPreview()}
+                          >
+                            {previewLoading ? "保存中…" : "确认保存"}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={previewLoading}
+                            onClick={onCancelPreview}
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <>

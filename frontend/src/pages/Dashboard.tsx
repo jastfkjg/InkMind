@@ -30,6 +30,7 @@ import {
   SunOutlined,
   MoonOutlined,
   EyeOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -133,6 +134,12 @@ export default function Dashboard() {
   ];
 
   const userMenuItems = [
+    {
+      key: "settings",
+      icon: <SettingOutlined />,
+      label: "AI 设置",
+      onClick: () => nav("/settings"),
+    },
     {
       key: "usage",
       icon: <BarChartOutlined />,

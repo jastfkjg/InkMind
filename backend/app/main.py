@@ -26,6 +26,18 @@ def _migrate_sqlite() -> None:
                 )
             if "llm_call_count" not in cols_users:
                 conn.execute(text("ALTER TABLE users ADD COLUMN llm_call_count INTEGER NOT NULL DEFAULT 0"))
+            if "agent_mode" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN agent_mode VARCHAR(32) NOT NULL DEFAULT 'flexible'"))
+            if "max_llm_iterations" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN max_llm_iterations INTEGER NOT NULL DEFAULT 10"))
+            if "max_tokens_per_task" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN max_tokens_per_task INTEGER NOT NULL DEFAULT 50000"))
+            if "enable_auto_audit" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN enable_auto_audit BOOLEAN NOT NULL DEFAULT 1"))
+            if "preview_before_save" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN preview_before_save BOOLEAN NOT NULL DEFAULT 1"))
+            if "auto_audit_min_score" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN auto_audit_min_score INTEGER NOT NULL DEFAULT 60"))
             if "novels" in tables:
                 ncols = {c["name"] for c in insp.get_columns("novels")}
                 if "outline" in ncols and "background" not in ncols:

@@ -533,3 +533,80 @@ def _parse_batch_plan(
         seen_titles.append(title)
 
     return plan
+
+
+def run_direct_chapter_generation(
+    db: Session,
+    novel: Novel,
+    chapter_summary: str,
+    target_chapter: Chapter | None,
+    llm: LLMProvider,
+    *,
+    fixed_title: str | None = None,
+    new_sort_order: int | None = None,
+    word_count: int | None = None,
+    save_to_db: bool = True,
+) -> tuple[str, str] | tuple[str, str, Chapter]:
+    """直接调用 LLM 生成章节，不经过 Agent 循环。
+
+    适用于简单任务场景，减少 LLM 交互轮数。
+
+    Args:
+        save_to_db: 是否保存到数据库（False 表示预览模式）
+
+    Returns:
+        如果 save_to_db=True: (title, content, Chapter)
+        如果 save_to_db=False: (title, content)
+    """
+    from app.models import Chapter as ChapterModel
+    from sqlalchemy import func, select
+
+    system, user = build_generation_prompt(
+        db, novel, chapter_summary, target_chapter,
+        fixed_title=fixed_title, word_count=word_count
+    )
+
+    raw = llm.complete(system, user)
+
+    need_title = fixed_title is None
+    title_out, body_text = parse_chapter_generation_json(raw, need_title=need_title)
+
+    if fixed_title is not None:
+        title_out = fixed_title
+    elif target_chapter and (target_chapter.title or "").strip():
+        title_out = target_chapter.title.strip()
+    elif not title_out.strip():
+        title_out = _generate_chapter_title(
+            db, llm, novel, target_chapter,
+            chapter_summary=chapter_summary, body_text=body_text
+        )
+
+    if not save_to_db:
+        return title_out, body_text
+
+    if target_chapter is None:
+        if new_sort_order is not None:
+            next_order = new_sort_order
+        else:
+            max_order = db.scalar(
+                select(func.max(ChapterModel.sort_order)).where(ChapterModel.novel_id == novel.id)
+            )
+            next_order = (max_order or 0) + 1
+        ch = ChapterModel(
+            novel_id=novel.id,
+            title=title_out,
+            summary=chapter_summary.strip(),
+            content=body_text,
+            sort_order=next_order,
+        )
+        db.add(ch)
+    else:
+        target_chapter.summary = chapter_summary.strip()
+        target_chapter.content = body_text
+        target_chapter.title = title_out
+        db.add(target_chapter)
+        ch = target_chapter
+
+    db.commit()
+    db.refresh(ch)
+    return title_out, body_text, ch

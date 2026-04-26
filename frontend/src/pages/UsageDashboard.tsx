@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Layout,
   Card,
@@ -28,6 +28,7 @@ import {
   MoonOutlined,
   EyeOutlined,
   UserOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
@@ -77,6 +78,7 @@ function getActionTag(action: string) {
 export default function UsageDashboard() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const nav = useNavigate();
   const [data, setData] = useState<LlmUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -123,6 +125,12 @@ export default function UsageDashboard() {
   ];
 
   const userMenuItems = [
+    {
+      key: "settings",
+      icon: <SettingOutlined />,
+      label: "AI 设置",
+      onClick: () => nav("/settings"),
+    },
     {
       key: "usage",
       icon: <BarChartOutlined />,
