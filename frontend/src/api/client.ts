@@ -13,6 +13,15 @@ export type ChapterEvaluateResult = {
   de_ai_score: number;
 };
 
+/** AI 生成预览结果 */
+export type ChapterPreviewResult = {
+  title: string;
+  content: string;
+  summary: string;
+  evaluate_result?: ChapterEvaluateResult;
+  needs_revision: boolean;
+};
+
 export type NdjsonAiResult = {
   chapter?: Chapter;
   chapters?: Chapter[];
@@ -21,6 +30,7 @@ export type NdjsonAiResult = {
   text?: string;
   summary?: string;
   evaluate?: ChapterEvaluateResult;
+  preview?: ChapterPreviewResult;
 };
 
 /** POST NDJSON 流：每行一个 JSON，含 token 片段 `t` 与最终字段（chapter / reply / text / summary / title）。 */
@@ -69,6 +79,9 @@ export async function postNdjsonAi(
     if ("summary" in obj && typeof obj.summary === "string") out.summary = obj.summary;
     if ("evaluate" in obj && obj.evaluate != null && typeof obj.evaluate === "object") {
       out.evaluate = obj.evaluate as ChapterEvaluateResult;
+    }
+    if ("preview" in obj && obj.preview != null && typeof obj.preview === "object") {
+      out.preview = obj.preview as ChapterPreviewResult;
     }
   };
   while (true) {
@@ -151,7 +164,15 @@ export async function authMe() {
   return data;
 }
 
-export async function patchAuthMe(payload: { preferred_llm_provider?: string | null }) {
+export async function patchAuthMe(payload: {
+  preferred_llm_provider?: string | null;
+  agent_mode?: string | null;
+  max_llm_iterations?: number | null;
+  max_tokens_per_task?: number | null;
+  enable_auto_audit?: boolean | null;
+  preview_before_save?: boolean | null;
+  auto_audit_min_score?: number | null;
+}) {
   const { data } = await api.patch<User>("/auth/me", payload);
   return data;
 }
@@ -216,7 +237,7 @@ export async function generateChapter(
     wordCount?: number | null;
     onToken?: (chunk: string) => void;
   }
-) {
+): Promise<NdjsonAiResult> {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/generate`,
     {
@@ -228,8 +249,28 @@ export async function generateChapter(
     },
     { onToken: options?.onToken }
   );
-  if (!r.chapter) throw new Error("未收到章节数据");
-  return r.chapter;
+  return r;
+}
+
+export async function confirmChapterGeneration(
+  novelId: number,
+  payload: {
+    chapter_id: number | null;
+    title: string;
+    content: string;
+    summary: string;
+  }
+): Promise<Chapter> {
+  const { data } = await api.post<Chapter>(
+    `/novels/${novelId}/chapters/confirm-generation`,
+    {
+      chapter_id: payload.chapter_id,
+      title: payload.title,
+      content: payload.content,
+      summary: payload.summary,
+    }
+  );
+  return data;
 }
 
 export async function generateChapterBatch(

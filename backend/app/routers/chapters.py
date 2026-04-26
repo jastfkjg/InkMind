@@ -15,10 +15,12 @@ from app.models import Chapter, ChapterVersion
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
     ChapterBatchGenerateIn,
+    ChapterConfirmIn,
     ChapterCreate,
     ChapterEvaluateIn,
     ChapterGenerateIn,
     ChapterOut,
+    ChapterPreviewOut,
     ChapterReviseIn,
     ChapterRollbackIn,
     ChapterSelectionAiIn,
@@ -33,7 +35,9 @@ from app.services.chapter_gen import (
     build_generation_prompt,
     parse_chapter_generation_json,
     plan_batch_chapters,
+    run_direct_chapter_generation,
     run_flexible_chapter_generation,
+    run_react_chapter_generation,
 )
 from app.services.chapter_llm import (
     ensure_unique_chapter_title,
@@ -102,6 +106,14 @@ def generate_chapter(
     word_count = body.word_count if body.word_count and 500 <= body.word_count <= 4000 else None
     provider_name = normalize_provider_name(None, user)
 
+    agent_mode = getattr(user, "agent_mode", "flexible")
+    max_iterations = getattr(user, "max_llm_iterations", 10)
+    enable_auto_audit = getattr(user, "enable_auto_audit", True)
+    preview_before_save = getattr(user, "preview_before_save", True)
+    auto_audit_min_score = getattr(user, "auto_audit_min_score", 60)
+
+    save_to_db = not preview_before_save
+
     def gen():
         with llm_usage_session(db, user.id, provider_name, "AI生成") as accumulator:
             try:
@@ -110,24 +122,112 @@ def generate_chapter(
                 yield ndjson_line({"error": str(e)})
                 return
             
-            if target is not None and target.content:
+            if target is not None and target.content and save_to_db:
                 save_version_before_change(db, target, "ai_generate")
 
             try:
-                with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
-                    result = run_flexible_chapter_generation(
-                        db, novel, body.summary.strip(), target,
-                        llm, fixed_title=fixed_title, word_count=word_count
+                title_out = ""
+                body_text = ""
+                ch: Chapter | None = None
+
+                if agent_mode == "direct":
+                    yield ndjson_line({"t": "[直接模式] 正在生成章节...\n"})
+                    with ai_span("chapter.generate.direct", novel_id=novel_id):
+                        result = run_direct_chapter_generation(
+                            db, novel, body.summary.strip(), target,
+                            llm, fixed_title=fixed_title, word_count=word_count,
+                            save_to_db=save_to_db
+                        )
+                        if save_to_db:
+                            title_out, body_text, ch = result  # type: ignore
+                        else:
+                            title_out, body_text = result  # type: ignore
+
+                elif agent_mode == "react":
+                    yield ndjson_line({"t": "[ReAct模式] 正在生成章节...\n"})
+                    with ai_span("chapter.generate.react_agent", novel_id=novel_id):
+                        result = run_react_chapter_generation(
+                            db, novel, body.summary.strip(), target,
+                            llm, fixed_title=fixed_title, word_count=word_count,
+                            max_iterations=max_iterations
+                        )
+                    ch = None
+                    body_parts: list[str] = []
+                    for item in result:
+                        if isinstance(item, Chapter):
+                            ch = item
+                            title_out = ch.title
+                            body_text = ch.content
+                        else:
+                            if item:
+                                body_parts.append(item)
+                                yield ndjson_line({"t": item})
+                    if not body_text and body_parts:
+                        from app.services.chapter_gen import _sanitize_generated_body
+                        body_text = _sanitize_generated_body("".join(body_parts))
+
+                else:
+                    yield ndjson_line({"t": "[Flexible模式] 正在生成章节...\n"})
+                    with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
+                        result = run_flexible_chapter_generation(
+                            db, novel, body.summary.strip(), target,
+                            llm, fixed_title=fixed_title, word_count=word_count,
+                            max_iterations=max_iterations
+                        )
+                    ch = None
+                    body_parts: list[str] = []
+                    for item in result:
+                        if isinstance(item, Chapter):
+                            ch = item
+                            title_out = ch.title
+                            body_text = ch.content
+                        else:
+                            if item:
+                                body_parts.append(item)
+                                yield ndjson_line({"t": item})
+                    if not body_text and body_parts:
+                        from app.services.chapter_gen import _sanitize_generated_body
+                        body_text = _sanitize_generated_body("".join(body_parts))
+
+                evaluate_result = None
+                needs_revision = False
+
+                if enable_auto_audit and body_text.strip():
+                    yield ndjson_line({"t": "\n[自动审核] 正在评估内容质量...\n"})
+                    try:
+                        eval_buf: list[str] = []
+                        with ai_span("chapter.auto_evaluate", novel_id=novel_id):
+                            for part in filter_think_chunks(stream_evaluate_tokens(
+                                llm,
+                                novel,
+                                title=title_out or "",
+                                summary=body.summary.strip(),
+                                content=body_text,
+                            )):
+                                eval_buf.append(part)
+                                yield ndjson_line({"t": part})
+                        eval_raw = "".join(eval_buf)
+                        evaluate_result = parse_evaluation_json(eval_raw)
+                        yield ndjson_line({"evaluate": evaluate_result.model_dump(mode="json")})
+
+                        if evaluate_result.de_ai_score < auto_audit_min_score:
+                            needs_revision = True
+                            yield ndjson_line({"t": f"\n[提示] 内容评分（{evaluate_result.de_ai_score}分）低于阈值（{auto_audit_min_score}分），建议修改后保存。\n"})
+                    except Exception as e:
+                        yield ndjson_line({"t": f"\n[警告] 自动审核失败: {str(e)}\n"})
+
+                if preview_before_save:
+                    preview_out = ChapterPreviewOut(
+                        title=title_out,
+                        content=body_text,
+                        summary=body.summary.strip(),
+                        evaluate_result=evaluate_result,
+                        needs_revision=needs_revision,
                     )
-                ch = None
-                for item in result:
-                    if isinstance(item, Chapter):
-                        ch = item
-                    else:
-                        if item:
-                            yield ndjson_line({"t": item})
-                if ch is not None:
+                    yield ndjson_line({"preview": preview_out.model_dump(mode="json")})
+                elif ch is not None:
                     yield ndjson_line({"chapter": ChapterOut.model_validate(ch).model_dump(mode="json")})
+
             except LLMRequestError as e:
                 yield ndjson_line({"error": e.message})
             except Exception as e:
@@ -139,6 +239,50 @@ def generate_chapter(
         media_type="application/x-ndjson",
         headers=_STREAM_HEADERS,
     )
+
+
+@router.post("/confirm-generation", response_model=ChapterOut)
+def confirm_generation(
+    novel_id: int,
+    body: ChapterConfirmIn,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """确认保存预览的生成内容。"""
+    novel = _get_owned_novel(db, user.id, novel_id)
+
+    target: Chapter | None = None
+    if body.chapter_id is not None:
+        target = db.get(Chapter, body.chapter_id)
+        if target is None or target.novel_id != novel_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+
+    if target is None:
+        from sqlalchemy import func, select
+        max_order = db.scalar(
+            select(func.max(Chapter.sort_order)).where(Chapter.novel_id == novel.id)
+        )
+        next_order = (max_order or 0) + 1
+        ch = Chapter(
+            novel_id=novel.id,
+            title=body.title,
+            summary=body.summary.strip(),
+            content=body.content,
+            sort_order=next_order,
+        )
+        db.add(ch)
+    else:
+        if target.content:
+            save_version_before_change(db, target, "ai_generate")
+        target.title = body.title
+        target.summary = body.summary.strip()
+        target.content = body.content
+        db.add(target)
+        ch = target
+
+    db.commit()
+    db.refresh(ch)
+    return ch
 
 
 @router.post("/generate-batch")

@@ -5,7 +5,6 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
 import type { User } from "@/types";
 import { authLogin, authMe, authRegister, clearToken, getToken, patchAuthMe, setToken } from "@/api/client";
@@ -17,12 +16,20 @@ type AuthState = {
   register: (email: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
   updatePreferredLlm: (preferred_llm_provider: string | null) => Promise<void>;
+  updateAiSettings: (settings: {
+    agent_mode?: string | null;
+    max_llm_iterations?: number | null;
+    max_tokens_per_task?: number | null;
+    enable_auto_audit?: boolean | null;
+    preview_before_save?: boolean | null;
+    auto_audit_min_score?: number | null;
+  }) => Promise<void>;
   refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,6 +73,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
+  const updateAiSettings = useCallback(
+    async (settings: {
+      agent_mode?: string | null;
+      max_llm_iterations?: number | null;
+      max_tokens_per_task?: number | null;
+      enable_auto_audit?: boolean | null;
+      preview_before_save?: boolean | null;
+      auto_audit_min_score?: number | null;
+    }) => {
+      const u = await patchAuthMe(settings);
+      setUser(u);
+    },
+    []
+  );
+
   const refreshUser = useCallback(async () => {
     const t = getToken();
     if (!t) return;
@@ -78,8 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, updatePreferredLlm, refreshUser }),
-    [user, loading, login, register, logout, updatePreferredLlm, refreshUser]
+    () => ({ user, loading, login, register, logout, updatePreferredLlm, updateAiSettings, refreshUser }),
+    [user, loading, login, register, logout, updatePreferredLlm, updateAiSettings, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

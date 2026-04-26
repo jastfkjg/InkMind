@@ -7,6 +7,7 @@ from sqlalchemy import (
     Integer,
     ForeignKey,
     DateTime,
+    Boolean,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,6 +23,8 @@ VersionChangeType = Literal[
     "rollback",
 ]
 
+AgentMode = Literal["flexible", "react", "direct"]
+
 
 class User(Base):
     __tablename__ = "users"
@@ -33,6 +36,13 @@ class User(Base):
     preferred_llm_provider: Mapped[str | None] = mapped_column(String(128), nullable=True)
     llm_call_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    agent_mode: Mapped[str] = mapped_column(String(32), default="flexible")
+    max_llm_iterations: Mapped[int] = mapped_column(Integer, default=10)
+    max_tokens_per_task: Mapped[int] = mapped_column(Integer, default=50000)
+    enable_auto_audit: Mapped[bool] = mapped_column(Boolean, default=True)
+    preview_before_save: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_audit_min_score: Mapped[int] = mapped_column(Integer, default=60)
 
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
     llm_usage_events: Mapped[list["LLMUsageEvent"]] = relationship(
