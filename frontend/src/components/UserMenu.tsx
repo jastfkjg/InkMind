@@ -83,8 +83,9 @@ export default function UserMenu() {
       {open ? (
         <div className="user-menu-dropdown card" role="menu">
           <div className="user-menu-email muted">{user?.email}</div>
+
           {llmOptions.length > 0 ? (
-            <div className="field" style={{ marginBottom: 0 }}>
+            <div className="field" style={{ marginBottom: 0, marginTop: "0.75rem" }}>
               <label htmlFor="menu-llm">默认模型</label>
               <select
                 id="menu-llm"
@@ -104,7 +105,7 @@ export default function UserMenu() {
               </p>
             </div>
           ) : (
-            <p className="hint" style={{ marginTop: 0 }}>
+            <p className="hint" style={{ marginTop: "0.75rem" }}>
               未配置任何 LLM，请在服务端环境变量中设置 API Key
             </p>
           )}
@@ -112,7 +113,7 @@ export default function UserMenu() {
           <Link
             to="/usage"
             className="btn btn-ghost"
-            style={{ width: "100%", marginTop: "0.5rem" }}
+            style={{ width: "100%", marginTop: "0.75rem" }}
             onClick={() => setOpen(false)}
           >
             Token 用量统计

@@ -1,7 +1,30 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  Card,
+  List,
+  Button,
+  Typography,
+  Empty,
+  Spin,
+  Alert,
+  Tag,
+  Space,
+  Tooltip,
+  Modal,
+  message,
+} from "antd";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  FileTextOutlined,
+} from "@ant-design/icons";
 import { apiErrorMessage, deleteMemo, fetchMemos } from "@/api/client";
 import type { Memo } from "@/types";
+
+const { Title, Text } = Typography;
+const { confirm } = Modal;
 
 export default function NovelMemos() {
   const { novelId } = useParams();
@@ -27,94 +50,192 @@ export default function NovelMemos() {
     })();
   }, [id]);
 
-  async function remove(memoId: number) {
-    if (!window.confirm("确定删除这条备忘？")) return;
-    setErr("");
-    try {
-      await deleteMemo(id, memoId);
-      setItems((prev) => prev.filter((x) => x.id !== memoId));
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-    }
+  function showDeleteConfirm(memo: Memo) {
+    const title = (memo.title || "").trim();
+    const preview = title || memo.body?.slice(0, 30) || "无标题";
+    confirm({
+      title: "删除备忘",
+      content: `确定要删除备忘「${preview}」吗？此操作不可恢复。`,
+      okText: "删除",
+      okType: "danger",
+      cancelText: "取消",
+      async onOk() {
+        try {
+          await deleteMemo(id, memo.id);
+          setItems((prev) => prev.filter((x) => x.id !== memo.id));
+          message.success("备忘已删除");
+        } catch (e) {
+          setErr(apiErrorMessage(e));
+          message.error("删除失败");
+        }
+      },
+    });
   }
 
   if (loading) {
-    return <p className="muted">加载中…</p>;
-  }
-
-  return (
-    <div className="card">
-      {err ? <p className="form-error">{err}</p> : null}
-
+    return (
       <div
         style={{
           display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "space-between",
+          justifyContent: "center",
           alignItems: "center",
-          gap: "0.75rem",
-          marginBottom: "1rem",
+          padding: "4rem 2rem",
         }}
       >
-        <h2 style={{ fontFamily: "var(--font-serif)", margin: 0 }}>备忘</h2>
-        <Link to={`/novels/${id}/memos/new`} className="btn btn-primary">
-          添加备忘
-        </Link>
+        <Spin size="large" />
+        <Text type="secondary" style={{ marginLeft: "1rem", fontSize: "1rem" }}>
+          加载中…
+        </Text>
       </div>
+    );
+  }
 
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {items.map((m) => {
-          const title = (m.title || "").trim();
-          const rawBody = (m.body || "").trim();
-          const bodyPreview = rawBody
-            ? `${rawBody.slice(0, 120)}${rawBody.length > 120 ? "…" : ""}`
-            : "";
+  return (
+    <div style={{ padding: "0.5rem" }}>
+      {err && (
+        <Alert
+          message="操作失败"
+          description={err}
+          type="error"
+          showIcon
+          style={{ marginBottom: "1rem" }}
+        />
+      )}
 
-          return (
-          <li
-            key={m.id}
-            style={{
-              padding: "0.65rem 0.75rem",
-              borderBottom: "1px solid var(--border)",
-              display: "flex",
-              justifyContent: "space-between",
-              gap: "0.5rem",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              {title ? (
-                <>
-                  <strong>{title}</strong>
-                  {bodyPreview ? (
-                    <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
-                      {bodyPreview}
-                    </p>
-                  ) : (
-                    <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.85rem" }}>
-                      （无正文）
-                    </p>
-                  )}
-                </>
-              ) : bodyPreview ? (
-                <strong>{bodyPreview}</strong>
-              ) : (
-                <span className="muted">（无正文）</span>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: "0.35rem", flexShrink: 0 }}>
-              <Link to={`/novels/${id}/memos/${m.id}/edit`} className="btn btn-ghost" style={{ fontSize: "0.8rem" }}>
-                编辑
-              </Link>
-              <button type="button" className="btn btn-danger" style={{ fontSize: "0.8rem" }} onClick={() => remove(m.id)}>
-                删
-              </button>
-            </div>
-          </li>
-          );
-        })}
-      </ul>
-      {items.length === 0 ? <p className="muted">暂无备忘，点击「添加备忘」新建。</p> : null}
+      <Card
+        style={{
+          borderRadius: 16,
+          border: "none",
+          boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
+          background: "#fffcf7",
+        }}
+        title={
+          <Space>
+            <FileTextOutlined style={{ color: "#7c2d12", fontSize: "1.25rem" }} />
+            <Title
+              level={4}
+              style={{
+                margin: 0,
+                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+                color: "#1c1917",
+              }}
+            >
+              备忘
+            </Title>
+            <Tag color="blue">{items.length} 条</Tag>
+          </Space>
+        }
+        extra={
+          <Link to={`/novels/${id}/memos/new`}>
+            <Button type="primary" icon={<PlusOutlined />} size="large">
+              添加备忘
+            </Button>
+          </Link>
+        }
+      >
+        <Spin spinning={loading}>
+          {items.length === 0 ? (
+            <Empty
+              description={
+                <div>
+                  <Title level={5} style={{ marginBottom: "0.5rem" }}>
+                    暂无备忘
+                  </Title>
+                  <Text type="secondary">
+                    点击「添加备忘」开始记录你的灵感和想法
+                  </Text>
+                </div>
+              }
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              style={{ padding: "3rem 0" }}
+            />
+          ) : (
+            <List
+              dataSource={items}
+              renderItem={(m) => {
+                const title = (m.title || "").trim();
+                const rawBody = (m.body || "").trim();
+                const bodyPreview = rawBody
+                  ? `${rawBody.slice(0, 120)}${rawBody.length > 120 ? "…" : ""}`
+                  : "";
+
+                return (
+                  <List.Item
+                    key={m.id}
+                    actions={[
+                      <Tooltip title="编辑备忘" key="edit">
+                        <Link to={`/novels/${id}/memos/${m.id}/edit`}>
+                          <Button
+                            type="text"
+                            icon={<EditOutlined />}
+                            style={{ color: "#7c2d12" }}
+                          >
+                            编辑
+                          </Button>
+                        </Link>
+                      </Tooltip>,
+                      <Tooltip title="删除备忘" key="delete">
+                        <Button
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => showDeleteConfirm(m)}
+                        >
+                          删除
+                        </Button>
+                      </Tooltip>,
+                    ]}
+                    style={{
+                      padding: "1rem 0",
+                      borderBottom: "1px solid #e7e0d5",
+                    }}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <div>
+                          {title ? (
+                            <Text
+                              strong
+                              style={{
+                                fontSize: "1.05rem",
+                                color: "#1c1917",
+                                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+                              }}
+                            >
+                              {title}
+                            </Text>
+                          ) : bodyPreview ? (
+                            <Text
+                              strong
+                              style={{
+                                color: "#1c1917",
+                              }}
+                            >
+                              {bodyPreview}
+                            </Text>
+                          ) : (
+                            <Tag color="default">无正文</Tag>
+                          )}
+                        </div>
+                      }
+                      description={
+                        title && bodyPreview ? (
+                          <Text
+                            type="secondary"
+                            style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}
+                          >
+                            {bodyPreview}
+                          </Text>
+                        ) : null
+                      }
+                    />
+                  </List.Item>
+                );
+              }}
+            />
+          )}
+        </Spin>
+      </Card>
     </div>
   );
 }
