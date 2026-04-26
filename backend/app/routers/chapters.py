@@ -33,7 +33,7 @@ from app.services.chapter_gen import (
     build_generation_prompt,
     parse_chapter_generation_json,
     plan_batch_chapters,
-    run_react_chapter_generation,
+    run_flexible_chapter_generation,
 )
 from app.services.chapter_llm import (
     ensure_unique_chapter_title,
@@ -114,8 +114,8 @@ def generate_chapter(
                 save_version_before_change(db, target, "ai_generate")
 
             try:
-                with ai_span("chapter.generate.react_agent", novel_id=novel_id):
-                    result = run_react_chapter_generation(
+                with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
+                    result = run_flexible_chapter_generation(
                         db, novel, body.summary.strip(), target,
                         llm, fixed_title=fixed_title, word_count=word_count
                     )
@@ -214,7 +214,7 @@ def generate_chapter_batch(
                     yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 正在生成《{item['title']}》...\n"})
                     target_chapter = anchor if start_from_current and idx == 1 else None
                     sort_order = None if target_chapter is not None else insert_order + idx - (1 if start_from_current else 0)
-                    result = run_react_chapter_generation(
+                    result = run_flexible_chapter_generation(
                         db,
                         novel,
                         item["summary"],

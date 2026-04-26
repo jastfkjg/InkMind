@@ -1,16 +1,32 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { ConfigProvider } from "antd";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import App from "@/App";
+import { getThemeConfig } from "@/styles/theme";
 import "@/styles/global.css";
+
+function AppWithTheme() {
+  const { theme } = useTheme();
+  const themeConfig = getThemeConfig(theme);
+
+  return (
+    <ConfigProvider theme={themeConfig}>
+      <App />
+    </ConfigProvider>
+  );
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppWithTheme />
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </StrictMode>
 );

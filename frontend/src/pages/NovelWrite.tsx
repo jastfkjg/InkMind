@@ -62,27 +62,15 @@ const LINE_HEIGHTS: { id: LineHeightId; label: string; value: number }[] = [
 
 const WRITE_LINE_HEIGHT_KEY = "inkmind_write_line_height";
 
-type LineWidthId = "sm" | "md" | "lg" | "xl" | "full";
+type LineWidthId = "md" | "lg" | "full";
 
 const LINE_WIDTHS: { id: LineWidthId; label: string; maxWidth: string | null }[] = [
-  { id: "sm", label: "窄", maxWidth: "42ch" },
   { id: "md", label: "适中", maxWidth: "55ch" },
   { id: "lg", label: "宽", maxWidth: "68ch" },
-  { id: "xl", label: "很宽", maxWidth: "80ch" },
   { id: "full", label: "铺满", maxWidth: null },
 ];
 
 const WRITE_LINE_WIDTH_KEY = "inkmind_write_line_width";
-
-type ThemeId = "light" | "sepia" | "dark";
-
-const THEMES: { id: ThemeId; label: string }[] = [
-  { id: "light", label: "明亮" },
-  { id: "sepia", label: "护眼" },
-  { id: "dark", label: "夜间" },
-];
-
-const WRITE_THEME_KEY = "inkmind_write_theme";
 
 const WRITE_FOCUS_MODE_KEY = "inkmind_write_focus_mode";
 
@@ -99,12 +87,15 @@ function readStoredLineHeight(): LineHeightId {
 }
 
 const LEGACY_LINE_WIDTH_MAP: Record<string, LineWidthId> = {
-  narrow: "sm",
+  narrow: "md",
   medium: "md",
   wide: "lg",
   full: "full",
-  xs: "sm",
-  "2xl": "xl",
+  xs: "md",
+  sm: "md",
+  lg: "lg",
+  xl: "lg",
+  "2xl": "lg",
 };
 
 function readStoredLineWidth(): LineWidthId {
@@ -123,19 +114,7 @@ function readStoredLineWidth(): LineWidthId {
   } catch {
     /* ignore */
   }
-  return "md";
-}
-
-function readStoredTheme(): ThemeId {
-  try {
-    const v = localStorage.getItem(WRITE_THEME_KEY);
-    if (v && THEMES.some((x) => x.id === v)) {
-      return v as ThemeId;
-    }
-  } catch {
-    /* ignore */
-  }
-  return "light";
+  return "full";
 }
 
 function readStoredFocusMode(): boolean {
@@ -251,10 +230,7 @@ export default function NovelWrite() {
     typeof window !== "undefined" ? readStoredLineHeight() : "normal"
   );
   const [lineWidthId, setLineWidthId] = useState<LineWidthId>(() =>
-    typeof window !== "undefined" ? readStoredLineWidth() : "medium"
-  );
-  const [themeId, setThemeId] = useState<ThemeId>(() =>
-    typeof window !== "undefined" ? readStoredTheme() : "light"
+    typeof window !== "undefined" ? readStoredLineWidth() : "full"
   );
   const [focusMode, setFocusMode] = useState(() =>
     typeof window !== "undefined" ? readStoredFocusMode() : false
@@ -263,7 +239,6 @@ export default function NovelWrite() {
   const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
   const [lineHeightMenuOpen, setLineHeightMenuOpen] = useState(false);
   const [lineWidthMenuOpen, setLineWidthMenuOpen] = useState(false);
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const sidebarToolsRef = useRef<HTMLDivElement | null>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -341,8 +316,6 @@ export default function NovelWrite() {
     const i = WRITE_BODY_FONT_SIZES.findIndex((x) => x.id === bodyFontSizeId);
     return i >= 0 ? i : 2;
   })();
-  const lineHeightValue = LINE_HEIGHTS.find((x) => x.id === lineHeightId)?.value ?? 1.85;
-  const lineWidthValue = LINE_WIDTHS.find((x) => x.id === lineWidthId)?.maxWidth;
 
   const wordCount = content.replace(/\s/g, "").length;
   const charCount = content.length;
@@ -402,14 +375,6 @@ export default function NovelWrite() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(WRITE_THEME_KEY, themeId);
-    } catch {
-      /* ignore */
-    }
-  }, [themeId]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(WRITE_FOCUS_MODE_KEY, String(focusMode));
     } catch {
       /* ignore */
@@ -421,14 +386,13 @@ export default function NovelWrite() {
   }, [focusMode]);
 
   useEffect(() => {
-    if (!fontMenuOpen && !sizeMenuOpen && !lineHeightMenuOpen && !lineWidthMenuOpen && !themeMenuOpen) return;
+    if (!fontMenuOpen && !sizeMenuOpen && !lineHeightMenuOpen && !lineWidthMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       if (sidebarToolsRef.current && !sidebarToolsRef.current.contains(e.target as Node)) {
         setFontMenuOpen(false);
         setSizeMenuOpen(false);
         setLineHeightMenuOpen(false);
         setLineWidthMenuOpen(false);
-        setThemeMenuOpen(false);
       }
     };
     const onKey = (e: KeyboardEvent) => {
@@ -437,7 +401,6 @@ export default function NovelWrite() {
         setSizeMenuOpen(false);
         setLineHeightMenuOpen(false);
         setLineWidthMenuOpen(false);
-        setThemeMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", onDoc);
@@ -446,7 +409,7 @@ export default function NovelWrite() {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [fontMenuOpen, sizeMenuOpen, lineHeightMenuOpen, lineWidthMenuOpen, themeMenuOpen]);
+  }, [fontMenuOpen, sizeMenuOpen, lineHeightMenuOpen, lineWidthMenuOpen]);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -659,17 +622,6 @@ export default function NovelWrite() {
       setErr(apiErrorMessage(e));
     } finally {
       setVersionsLoading(false);
-    }
-  }
-
-  async function loadVersionDetail(versionId: number) {
-    if (activeId === null) return;
-    setErr("");
-    try {
-      const v = await fetchChapterVersionDetail(id, activeId, versionId);
-      setSelectedVersion(v);
-    } catch (e) {
-      setErr(apiErrorMessage(e));
     }
   }
 
@@ -1263,7 +1215,7 @@ export default function NovelWrite() {
     rightTool && hasLlm && (activeId !== null || rightTool === "ask" || rightTool === "naming");
 
   return (
-    <div className={`write-shell write-theme--${themeId}${focusMode ? " write-focus-mode" : ""}`}>
+    <div className={`write-shell${focusMode ? " write-focus-mode" : ""}`}>
       {err ? <p className="form-error write-err-banner">{err}</p> : null}
 
       {narrow && sidebarOpen && !focusMode ? (
@@ -1340,7 +1292,6 @@ export default function NovelWrite() {
                   setFontMenuOpen(false);
                   setLineHeightMenuOpen(false);
                   setLineWidthMenuOpen(false);
-                  setThemeMenuOpen(false);
                   setSizeMenuOpen((v) => !v);
                 }}
               >
@@ -1410,7 +1361,6 @@ export default function NovelWrite() {
                   setFontMenuOpen(false);
                   setSizeMenuOpen(false);
                   setLineWidthMenuOpen(false);
-                  setThemeMenuOpen(false);
                   setLineHeightMenuOpen((v) => !v);
                 }}
               >
@@ -1454,7 +1404,6 @@ export default function NovelWrite() {
                   setFontMenuOpen(false);
                   setSizeMenuOpen(false);
                   setLineHeightMenuOpen(false);
-                  setThemeMenuOpen(false);
                   setLineWidthMenuOpen((v) => !v);
                 }}
               >
@@ -1479,48 +1428,6 @@ export default function NovelWrite() {
                         }}
                       >
                         {lw.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-
-            <div className="write-theme-picker">
-              <button
-                type="button"
-                className="write-icon-btn write-theme-btn"
-                title="主题"
-                aria-expanded={themeMenuOpen}
-                aria-haspopup="listbox"
-                aria-label="主题"
-                onClick={() => {
-                  setFontMenuOpen(false);
-                  setSizeMenuOpen(false);
-                  setLineHeightMenuOpen(false);
-                  setLineWidthMenuOpen(false);
-                  setThemeMenuOpen((v) => !v);
-                }}
-              >
-                <span className="write-theme-icon" aria-hidden>
-                  {themeId === "dark" ? "☾" : themeId === "sepia" ? "◐" : "☼"}
-                </span>
-              </button>
-              {themeMenuOpen ? (
-                <ul className="write-theme-menu" role="listbox" aria-label="选择主题">
-                  {THEMES.map((t) => (
-                    <li key={t.id} role="presentation">
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={themeId === t.id}
-                        className={`write-theme-option${themeId === t.id ? " is-active" : ""}`}
-                        onClick={() => {
-                          setThemeId(t.id);
-                          setThemeMenuOpen(false);
-                        }}
-                      >
-                        {t.label}
                       </button>
                     </li>
                   ))}
@@ -1591,7 +1498,7 @@ export default function NovelWrite() {
         </aside>
 
         <div className="write-main write-main--with-rail">
-          <div className={`card write-editor-card write-editor-card--${themeId}`}>
+          <div className="card write-editor-card">
             {activeId ? (
               <>
                 <div className="write-editor-header">

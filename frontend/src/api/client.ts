@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Chapter, Character, LlmUsageSummary, Memo, Novel, User } from "@/types";
+import type { Chapter, ChapterVersion, ChapterVersionDiff, Character, LlmUsageSummary, Memo, Novel, User } from "@/types";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
