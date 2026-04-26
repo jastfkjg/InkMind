@@ -1,6 +1,8 @@
-# InkMind
-
 <div align="center">
+
+<img src="images/favicon.png?v=2" width="128" alt="InkMind Logo"/>
+
+# InkMind
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
@@ -45,48 +47,48 @@
 ## 预览
 
 ### 作品列表
-<img src="images/novellistpage.png" width="800"/>
+<img src="images/novellistpage.png?v=2" width="800"/>
 
 ### 作品设定
-<img src="images/novelsettingpage.png" width="600"/>
+<img src="images/novelsettingpage.png?v=2" width="600"/>
 
 作品信息、类型、写作风格与背景设定。
 
 ### 人物管理
-<img src="images/characterpage.png" width="800"/>
+<img src="images/characterpage.png?v=2" width="800"/>
 
 人物卡支持姓名、昵称、简介、角色关系，生成章节时自动带入上下文。
 
 ### 章节写作
-<img src="images/writingpage.png" width="800"/>
+<img src="images/writingpage.png?v=2" width="800"/>
 
 右侧 AI 工具栏提供：生成、改写、追加、提问、评估五大功能。
 
 ### AI 评估
-<img src="images/ai-evaluate.png" width="600"/>
+<img src="images/ai-evaluate.png?v=2" width="600"/>
 
 AI 评估当前章节存在的问题与不足，给出具体改进建议。
 
 ### AI 生成
-<img src="images/ai-generate.png" width="600"/>
+<img src="images/ai-generate.png?v=2" width="600"/>
 
 ### 选中扩写 & 润色
-<img src="images/textaugmentation.png" width="800"/>
+<img src="images/textaugmentation.png?v=2" width="800"/>
 
 选中章节中的任意段落，一键扩写或润色。
 
 ### Token 用量统计
-<img src="images/tokenusage.png" width="800"/>
+<img src="images/tokenusage.png?v=2" width="800"/>
 
 各模型本月调用次数与消耗金额实时统计。
 
 ### AI 设置
-<img src="images/ai-settings.png" width="600"/>
+<img src="images/ai-settings.png?v=2" width="600"/>
 
 支持选择不同的 Agent 工作模式（Flexible Agent / ReAct 模式 / 直接调用 LLM），配置最大 LLM 交互轮数、Token 消耗阈值、自动审核开关和预览确认功能。
 
 ### 作品导出
-<img src="images/novelexport.png" width="800"/>
+<img src="images/novelexport.png?v=2" width="800"/>
 
 ---
 
