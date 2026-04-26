@@ -92,7 +92,9 @@ def build_generation_prompt(
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 只能有一个键 body，值为字符串：本章完整正文。
-4. 正文中不要写章节标题、章节号或「本章」等结构标签。{word_count_req}"""
+4. 正文中不要写章节标题、章节号或「本章」等结构标签。
+5. 【重要】前文情节概要是已完成的内容，绝对不要重复或改写！本章必须续写全新的情节，推动故事向前发展。
+6. 【重要】不要复述前文情节，直接开始写本章的新内容。{word_count_req}"""
 
         title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
     else:
@@ -101,7 +103,9 @@ def build_generation_prompt(
 1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
 2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
 3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
-4. 正文中不要写章节标题行、章节号或「本章」等结构标签。{word_count_req}"""
+4. 正文中不要写章节标题行、章节号或「本章」等结构标签。
+5. 【重要】前文情节概要是已完成的内容，绝对不要重复或改写！本章必须续写全新的情节，推动故事向前发展。
+6. 【重要】不要复述前文情节，直接开始写本章的新内容。{word_count_req}"""
         title_line = ""
         if target_chapter and (target_chapter.title or "").strip():
             title_line = f"\n【当前章节已有标题（可改写或沿用模型生成的 title）】{target_chapter.title.strip()}"
@@ -113,6 +117,11 @@ def build_generation_prompt(
 【本章任务】
 本章概要：{_clip(chapter_summary, _TASK_SUMMARY_MAX) or '（无）'}
 {title_line}
+
+【特别提醒】
+- 前文情节概要是已完成的内容，不要重复、不要改写、不要复述
+- 本章必须写全新的内容，推动故事向前发展
+- 直接开始写本章正文，不要有任何回顾前文的内容
 
 请严格按 system 要求的 JSON 结构输出。"""
 
