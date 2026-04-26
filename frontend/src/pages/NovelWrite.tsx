@@ -1016,6 +1016,7 @@ export default function NovelWrite() {
       setSummary(ch.summary);
       setContent(normalizeBodyParagraphIndent(ch.content));
       setPreviewResult(null);
+      setIsPreviewMode(false);
       setSingleGenerateTitle("");
       setSingleGenerateLockTitle(false);
       setGenerateWordCount(null);
@@ -1027,8 +1028,13 @@ export default function NovelWrite() {
   }
 
   function onCancelPreview() {
+    const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
     setPreviewResult(null);
     setEvaluateResult(null);
+    setIsPreviewMode(false);
+    setTitle(savedTitle);
+    setSummary(savedSummary);
+    setContent(savedContent);
   }
 
   async function onBatchGenerate() {
