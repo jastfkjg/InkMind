@@ -28,10 +28,14 @@
 | **AI 提问** | 通用问题解答，随时调用 |
 | **AI 评估** | 分析章节不足，给出改进建议 |
 | **AI 扩写 / 润色** | 选中段落，单独扩写或润色 |
+| **预览确认** | AI 生成内容后先预览，确认后才保存 |
+| **自动审核** | 生成后自动评估内容质量（去 AI 化评分、问题点检测） |
 
 ### 核心功能
 
 - **多 LLM 支持** — OpenAI / Anthropic / 通义千问 / DeepSeek / MiniMax / Kimi，一键切换
+- **多种 Agent 模式** — Flexible Agent / ReAct 模式 / 直接调用 LLM，按需选择
+- **可配置 AI 行为** — 自定义最大 LLM 交互轮数、Token 消耗阈值
 - **作品管理** — 大纲、类型（文学/玄幻/都市/爱情/哲学等）、写作风格、背景设定
 - **章节编辑** — 增删改排序、正文在页编辑、字体调整
 - **人物系统** — 人物管理
@@ -75,6 +79,11 @@ AI 评估当前章节存在的问题与不足，给出具体改进建议。
 <img src="images/tokenusage.png" width="800"/>
 
 各模型本月调用次数与消耗金额实时统计。
+
+### AI 设置
+<img src="images/ai-settings.png" width="600"/>
+
+支持选择不同的 Agent 工作模式（Flexible Agent / ReAct 模式 / 直接调用 LLM），配置最大 LLM 交互轮数、Token 消耗阈值、自动审核开关和预览确认功能。
 
 ### 作品导出
 <img src="images/novelexport.png" width="800"/>
