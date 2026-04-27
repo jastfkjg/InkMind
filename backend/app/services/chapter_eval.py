@@ -7,8 +7,10 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
+from app.language import Language
 from app.llm.base import LLMProvider
 from app.models import Novel
+from app.prompts import get_prompt
 from app.schemas.chapter import ChapterEvaluateIssue, ChapterEvaluateOut
 
 _EVAL_BODY_MAX = 18000
@@ -28,41 +30,38 @@ def build_evaluate_messages(
     title: str,
     summary: str,
     content: str,
+    language: Language = "zh",
 ) -> tuple[str, str]:
     body = (content or "").strip()
     clipped = body[:_EVAL_BODY_MAX] if len(body) > _EVAL_BODY_MAX else body
-    system = (
-        "你是严谨的文学编辑与中文网文审稿人。\n"
-        "【重要】禁止在输出中包含任何思考过程、推理步骤或 think 标签。\n"
-        "用户会提供一部小说的某一章：标题、本章概要（若有）与正文。\n"
-        "请只指出写得不够好或容易显得「像 AI 生成」的地方，每条说明为何不理想。\n"
-        "不要泛泛夸奖，不要编造正文中不存在的情节；若没有值得指出的问题，issues 可为空列表。\n"
-        "同时给出一个 0～100 的整数 de_ai_score，表示「去 AI 化」程度：\n"
-        "分数越高，表示读起来越像自然的人类创作，越少模板句、堆砌副词、空洞比喻、机械转折与万能套话。\n"
-        "若正文极短或几乎为空，可将 de_ai_score 设为 0，issues 说明原因。\n"
-        "【重要】你必须只输出合法 JSON 对象，不要 markdown 代码围栏以外的任何文字，不要包含思考过程。\n"
-        "键名固定为 issues 与 de_ai_score。"
-        'issues 为数组，元素为对象，字段 aspect（问题点简述）与 detail（理由），均为字符串。'
-    )
+    
+    system = get_prompt("evaluate_system", language)
+    
+    genre_display = novel.genre or get_prompt("common_unspecified", language)
+    title_display = novel.title or get_prompt("common_none", language)
+    chapter_title_display = title or get_prompt("common_none", language)
+    summary_display = (summary or "").strip() or get_prompt("common_not_filled", language)
+    content_display = clipped or get_prompt("common_none", language)
+    
     user_msg = (
-        f"【作品类型】{novel.genre or '未指定'}\n"
-        f"【书名】{novel.title or '（无）'}\n\n"
-        f"【本章标题】{title or '（无）'}\n"
-        f"【本章概要】\n{(summary or '').strip() or '（未填）'}\n\n"
-        f"【正文】\n{clipped or '（空）'}"
+        get_prompt("evaluate_user_intro", language, genre=genre_display, title=title_display)
+        + get_prompt("evaluate_user_chapter", language, chapter_title=chapter_title_display, chapter_summary=summary_display)
+        + get_prompt("evaluate_user_content", language, content=content_display)
     )
     return system, user_msg
 
 
 def stream_evaluate_tokens(
-    llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str
+    llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str, language: Language = "zh"
 ) -> Iterator[str]:
-    system, user_msg = build_evaluate_messages(novel, title=title, summary=summary, content=content)
+    system, user_msg = build_evaluate_messages(novel, title=title, summary=summary, content=content, language=language)
     yield from llm.stream_complete(system, user_msg)
 
 
-def evaluate_chapter(llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str) -> ChapterEvaluateOut:
-    raw = "".join(stream_evaluate_tokens(llm, novel, title=title, summary=summary, content=content))
+def evaluate_chapter(
+    llm: LLMProvider, novel: Novel, *, title: str, summary: str, content: str, language: Language = "zh"
+) -> ChapterEvaluateOut:
+    raw = "".join(stream_evaluate_tokens(llm, novel, title=title, summary=summary, content=content, language=language))
     return parse_evaluation_json(raw)
 
 

@@ -25,11 +25,13 @@ import {
 } from "@ant-design/icons";
 import { apiErrorMessage, deleteCharacter, fetchCharacters } from "@/api/client";
 import type { Character } from "@/types";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { confirm } = Modal;
 
 export default function NovelPeople() {
+  const { t } = useI18n();
   const { novelId } = useParams();
   const id = Number(novelId);
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -61,19 +63,19 @@ export default function NovelPeople() {
 
   function showDeleteConfirm(char: Character) {
     confirm({
-      title: "删除人物",
-      content: `确定要删除人物「${char.name}」吗？此操作不可恢复。`,
-      okText: "删除",
+      title: t("people_delete_character_title"),
+      content: t("people_delete_character_confirm").replace("{name}", char.name),
+      okText: t("people_delete"),
       okType: "danger",
-      cancelText: "取消",
+      cancelText: t("common_cancel"),
       async onOk() {
         try {
           await deleteCharacter(id, char.id);
           setCharacters((prev) => prev.filter((c) => c.id !== char.id));
-          message.success(`人物「${char.name}」已删除`);
+          message.success(t("people_character_deleted").replace("{name}", char.name));
         } catch (e) {
           setErr(apiErrorMessage(e));
-          message.error("删除失败");
+          message.error(t("people_delete_failed"));
         }
       },
     });
@@ -83,7 +85,7 @@ export default function NovelPeople() {
     <div style={{ padding: "0.5rem" }}>
       {err && (
         <Alert
-          message="操作失败"
+          message={t("operation_failed_title")}
           description={err}
           type="error"
           showIcon
@@ -109,15 +111,15 @@ export default function NovelPeople() {
                 color: "#1c1917",
               }}
             >
-              人物管理
+              {t("people_title")}
             </Title>
-            <Tag color="blue">{characters.length} 位</Tag>
+            <Tag color="blue">{t("people_character_count").replace("{count}", String(characters.length))}</Tag>
           </Space>
         }
         extra={
           <Link to={`/novels/${id}/people/new`}>
             <Button type="primary" icon={<PlusOutlined />} size="large">
-              添加人物
+              {t("people_create_character")}
             </Button>
           </Link>
         }
@@ -128,10 +130,10 @@ export default function NovelPeople() {
               description={
                 <div>
                   <Title level={5} style={{ marginBottom: "0.5rem" }}>
-                    还没有人物
+                    {t("people_no_characters")}
                   </Title>
                   <Text type="secondary">
-                    点击「添加人物」开始创建你的角色
+                    {t("people_no_characters_desc")}
                   </Text>
                 </div>
               }
@@ -145,25 +147,25 @@ export default function NovelPeople() {
                 <List.Item
                   key={char.id}
                   actions={[
-                    <Tooltip title="编辑人物" key="edit">
+                    <Tooltip title={t("people_edit_character")} key="edit">
                       <Link to={`/novels/${id}/people/${char.id}/edit`}>
                         <Button
                           type="text"
                           icon={<EditOutlined />}
                           style={{ color: "#7c2d12" }}
                         >
-                          编辑
+                          {t("people_edit")}
                         </Button>
                       </Link>
                     </Tooltip>,
-                    <Tooltip title="删除人物" key="delete">
+                    <Tooltip title={t("people_delete_character")} key="delete">
                       <Button
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => showDeleteConfirm(char)}
                       >
-                        删除
+                        {t("people_delete")}
                       </Button>
                     </Tooltip>,
                   ]}
@@ -217,7 +219,7 @@ export default function NovelPeople() {
                           </div>
                         )}
                         {!char.profile && !char.notes && (
-                          <Tag color="default">未填写设定</Tag>
+                          <Tag color="default">{t("people_no_settings")}</Tag>
                         )}
                       </div>
                     }

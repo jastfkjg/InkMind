@@ -1,18 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiErrorMessage, fetchLlmProviders, novelAiChat, novelAiNaming } from "@/api/client";
+import { useI18n } from "@/i18n";
 
 type Tool = "naming" | "ask";
-
-const RAIL: { key: Tool; line2: string }[] = [
-  { key: "naming", line2: "起名" },
-  { key: "ask", line2: "提问" },
-];
 
 type Props = {
   novelId: number;
 };
 
 export default function NovelAiNamingAskDock({ novelId }: Props) {
+  const { t } = useI18n();
+  
+  const RAIL: { key: Tool; line2: string }[] = useMemo(() => [
+    { key: "naming", line2: t("namingask_naming") },
+    { key: "ask", line2: t("namingask_ask") },
+  ], [t]);
+  
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [rightTool, setRightTool] = useState<Tool | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +62,7 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
   async function onRunNaming() {
     const d = namingDesc.trim();
     if (!d) {
-      setErr("请说明要命名的对象");
+      setErr(t("namingask_please_describe"));
       return;
     }
     setBusy(true);
@@ -130,14 +133,14 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
 
   return (
     <>
-      <nav className="write-ai-rail" aria-label="AI 功能">
+      <nav className="write-ai-rail" aria-label={t("write_rail_aria_ai_tools")}>
         {RAIL.map(({ key, line2 }) => (
           <button
             key={key}
             type="button"
             className={`write-rail-btn${rightTool === key ? " active" : ""}`}
             disabled={!hasLlm}
-            title={!hasLlm ? "未配置 LLM" : `AI${line2}`}
+            title={!hasLlm ? t("namingask_no_llm") : `AI${line2}`}
             onClick={() => toggleTool(key)}
           >
             <span className="write-rail-stack">
@@ -151,9 +154,9 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
       {drawerOpen && rightTool ? (
         <div className="write-ai-drawer">
           <div className="write-ai-drawer-head">
-            <span>{rightTool === "naming" ? "AI 起名" : "AI 提问"}</span>
+            <span>{rightTool === "naming" ? t("namingask_ai_naming") : t("namingask_ai_ask")}</span>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
-              关闭
+              {t("namingask_close")}
             </button>
           </div>
           <div className="write-ai-drawer-body">
@@ -161,42 +164,42 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
 
             {rightTool === "naming" ? (
               <div className="write-ai-section">
-                <p className="hint">为人物、物品、功法等请求备选名称（非章节标题）。</p>
+                <p className="hint">{t("namingask_naming_hint")}</p>
                 <div className="field">
-                  <label>类别</label>
+                  <label>{t("namingask_category")}</label>
                   <select
                     className="input"
                     value={namingCategory}
                     onChange={(e) => setNamingCategory(e.target.value as typeof namingCategory)}
                   >
-                    <option value="character">人物 / 角色</option>
-                    <option value="item">物品 / 器物</option>
-                    <option value="skill">功法 / 招式</option>
-                    <option value="other">其他</option>
+                    <option value="character">{t("namingask_cat_character")}</option>
+                    <option value="item">{t("namingask_cat_item")}</option>
+                    <option value="skill">{t("namingask_cat_skill")}</option>
+                    <option value="other">{t("namingask_cat_other")}</option>
                   </select>
                 </div>
                 <div className="field">
-                  <label>要命名的对象</label>
+                  <label>{t("namingask_target_label")}</label>
                   <textarea
                     className="textarea"
                     rows={3}
                     value={namingDesc}
                     onChange={(e) => setNamingDesc(e.target.value)}
-                    placeholder="例如：擅长用毒的黑市药师；上古飞剑；火系入门功法…"
+                    placeholder={t("namingask_target_placeholder")}
                   />
                 </div>
                 <div className="field">
-                  <label>补充（可选）</label>
+                  <label>{t("namingask_hint_label")}</label>
                   <textarea
                     className="textarea textarea-compact"
                     rows={2}
                     value={namingHint}
                     onChange={(e) => setNamingHint(e.target.value)}
-                    placeholder="字数、风格、避讳…"
+                    placeholder={t("namingask_hint_placeholder")}
                   />
                 </div>
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunNaming}>
-                  {busy ? "生成中…" : "生成备选名"}
+                  {busy ? t("namingask_generating") : t("namingask_generate_names")}
                 </button>
                 {namingResult ? <pre className="write-ai-naming-out">{namingResult}</pre> : null}
               </div>
@@ -207,7 +210,7 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
                 <div className="write-ai-messages">
                   {askHistory.length === 0 ? (
                     <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-                      围绕本书设定提问，例如结构、人物、节奏等。
+                      {t("namingask_ask_hint")}
                     </p>
                   ) : (
                     askHistory.map((m, i) => (
@@ -227,7 +230,7 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
                     rows={2}
                     value={askInput}
                     onChange={(e) => setAskInput(e.target.value)}
-                    placeholder="输入问题…"
+                    placeholder={t("namingask_input_placeholder")}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -236,7 +239,7 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
                     }}
                   />
                   <button type="button" className="btn btn-primary" disabled={busy || !askInput.trim()} onClick={onAskSend}>
-                    发送
+                    {t("namingask_send")}
                   </button>
                 </div>
               </div>

@@ -25,6 +25,7 @@ class UserOut(BaseModel):
     enable_auto_audit: bool = True
     preview_before_save: bool = True
     auto_audit_min_score: int = 60
+    ai_language: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -38,6 +39,7 @@ class UserUpdate(BaseModel):
     enable_auto_audit: bool | None = None
     preview_before_save: bool | None = None
     auto_audit_min_score: int | None = None
+    ai_language: str | None = None
 
 
 class Token(BaseModel):

@@ -2,21 +2,27 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiErrorMessage, fetchLlmProviders } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 
 const LLM_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  qwen: "通义千问",
+  qwen: "qwen",
   deepseek: "DeepSeek",
   minimax: "MiniMax",
   kimi: "Kimi",
 };
 
-function llmLabel(id: string) {
-  return LLM_LABEL[id] ?? id;
+function llmLabel(id: string, t: (key: string) => string) {
+  const label = LLM_LABEL[id];
+  if (label === "qwen") {
+    return t("usermenu_model_qwen");
+  }
+  return label ?? id;
 }
 
 export default function UserMenu() {
+  const { t } = useI18n();
   const { user, logout, updatePreferredLlm, refreshUser } = useAuth();
   const [open, setOpen] = useState(false);
   const [llmOptions, setLlmOptions] = useState<string[]>([]);
@@ -75,7 +81,7 @@ export default function UserMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
       >
-        {user?.display_name || user?.email || "用户"}
+        {user?.display_name || user?.email || t("usermenu_user")}
         <span className="user-menu-caret" aria-hidden>
           ▾
         </span>
@@ -86,7 +92,7 @@ export default function UserMenu() {
 
           {llmOptions.length > 0 ? (
             <div className="field" style={{ marginBottom: 0, marginTop: "0.75rem" }}>
-              <label htmlFor="menu-llm">默认模型</label>
+              <label htmlFor="menu-llm">{t("usermenu_default_llm")}</label>
               <select
                 id="menu-llm"
                 className="input"
@@ -96,17 +102,17 @@ export default function UserMenu() {
               >
                 {llmOptions.map((o) => (
                   <option key={o} value={o}>
-                    {llmLabel(o)}
+                    {llmLabel(o, t)}
                   </option>
                 ))}
               </select>
               <p className="hint" style={{ marginBottom: 0 }}>
-                用于生成、修改章节与自动摘要
+                {t("usermenu_llm_hint")}
               </p>
             </div>
           ) : (
             <p className="hint" style={{ marginTop: "0.75rem" }}>
-              未配置任何 LLM，请在服务端环境变量中设置 API Key
+              {t("usermenu_no_llm_configured")}
             </p>
           )}
           {err ? <p className="form-error" style={{ marginTop: "0.5rem" }}>{err}</p> : null}
@@ -116,10 +122,10 @@ export default function UserMenu() {
             style={{ width: "100%", marginTop: "0.75rem" }}
             onClick={() => setOpen(false)}
           >
-            Token 用量统计
+            {t("usermenu_token_usage")}
           </Link>
           <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.75rem" }} onClick={logout}>
-            退出登录
+            {t("usermenu_logout")}
           </button>
         </div>
       ) : null}

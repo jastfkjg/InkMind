@@ -22,11 +22,13 @@ import {
 } from "@ant-design/icons";
 import { apiErrorMessage, deleteMemo, fetchMemos } from "@/api/client";
 import type { Memo } from "@/types";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { confirm } = Modal;
 
 export default function NovelMemos() {
+  const { t } = useI18n();
   const { novelId } = useParams();
   const id = Number(novelId);
   const [items, setItems] = useState<Memo[]>([]);
@@ -52,21 +54,21 @@ export default function NovelMemos() {
 
   function showDeleteConfirm(memo: Memo) {
     const title = (memo.title || "").trim();
-    const preview = title || memo.body?.slice(0, 30) || "无标题";
+    const preview = title || memo.body?.slice(0, 30) || t("memos_no_title");
     confirm({
-      title: "删除备忘",
-      content: `确定要删除备忘「${preview}」吗？此操作不可恢复。`,
-      okText: "删除",
+      title: t("memos_delete_memo_title"),
+      content: t("memos_delete_memo_confirm").replace("{preview}", preview),
+      okText: t("memos_delete"),
       okType: "danger",
-      cancelText: "取消",
+      cancelText: t("common_cancel"),
       async onOk() {
         try {
           await deleteMemo(id, memo.id);
           setItems((prev) => prev.filter((x) => x.id !== memo.id));
-          message.success("备忘已删除");
+          message.success(t("memos_deleted"));
         } catch (e) {
           setErr(apiErrorMessage(e));
-          message.error("删除失败");
+          message.error(t("memos_delete_failed"));
         }
       },
     });
@@ -84,7 +86,7 @@ export default function NovelMemos() {
       >
         <Spin size="large" />
         <Text type="secondary" style={{ marginLeft: "1rem", fontSize: "1rem" }}>
-          加载中…
+          {t("common_loading")}
         </Text>
       </div>
     );
@@ -94,7 +96,7 @@ export default function NovelMemos() {
     <div style={{ padding: "0.5rem" }}>
       {err && (
         <Alert
-          message="操作失败"
+          message={t("operation_failed_title")}
           description={err}
           type="error"
           showIcon
@@ -120,15 +122,15 @@ export default function NovelMemos() {
                 color: "#1c1917",
               }}
             >
-              备忘
+              {t("memos_title")}
             </Title>
-            <Tag color="blue">{items.length} 条</Tag>
+            <Tag color="blue">{t("memos_count").replace("{count}", String(items.length))}</Tag>
           </Space>
         }
         extra={
           <Link to={`/novels/${id}/memos/new`}>
             <Button type="primary" icon={<PlusOutlined />} size="large">
-              添加备忘
+              {t("memos_create_memo")}
             </Button>
           </Link>
         }
@@ -139,10 +141,10 @@ export default function NovelMemos() {
               description={
                 <div>
                   <Title level={5} style={{ marginBottom: "0.5rem" }}>
-                    暂无备忘
+                    {t("memos_no_memos")}
                   </Title>
                   <Text type="secondary">
-                    点击「添加备忘」开始记录你的灵感和想法
+                    {t("memos_no_memos_desc")}
                   </Text>
                 </div>
               }
@@ -163,25 +165,25 @@ export default function NovelMemos() {
                   <List.Item
                     key={m.id}
                     actions={[
-                      <Tooltip title="编辑备忘" key="edit">
+                      <Tooltip title={t("memos_edit_memo")} key="edit">
                         <Link to={`/novels/${id}/memos/${m.id}/edit`}>
                           <Button
                             type="text"
                             icon={<EditOutlined />}
                             style={{ color: "#7c2d12" }}
                           >
-                            编辑
+                            {t("memos_edit")}
                           </Button>
                         </Link>
                       </Tooltip>,
-                      <Tooltip title="删除备忘" key="delete">
+                      <Tooltip title={t("memos_delete_memo")} key="delete">
                         <Button
                           type="text"
                           danger
                           icon={<DeleteOutlined />}
                           onClick={() => showDeleteConfirm(m)}
                         >
-                          删除
+                          {t("memos_delete")}
                         </Button>
                       </Tooltip>,
                     ]}
@@ -214,7 +216,7 @@ export default function NovelMemos() {
                               {bodyPreview}
                             </Text>
                           ) : (
-                            <Tag color="default">无正文</Tag>
+                            <Tag color="default">{t("memos_no_content")}</Tag>
                           )}
                         </div>
                       }

@@ -18,11 +18,13 @@ import {
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import { apiErrorMessage, createMemo, fetchMemos, updateMemo } from "@/api/client";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 export default function NovelMemoForm() {
+  const { t } = useI18n();
   const { novelId, memoId } = useParams();
   const id = Number(novelId);
   const mid = memoId ? Number(memoId) : NaN;
@@ -42,7 +44,7 @@ export default function NovelMemoForm() {
         const list = await fetchMemos(id);
         const m = list.find((x) => x.id === mid);
         if (!m) {
-          setErrorMsg("找不到该备忘");
+          setErrorMsg(t("memoform_memo_not_found"));
           return;
         }
         form.setFieldsValue({
@@ -55,7 +57,7 @@ export default function NovelMemoForm() {
         setLoading(false);
       }
     })();
-  }, [id, mid, isEdit, form]);
+  }, [id, mid, isEdit, form, t]);
 
   async function onFinish(values: { title: string; body: string }) {
     setErrorMsg("");
@@ -63,15 +65,15 @@ export default function NovelMemoForm() {
     try {
       if (isEdit) {
         await updateMemo(id, mid, { title: values.title, body: values.body });
-        message.success("备忘已更新");
+        message.success(t("memoform_updated"));
       } else {
         await createMemo(id, { title: values.title, body: values.body });
-        message.success("备忘已创建");
+        message.success(t("memoform_created"));
       }
       nav(`/novels/${id}/memos`);
     } catch (e) {
       setErrorMsg(apiErrorMessage(e));
-      message.error("保存失败");
+      message.error(t("memoform_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -107,7 +109,7 @@ export default function NovelMemoForm() {
               type="secondary"
               style={{ marginLeft: "1rem", fontSize: "1rem" }}
             >
-              加载备忘信息…
+              {t("memoform_loading_memo")}
             </Text>
           </div>
         </Card>
@@ -141,7 +143,7 @@ export default function NovelMemoForm() {
                 color: "#1c1917",
               }}
             >
-              {isEdit ? "编辑备忘" : "新建备忘"}
+              {isEdit ? t("memoform_edit_memo") : t("memoform_new_memo")}
             </Title>
           </Space>
         }
@@ -150,7 +152,7 @@ export default function NovelMemoForm() {
             icon={<ArrowLeftOutlined />}
             onClick={() => nav(`/novels/${id}/memos`)}
           >
-            返回列表
+            {t("memoform_back_to_list")}
           </Button>
         }
       >
@@ -166,7 +168,7 @@ export default function NovelMemoForm() {
         >
           {errorMsg && (
             <Alert
-              message="操作失败"
+              message={t("operation_failed_title")}
               description={errorMsg}
               type="error"
               showIcon
@@ -179,7 +181,7 @@ export default function NovelMemoForm() {
             title={
               <Space>
                 <FileTextOutlined style={{ color: "#7c2d12" }} />
-                <span>备忘信息</span>
+                <span>{t("memoform_memo_info")}</span>
               </Space>
             }
             style={{
@@ -192,21 +194,21 @@ export default function NovelMemoForm() {
               name="title"
               label={
                 <Space>
-                  <span>标题</span>
+                  <span>{t("memoform_memo_title")}</span>
                   <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                    （可选）
+                    {t("memoform_title_optional")}
                   </Text>
                   <Text
                     type="secondary"
                     style={{ fontSize: "0.8rem", cursor: "help" }}
                   >
-                    <QuestionCircleOutlined /> 标题用于快速识别备忘内容
+                    <QuestionCircleOutlined /> {t("memoform_title_tooltip")}
                   </Text>
                 </Space>
               }
             >
               <Input
-                placeholder="简要描述备忘的内容"
+                placeholder={t("memoform_title_placeholder")}
                 size="large"
                 prefix={<FileTextOutlined style={{ color: "#78716c" }} />}
                 style={{ height: 44 }}
@@ -217,27 +219,21 @@ export default function NovelMemoForm() {
               name="body"
               label={
                 <Space>
-                  <span>正文</span>
+                  <span>{t("memoform_memo_content")}</span>
                   <span style={{ color: "#ff4d4f" }}>*</span>
                   <Text
                     type="secondary"
                     style={{ fontSize: "0.8rem", cursor: "help" }}
                   >
-                    <QuestionCircleOutlined /> 记录你的备忘内容
+                    <QuestionCircleOutlined /> {t("memoform_content_tooltip")}
                   </Text>
                 </Space>
               }
-              rules={[{ required: true, message: "请输入备忘内容" }]}
+              rules={[{ required: true, message: t("memoform_content_required") }]}
             >
               <TextArea
                 rows={14}
-                placeholder="记录你的备忘内容…
-
-备忘可以用于：
-- 记录灵感和想法
-- 保存重要的设定细节
-- 记录剧情线索和伏笔
-- 保存参考资料和素材"
+                placeholder={t("memoform_content_placeholder")}
                 style={{
                   minHeight: 280,
                   lineHeight: 1.8,
@@ -249,8 +245,8 @@ export default function NovelMemoForm() {
           </Card>
 
           <Alert
-            message="备忘的用途"
-            description="备忘是你创作时的得力助手。你可以用它来记录灵感、保存设定细节、追踪剧情线索，或者存放任何对你有帮助的参考资料。建议定期整理你的备忘，保持备忘列表的整洁和高效。"
+            message={t("memoform_tip_title")}
+            description={t("memoform_tip_content")}
             type="info"
             showIcon
             style={{ marginBottom: "1.5rem" }}
@@ -272,7 +268,7 @@ export default function NovelMemoForm() {
                   paddingRight: 32,
                 }}
               >
-                {isEdit ? "保存修改" : "添加备忘"}
+                {isEdit ? t("memoform_save_changes") : t("memoform_add_memo")}
               </Button>
               <Button
                 size="large"
@@ -280,7 +276,7 @@ export default function NovelMemoForm() {
                 disabled={saving}
                 style={{ height: 44 }}
               >
-                取消
+                {t("memoform_cancel")}
               </Button>
             </Space>
           </Form.Item>

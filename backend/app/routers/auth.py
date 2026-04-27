@@ -94,6 +94,15 @@ def update_me(body: UserUpdate, user: CurrentUser, db: Session = Depends(get_db)
             )
         user.auto_audit_min_score = v or 60
 
+    if "ai_language" in data:
+        v = data["ai_language"]
+        if v is not None and v not in ["zh", "en"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ai_language 必须是 'zh' 或 'en'",
+            )
+        user.ai_language = v
+
     db.add(user)
     db.commit()
     db.refresh(user)

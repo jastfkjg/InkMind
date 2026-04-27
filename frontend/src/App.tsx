@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import NovelLayout from "@/pages/NovelLayout";
@@ -18,11 +19,12 @@ import BackgroundTasks from "@/pages/BackgroundTasks";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { t } = useI18n();
   const loc = useLocation();
   if (loading) {
     return (
       <div className="app-shell">
-        <p className="muted">加载中…</p>
+        <p className="muted">{t("app_loading")}</p>
       </div>
     );
   }

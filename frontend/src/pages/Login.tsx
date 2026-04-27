@@ -11,16 +11,24 @@ import {
   Row,
   Col,
   message,
+  Dropdown,
 } from "antd";
-import { UserOutlined, LockOutlined, BookOutlined } from "@ant-design/icons";
+import {
+  UserOutlined,
+  LockOutlined,
+  BookOutlined,
+  GlobalOutlined,
+} from "@ant-design/icons";
 import { apiErrorMessage } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { Content } = Layout;
 
 export default function Login() {
   const { user, login } = useAuth();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -30,12 +38,25 @@ export default function Login() {
     if (user) nav("/", { replace: true });
   }, [user, nav]);
 
+  const languageMenuItems = [
+    {
+      key: "zh",
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
   const onFinish = async (values: { email: string; password: string }) => {
     setErrorMsg("");
     setLoading(true);
     try {
       await login(values.email, values.password);
-      message.success("登录成功！");
+      message.success(t("login_success"));
       nav("/", { replace: true });
     } catch (ex) {
       setErrorMsg(apiErrorMessage(ex));
@@ -55,6 +76,21 @@ export default function Login() {
         `,
       }}
     >
+      <div
+        style={{
+          position: "absolute",
+          top: "1rem",
+          right: "1rem",
+          zIndex: 100,
+        }}
+      >
+        <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+          <Button type="text" icon={<GlobalOutlined />} size="large">
+            {isZh ? "中文" : "EN"}
+          </Button>
+        </Dropdown>
+      </div>
+
       <Content
         style={{
           display: "flex",
@@ -89,7 +125,7 @@ export default function Login() {
                     fontSize: "2.25rem",
                   }}
                 >
-                  InkMind
+                  {t("app_name")}
                 </Title>
               </div>
               <Title
@@ -102,7 +138,7 @@ export default function Login() {
                   fontSize: "1.5rem",
                 }}
               >
-                AI 辅助小说创作平台
+                {t("login_welcome_subtitle")}
               </Title>
               <Text
                 style={{
@@ -111,8 +147,7 @@ export default function Login() {
                   lineHeight: 1.8,
                 }}
               >
-                智能生成章节、改写内容、评估文本，你的全能创作助手。支持多模型 AI
-                驱动，一站式小说写作从未如此轻松。
+                {t("login_welcome_desc")}
               </Text>
             </div>
           </Col>
@@ -141,16 +176,16 @@ export default function Login() {
                     color: "#1c1917",
                   }}
                 >
-                  登录账户
+                  {t("login_title")}
                 </Title>
                 <Text type="secondary" style={{ fontSize: "0.9rem" }}>
-                  欢迎回来，继续你的创作之旅
+                  {t("login_subtitle")}
                 </Text>
               </div>
 
               {errorMsg && (
                 <Alert
-                  message="登录失败"
+                  message={t("login_failed")}
                   description={errorMsg}
                   type="error"
                   showIcon
@@ -167,15 +202,15 @@ export default function Login() {
               >
                 <Form.Item
                   name="email"
-                  label="邮箱地址"
+                  label={t("login_email")}
                   rules={[
-                    { required: true, message: "请输入邮箱地址" },
-                    { type: "email", message: "请输入有效的邮箱地址" },
+                    { required: true, message: t("validation_email_required") },
+                    { type: "email", message: t("validation_email_invalid") },
                   ]}
                 >
                   <Input
                     prefix={<UserOutlined style={{ color: "#78716c" }} />}
-                    placeholder="请输入邮箱地址"
+                    placeholder={t("login_email_placeholder")}
                     autoComplete="email"
                     style={{ height: 44 }}
                   />
@@ -183,12 +218,12 @@ export default function Login() {
 
                 <Form.Item
                   name="password"
-                  label="密码"
-                  rules={[{ required: true, message: "请输入密码" }]}
+                  label={t("login_password")}
+                  rules={[{ required: true, message: t("validation_password_required") }]}
                 >
                   <Input.Password
                     prefix={<LockOutlined style={{ color: "#78716c" }} />}
-                    placeholder="请输入密码"
+                    placeholder={t("login_password_placeholder")}
                     autoComplete="current-password"
                     style={{ height: 44 }}
                   />
@@ -207,7 +242,7 @@ export default function Login() {
                       fontWeight: 600,
                     }}
                   >
-                    登录
+                    {t("login_button")}
                   </Button>
                 </Form.Item>
               </Form>
@@ -220,7 +255,7 @@ export default function Login() {
                   paddingTop: "1.5rem",
                 }}
               >
-                <Text type="secondary">还没有账户？</Text>{" "}
+                <Text type="secondary">{t("login_no_account")}</Text>{" "}
                 <Link
                   to="/register"
                   style={{
@@ -229,7 +264,7 @@ export default function Login() {
                     textDecoration: "none",
                   }}
                 >
-                  立即注册
+                  {t("login_register_now")}
                 </Link>
               </div>
             </Card>

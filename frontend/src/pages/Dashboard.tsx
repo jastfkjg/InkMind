@@ -32,6 +32,7 @@ import {
   EyeOutlined,
   SettingOutlined,
   HistoryOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -42,6 +43,7 @@ import {
 import ExportNovelModal from "@/components/ExportNovelModal";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useI18n } from "@/i18n";
 import type { Novel } from "@/types";
 import { isNovelSetupComplete, novelPrimaryHref } from "@/utils/novelSetup";
 
@@ -52,6 +54,7 @@ const { confirm } = Modal;
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
   const [novels, setNovels] = useState<Novel[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -78,13 +81,13 @@ export default function Dashboard() {
   async function onCreate() {
     setCreating(true);
     try {
-      const n = await createNovel({ title: "未命名作品" });
+      const n = await createNovel({ title: t("dashboard_untitled") });
       setNovels((prev) => [n, ...prev]);
-      message.success("作品创建成功！");
+      message.success(t("create_novel_success"));
       nav(novelPrimaryHref(n));
     } catch (e) {
       setErr(apiErrorMessage(e));
-      message.error("创建失败");
+      message.error(t("dashboard_create_failed"));
     } finally {
       setCreating(false);
     }
@@ -92,43 +95,58 @@ export default function Dashboard() {
 
   function showDeleteConfirm(novel: Novel) {
     confirm({
-      title: "删除作品",
-      content: `确定要删除《${novel.title || "未命名"}》吗？此操作不可恢复。`,
-      okText: "删除",
+      title: t("dashboard_delete_confirm_title"),
+      content: t("dashboard_delete_confirm_content").replace("{title}", novel.title || t("dashboard_untitled")),
+      okText: t("dashboard_yes_delete"),
       okType: "danger",
-      cancelText: "取消",
+      cancelText: t("common_cancel"),
       async onOk() {
         try {
           await deleteNovel(novel.id);
           setNovels((prev) => prev.filter((x) => x.id !== novel.id));
-          message.success("作品已删除");
+          message.success(t("dashboard_delete_success"));
         } catch (e) {
           setErr(apiErrorMessage(e));
-          message.error("删除失败");
+          message.error(t("dashboard_delete_failed"));
         }
       },
     });
   }
 
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
   const themeMenuItems = [
     {
       key: "light",
       icon: <SunOutlined />,
-      label: "日间",
+      label: t("theme_light"),
       onClick: () => setTheme("light"),
       disabled: theme === "light",
     },
     {
       key: "sepia",
       icon: <EyeOutlined />,
-      label: "护眼",
+      label: t("theme_sepia"),
       onClick: () => setTheme("sepia"),
       disabled: theme === "sepia",
     },
     {
       key: "dark",
       icon: <MoonOutlined />,
-      label: "夜间",
+      label: t("theme_dark"),
       onClick: () => setTheme("dark"),
       disabled: theme === "dark",
     },
@@ -138,19 +156,19 @@ export default function Dashboard() {
     {
       key: "settings",
       icon: <SettingOutlined />,
-      label: "AI 设置",
+      label: t("nav_ai_settings"),
       onClick: () => nav("/settings"),
     },
     {
       key: "usage",
       icon: <BarChartOutlined />,
-      label: "Token 用量",
+      label: t("nav_usage"),
       onClick: () => nav("/usage"),
     },
     {
       key: "tasks",
       icon: <HistoryOutlined />,
-      label: "后台任务",
+      label: t("nav_background_tasks"),
       onClick: () => nav("/tasks"),
     },
     {
@@ -160,11 +178,11 @@ export default function Dashboard() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("nav_logout"),
       danger: true,
       onClick: () => {
         logout();
-        message.success("已退出登录");
+        message.success(t("dashboard_logged_out"));
       },
     },
   ];
@@ -226,7 +244,7 @@ export default function Dashboard() {
               transition: "color 0.3s ease",
             }}
           >
-            InkMind
+            {t("app_name")}
           </Title>
         </div>
 
@@ -243,8 +261,22 @@ export default function Dashboard() {
               paddingRight: 20,
             }}
           >
-            新建作品
+            {t("dashboard_create_novel")}
           </Button>
+
+          <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={<GlobalOutlined />}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            >
+              {isZh ? "中文" : "EN"}
+            </Button>
+          </Dropdown>
 
           <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
             <Button
@@ -322,7 +354,7 @@ export default function Dashboard() {
       >
         {err && (
           <Alert
-            message="操作失败"
+            message={t("operation_failed_title")}
             description={err}
             type="error"
             showIcon
@@ -345,9 +377,11 @@ export default function Dashboard() {
                 description={
                   <div>
                     <Title level={4} style={{ marginBottom: "0.5rem", color: textColor }}>
-                      还没有作品
+                      {t("dashboard_no_novels")}
                     </Title>
-                    <Text type="secondary">点击「新建作品」开始你的创作之旅</Text>
+                    <Text type="secondary">
+                      {t("dashboard_no_novels_desc")}
+                    </Text>
                   </div>
                 }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -364,7 +398,7 @@ export default function Dashboard() {
                   transition: "color 0.3s ease",
                 }}
               >
-                我的作品 ({novels.length})
+                {t("dashboard_title")} ({novels.length})
               </Title>
 
               <List
@@ -394,35 +428,35 @@ export default function Dashboard() {
                         }}
                         bodyStyle={{ padding: "1.5rem" }}
                         actions={[
-                          <Tooltip title={ready ? "开始写作" : "完善设定"} key="edit">
+                          <Tooltip title={ready ? t("nav_write") : t("nav_settings")} key="edit">
                             <Link to={entry}>
                               <Button
                                 type="text"
                                 icon={<EditOutlined />}
                                 style={{ color: isDark ? "#f97316" : "#7c2d12" }}
                               >
-                                {ready ? "写作" : "设定"}
+                                {ready ? t("dashboard_write") : t("dashboard_setup")}
                               </Button>
                             </Link>
                           </Tooltip>,
-                          <Tooltip title="导出作品" key="export">
+                          <Tooltip title={t("dashboard_export_novel")} key="export">
                             <Button
                               type="text"
                               icon={<ExportOutlined />}
                               onClick={() => setExportNovel(novel)}
                               style={{ color: isDark ? "#f97316" : "#7c2d12" }}
                             >
-                              导出
+                              {t("dashboard_export_novel")}
                             </Button>
                           </Tooltip>,
-                          <Tooltip title="删除作品" key="delete">
+                          <Tooltip title={t("dashboard_delete_novel")} key="delete">
                             <Button
                               type="text"
                               danger
                               icon={<DeleteOutlined />}
                               onClick={() => showDeleteConfirm(novel)}
                             >
-                              删除
+                              {t("dashboard_delete_novel")}
                             </Button>
                           </Tooltip>,
                         ]}
@@ -448,11 +482,11 @@ export default function Dashboard() {
                                   transition: "color 0.3s ease",
                                 }}
                               >
-                                {novel.title || "未命名作品"}
+                                {novel.title || t("dashboard_untitled")}
                               </Link>
                               {!ready && (
                                 <Tag color="orange" icon={<QuestionCircleOutlined />}>
-                                  待完善
+                                  {t("dashboard_incomplete")}
                                 </Tag>
                               )}
                             </div>
@@ -466,7 +500,7 @@ export default function Dashboard() {
                               >
                                 <Space size="middle">
                                   <Text type="secondary" style={{ fontSize: "0.85rem", color: secondaryTextColor }}>
-                                    {novel.genre ? `类型：${novel.genre}` : "未设置类型"}
+                                    {novel.genre ? t("dashboard_genre") + novel.genre : t("dashboard_no_genre")}
                                   </Text>
                                 </Space>
                               </div>
@@ -478,7 +512,7 @@ export default function Dashboard() {
                                   transition: "color 0.3s ease",
                                 }}
                               >
-                                创建于：{new Date(novel.updated_at).toLocaleString()}
+                                {t("dashboard_created")}{new Date(novel.updated_at).toLocaleString()}
                               </Text>
                             </div>
                           }

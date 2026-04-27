@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   apiErrorMessage,
@@ -24,6 +24,7 @@ import {
   type ChapterPreviewResult,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
@@ -32,47 +33,66 @@ type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate" 
 
 type GenerateTab = "single" | "batch";
 
-const RAIL_ITEMS: { key: AiTool; line2: string }[] = [
-  { key: "generate", line2: "生成" },
-  { key: "rewrite", line2: "改写" },
-  { key: "append", line2: "追加" },
-  { key: "naming", line2: "起名" },
-  { key: "ask", line2: "提问" },
-  { key: "evaluate", line2: "评估" },
-  { key: "versions", line2: "版本" },
+const RAIL_ITEM_KEYS: { key: AiTool; labelKey: string }[] = [
+  { key: "generate", labelKey: "write_tool_generate" },
+  { key: "rewrite", labelKey: "write_tool_rewrite" },
+  { key: "append", labelKey: "write_tool_append" },
+  { key: "naming", labelKey: "write_tool_naming" },
+  { key: "ask", labelKey: "write_tool_ask" },
+  { key: "evaluate", labelKey: "write_tool_evaluate" },
+  { key: "versions", labelKey: "write_tool_versions" },
 ];
 
 const WRITE_BODY_FONT_KEY = "inkmind_write_body_font";
 
 type WriteBodyFontId = "noto" | "song" | "kai" | "fang" | "hei" | "mono";
 
-const WRITE_BODY_FONTS: { id: WriteBodyFontId; label: string }[] = [
-  { id: "noto", label: "思源宋体（默认）" },
-  { id: "song", label: "宋体" },
-  { id: "kai", label: "楷体" },
-  { id: "fang", label: "仿宋" },
-  { id: "hei", label: "黑体" },
-  { id: "mono", label: "等宽" },
-];
+const WRITE_BODY_FONT_IDS: WriteBodyFontId[] = ["noto", "song", "kai", "fang", "hei", "mono"];
+
+const WRITE_BODY_FONT_LABEL_KEYS: Record<WriteBodyFontId, string> = {
+  noto: "write_font_noto",
+  song: "write_font_song",
+  kai: "write_font_kai",
+  fang: "write_font_fang",
+  hei: "write_font_hei",
+  mono: "write_font_mono",
+};
 
 type LineHeightId = "compact" | "normal" | "relaxed" | "loose";
 
-const LINE_HEIGHTS: { id: LineHeightId; label: string; value: number }[] = [
-  { id: "compact", label: "紧凑", value: 1.6 },
-  { id: "normal", label: "标准", value: 1.85 },
-  { id: "relaxed", label: "宽松", value: 2.0 },
-  { id: "loose", label: "超宽", value: 2.2 },
-];
+const LINE_HEIGHT_IDS: LineHeightId[] = ["compact", "normal", "relaxed", "loose"];
+
+const LINE_HEIGHT_VALUES: Record<LineHeightId, number> = {
+  compact: 1.6,
+  normal: 1.85,
+  relaxed: 2.0,
+  loose: 2.2,
+};
+
+const LINE_HEIGHT_LABEL_KEYS: Record<LineHeightId, string> = {
+  compact: "write_line_height_compact",
+  normal: "write_line_height_normal",
+  relaxed: "write_line_height_relaxed",
+  loose: "write_line_height_loose",
+};
 
 const WRITE_LINE_HEIGHT_KEY = "inkmind_write_line_height";
 
 type LineWidthId = "md" | "lg" | "full";
 
-const LINE_WIDTHS: { id: LineWidthId; label: string; maxWidth: string | null }[] = [
-  { id: "md", label: "适中", maxWidth: "55ch" },
-  { id: "lg", label: "宽", maxWidth: "68ch" },
-  { id: "full", label: "铺满", maxWidth: null },
-];
+const LINE_WIDTH_IDS: LineWidthId[] = ["md", "lg", "full"];
+
+const LINE_WIDTH_MAX_WIDTHS: Record<LineWidthId, string | null> = {
+  md: "55ch",
+  lg: "68ch",
+  full: null,
+};
+
+const LINE_WIDTH_LABEL_KEYS: Record<LineWidthId, string> = {
+  md: "write_line_width_md",
+  lg: "write_line_width_lg",
+  full: "write_line_width_full",
+};
 
 const WRITE_LINE_WIDTH_KEY = "inkmind_write_line_width";
 
@@ -81,7 +101,7 @@ const WRITE_FOCUS_MODE_KEY = "inkmind_write_focus_mode";
 function readStoredLineHeight(): LineHeightId {
   try {
     const v = localStorage.getItem(WRITE_LINE_HEIGHT_KEY);
-    if (v && LINE_HEIGHTS.some((x) => x.id === v)) {
+    if (v && LINE_HEIGHT_IDS.includes(v as LineHeightId)) {
       return v as LineHeightId;
     }
   } catch {
@@ -106,7 +126,7 @@ function readStoredLineWidth(): LineWidthId {
   try {
     const v = localStorage.getItem(WRITE_LINE_WIDTH_KEY);
     if (v) {
-      if (LINE_WIDTHS.some((x) => x.id === v)) {
+      if (LINE_WIDTH_IDS.includes(v as LineWidthId)) {
         return v as LineWidthId;
       }
       const mapped = LEGACY_LINE_WIDTH_MAP[v];
@@ -143,7 +163,7 @@ const WRITE_FONT_PREVIEW: Record<WriteBodyFontId, string> = {
 function readStoredBodyFont(): WriteBodyFontId {
   try {
     const v = localStorage.getItem(WRITE_BODY_FONT_KEY);
-    if (v && WRITE_BODY_FONTS.some((x) => x.id === v)) {
+    if (v && WRITE_BODY_FONT_IDS.includes(v as WriteBodyFontId)) {
       return v as WriteBodyFontId;
     }
   } catch {
@@ -152,38 +172,49 @@ function readStoredBodyFont(): WriteBodyFontId {
   return "noto";
 }
 
-/** 正文字号分档（不展示像素，仅内部映射） */
+/** Font size tiers (internal mapping only) */
 type WriteBodyFontSizeId = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 
-const WRITE_BODY_FONT_SIZES: { id: WriteBodyFontSizeId; label: string; px: number }[] = [
-  { id: "xs", label: "极小", px: 14 },
-  { id: "sm", label: "小", px: 16 },
-  { id: "md", label: "标准", px: 17 },
-  { id: "lg", label: "大", px: 19 },
-  { id: "xl", label: "较大", px: 21 },
-  { id: "xxl", label: "特大", px: 24 },
-];
+const WRITE_BODY_FONT_SIZE_IDS: WriteBodyFontSizeId[] = ["xs", "sm", "md", "lg", "xl", "xxl"];
+
+const WRITE_BODY_FONT_SIZE_PX: Record<WriteBodyFontSizeId, number> = {
+  xs: 14,
+  sm: 16,
+  md: 17,
+  lg: 19,
+  xl: 21,
+  xxl: 24,
+};
+
+const WRITE_BODY_FONT_SIZE_LABEL_KEYS: Record<WriteBodyFontSizeId, string> = {
+  xs: "write_font_size_xs",
+  sm: "write_font_size_sm",
+  md: "write_font_size_md",
+  lg: "write_font_size_lg",
+  xl: "write_font_size_xl",
+  xxl: "write_font_size_xxl",
+};
 
 const WRITE_BODY_FONT_SIZE_KEY = "inkmind_write_body_font_size";
 const LEGACY_BODY_FONT_SIZE_PX_KEY = "inkmind_write_body_font_size_px";
 
 function nearestFontSizeId(px: number): WriteBodyFontSizeId {
-  let best = WRITE_BODY_FONT_SIZES[0];
-  let d = Math.abs(px - best.px);
-  for (const p of WRITE_BODY_FONT_SIZES) {
-    const dd = Math.abs(px - p.px);
+  let best = WRITE_BODY_FONT_SIZE_IDS[0];
+  let d = Math.abs(px - WRITE_BODY_FONT_SIZE_PX[best]);
+  for (const id of WRITE_BODY_FONT_SIZE_IDS) {
+    const dd = Math.abs(px - WRITE_BODY_FONT_SIZE_PX[id]);
     if (dd < d) {
       d = dd;
-      best = p;
+      best = id;
     }
   }
-  return best.id;
+  return best;
 }
 
 function readStoredBodyFontSizeId(): WriteBodyFontSizeId {
   try {
     const v = localStorage.getItem(WRITE_BODY_FONT_SIZE_KEY);
-    if (v && WRITE_BODY_FONT_SIZES.some((x) => x.id === v)) {
+    if (v && WRITE_BODY_FONT_SIZE_IDS.includes(v as WriteBodyFontSizeId)) {
       return v as WriteBodyFontSizeId;
     }
     const legacy = localStorage.getItem(LEGACY_BODY_FONT_SIZE_PX_KEY);
@@ -215,6 +246,32 @@ export default function NovelWrite() {
   const id = Number(novelId);
   const nav = useNavigate();
   const { user } = useAuth();
+  const { t, isZh } = useI18n();
+
+  const RAIL_ITEMS = useMemo(
+    () => RAIL_ITEM_KEYS.map(({ key, labelKey }) => ({ key, line2: t(labelKey) })),
+    [t]
+  );
+
+  const WRITE_BODY_FONTS = useMemo(
+    () => WRITE_BODY_FONT_IDS.map((id) => ({ id, label: t(WRITE_BODY_FONT_LABEL_KEYS[id]) })),
+    [t]
+  );
+
+  const LINE_HEIGHTS = useMemo(
+    () => LINE_HEIGHT_IDS.map((id) => ({ id, label: t(LINE_HEIGHT_LABEL_KEYS[id]), value: LINE_HEIGHT_VALUES[id] })),
+    [t]
+  );
+
+  const LINE_WIDTHS = useMemo(
+    () => LINE_WIDTH_IDS.map((id) => ({ id, label: t(LINE_WIDTH_LABEL_KEYS[id]), maxWidth: LINE_WIDTH_MAX_WIDTHS[id] })),
+    [t]
+  );
+
+  const WRITE_BODY_FONT_SIZES = useMemo(
+    () => WRITE_BODY_FONT_SIZE_IDS.map((id) => ({ id, label: t(WRITE_BODY_FONT_SIZE_LABEL_KEYS[id]), px: WRITE_BODY_FONT_SIZE_PX[id] })),
+    [t]
+  );
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -563,11 +620,11 @@ export default function NovelWrite() {
     if (!r || r.start === r.end || activeId === null) return;
     const sel = content.slice(r.start, r.end);
     if (!sel.trim()) {
-      setErr("请先选中要处理的文字");
+      setErr(t("write_err_select_text"));
       return;
     }
     if (!hasLlm) {
-      setErr("未配置 LLM");
+      setErr(t("write_err_no_llm"));
       return;
     }
     setErr("");
@@ -618,7 +675,7 @@ export default function NovelWrite() {
     try {
       await navigator.clipboard.writeText(selectionPanel.text);
     } catch {
-      setErr("复制失败，请手动复制");
+      setErr(t("write_err_copy_failed"));
     }
   }
 
@@ -653,8 +710,8 @@ export default function NovelWrite() {
   async function handleRollback(versionId: number, saveCurrent: boolean = true) {
     if (activeId === null) return;
     const confirmMsg = saveCurrent
-      ? "确定要回滚到该版本吗？当前内容将被保存为历史版本。"
-      : "确定要回滚到该版本吗？当前内容将被丢弃。";
+      ? t("write_confirm_rollback_save")
+      : t("write_confirm_rollback_discard");
     if (!window.confirm(confirmMsg)) return;
     
     setVersionActionLoading(true);
@@ -846,7 +903,7 @@ export default function NovelWrite() {
 
   async function onDeleteChapterById(cid: number) {
     const nid = id;
-    if (!window.confirm("确定删除该章节？")) return;
+    if (!window.confirm(t("write_confirm_delete_chapter"))) return;
     setErr("");
     try {
       await flushSave();
@@ -902,11 +959,11 @@ export default function NovelWrite() {
     const nid = id;
     if (!activeId || !hasLlm) return;
     if (!isLatestChapter) {
-      setErr("批量生成仅支持从最新章节开始");
+      setErr(t("write_err_batch_latest_only"));
       return;
     }
     if (!batchChapterCount) {
-      setErr("请填写 1 到 20 之间的生成章节数");
+      setErr(t("write_err_chapter_count_range"));
       return;
     }
     setBatchSummaryInspireBusy(true);
@@ -934,12 +991,12 @@ export default function NovelWrite() {
     const nid = id;
     const s = summary.trim();
     if (!s) {
-      setErr("请填写本章概要");
+      setErr(t("write_err_summary_required"));
       return;
     }
     if (!activeId) return;
     if (hasBody) {
-      const ok = window.confirm("将根据当前概要重新生成正文并覆盖现有内容，标题也可能随内容一起更新，是否继续？");
+      const ok = window.confirm(t("write_confirm_regenerate"));
       if (!ok) return;
     }
     preGenerateSnapshotRef.current = { title, summary, content };
@@ -985,7 +1042,7 @@ export default function NovelWrite() {
         setSingleGenerateLockTitle(false);
         setGenerateWordCount(null);
       } else {
-        throw new Error("未收到生成结果");
+        throw new Error(t("write_err_no_result"));
       }
     } catch (e) {
       if (novelIdRef.current === nid) {
@@ -1045,16 +1102,16 @@ export default function NovelWrite() {
     const nid = id;
     if (!activeId) return;
     if (!isLatestChapter) {
-      setErr("批量生成仅支持从最新章节开始");
+      setErr(t("write_err_batch_latest_only"));
       return;
     }
     if (!batchChapterCount) {
-      setErr("请填写 1 到 20 之间的生成章节数");
+      setErr(t("write_err_chapter_count_range"));
       return;
     }
     const total = batchSummary.trim();
     if (!total) {
-      setErr("请填写后续章节总概要");
+      setErr(t("write_err_total_summary_required"));
       return;
     }
     setBusy(true);
@@ -1086,7 +1143,7 @@ export default function NovelWrite() {
       }
       setGenerateTab("single");
       setGenerateWordCount(null);
-      setBatchStreaming((prev) => prev + `已完成，共生成 ${created.length} 章。`);
+      setBatchStreaming((prev) => prev + `${t("write_batch_complete")} ${created.length} ${t("write_batch_chapters")}`);
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
@@ -1100,7 +1157,7 @@ export default function NovelWrite() {
     const nid = id;
     const s = summary.trim();
     if (!s) {
-      setErr("请填写本章概要");
+      setErr(t("write_err_summary_required"));
       return;
     }
     if (!activeId) return;
@@ -1130,16 +1187,16 @@ export default function NovelWrite() {
     const nid = id;
     if (!activeId) return;
     if (!isLatestChapter) {
-      setErr("批量生成仅支持从最新章节开始");
+      setErr(t("write_err_batch_latest_only"));
       return;
     }
     if (!batchChapterCount) {
-      setErr("请填写 1 到 20 之间的生成章节数");
+      setErr(t("write_err_chapter_count_range"));
       return;
     }
     const total = batchSummary.trim();
     if (!total) {
-      setErr("请填写后续章节总概要");
+      setErr(t("write_err_total_summary_required"));
       return;
     }
     
@@ -1170,11 +1227,11 @@ export default function NovelWrite() {
   async function onRunRewrite() {
     const nid = id;
     if (!activeId || !rewriteInstr.trim()) {
-      setErr("请填写改写说明");
+      setErr(t("write_err_rewrite_instr_required"));
       return;
     }
     if (!hasBody) {
-      setErr("改写需要已有正文");
+      setErr(t("write_err_rewrite_needs_body"));
       return;
     }
     setBusy(true);
@@ -1213,7 +1270,7 @@ export default function NovelWrite() {
   async function onRunAppend() {
     const nid = id;
     if (!activeId || !appendInstr.trim()) {
-      setErr("请填写要追加的内容说明");
+      setErr(t("write_err_append_instr_required"));
       return;
     }
     setBusy(true);
@@ -1255,7 +1312,7 @@ export default function NovelWrite() {
   async function onRunNaming() {
     const d = namingDesc.trim();
     if (!d) {
-      setErr("请说明要命名的对象");
+      setErr(t("write_err_naming_desc_required"));
       return;
     }
     setBusy(true);
@@ -1326,7 +1383,7 @@ export default function NovelWrite() {
     const aid = activeId;
     if (aid === null) return;
     if (!(content || "").trim()) {
-      setErr("请先撰写正文后再评估");
+      setErr(t("write_err_evaluate_needs_body"));
       return;
     }
     setEvaluateBusy(true);
@@ -1352,7 +1409,7 @@ export default function NovelWrite() {
   }
 
   if (loading) {
-    return <p className="muted">加载章节…</p>;
+    return <p className="muted">{t("write_loading_chapters")}</p>;
   }
 
   const drawerOpen =
@@ -1366,7 +1423,7 @@ export default function NovelWrite() {
         <button
           type="button"
           className="write-sidebar-backdrop"
-          aria-label="关闭章节列表"
+          aria-label={t("write_close_chapter_list")}
           onClick={() => setSidebarOpen(false)}
         />
       ) : null}
@@ -1376,7 +1433,7 @@ export default function NovelWrite() {
           <button
             type="button"
             className="write-icon-btn"
-            title={sidebarOpen ? "关闭边栏" : "打开边栏"}
+            title={sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
             aria-expanded={sidebarOpen}
             onClick={() => setSidebarOpen((v) => !v)}
           >
@@ -1391,10 +1448,10 @@ export default function NovelWrite() {
               <button
                 type="button"
                 className="write-icon-btn write-font-btn"
-                title="正文字体"
+                title={t("write_font_body")}
                 aria-expanded={fontMenuOpen}
                 aria-haspopup="listbox"
-                aria-label="正文字体"
+                aria-label={t("write_font_body")}
                 onClick={() => {
                   setSizeMenuOpen(false);
                   setFontMenuOpen((v) => !v);
@@ -1403,7 +1460,7 @@ export default function NovelWrite() {
                 Aa
               </button>
               {fontMenuOpen ? (
-                <ul className="write-font-menu" role="listbox" aria-label="选择正文字体">
+                <ul className="write-font-menu" role="listbox" aria-label={t("write_select_font")}>
                   {WRITE_BODY_FONTS.map((f) => (
                     <li key={f.id} role="presentation">
                       <button
@@ -1428,10 +1485,10 @@ export default function NovelWrite() {
               <button
                 type="button"
                 className="write-icon-btn write-size-menu-btn"
-                title="正文字号"
+                title={t("write_font_size")}
                 aria-expanded={sizeMenuOpen}
                 aria-haspopup="dialog"
-                aria-label="正文字号"
+                aria-label={t("write_font_size")}
                 onClick={() => {
                   setFontMenuOpen(false);
                   setLineHeightMenuOpen(false);
@@ -1445,7 +1502,7 @@ export default function NovelWrite() {
                 </span>
               </button>
               {sizeMenuOpen ? (
-                <div className="write-size-popover" role="dialog" aria-label="调整正文字号">
+                <div className="write-size-popover" role="dialog" aria-label={t("write_adjust_font_size")}>
                   <div className="write-size-slider-row">
                     <span className="write-size-slider-a write-size-slider-a--min" aria-hidden>
                       A
@@ -1476,7 +1533,7 @@ export default function NovelWrite() {
                         aria-valuemax={WRITE_BODY_FONT_SIZES.length - 1}
                         aria-valuenow={bodyFontSizeIndex}
                         aria-valuetext={
-                          WRITE_BODY_FONT_SIZES.find((x) => x.id === bodyFontSizeId)?.label ?? "标准"
+                          WRITE_BODY_FONT_SIZES.find((x) => x.id === bodyFontSizeId)?.label ?? t("write_font_size_md")
                         }
                         onChange={(e) => {
                           const i = Number(e.target.value);
@@ -1497,10 +1554,10 @@ export default function NovelWrite() {
               <button
                 type="button"
                 className="write-icon-btn write-line-height-btn"
-                title="行高"
+                title={t("write_line_height")}
                 aria-expanded={lineHeightMenuOpen}
                 aria-haspopup="listbox"
-                aria-label="行高"
+                aria-label={t("write_line_height")}
                 onClick={() => {
                   setFontMenuOpen(false);
                   setSizeMenuOpen(false);
@@ -1515,7 +1572,7 @@ export default function NovelWrite() {
                 </span>
               </button>
               {lineHeightMenuOpen ? (
-                <ul className="write-line-height-menu" role="listbox" aria-label="选择行高">
+                <ul className="write-line-height-menu" role="listbox" aria-label={t("write_select_line_height")}>
                   {LINE_HEIGHTS.map((lh) => (
                     <li key={lh.id} role="presentation">
                       <button
@@ -1540,10 +1597,10 @@ export default function NovelWrite() {
               <button
                 type="button"
                 className="write-icon-btn write-line-width-btn"
-                title="行宽"
+                title={t("write_line_width")}
                 aria-expanded={lineWidthMenuOpen}
                 aria-haspopup="listbox"
-                aria-label="行宽"
+                aria-label={t("write_line_width")}
                 onClick={() => {
                   setFontMenuOpen(false);
                   setSizeMenuOpen(false);
@@ -1558,7 +1615,7 @@ export default function NovelWrite() {
                 </span>
               </button>
               {lineWidthMenuOpen ? (
-                <ul className="write-line-width-menu" role="listbox" aria-label="选择行宽">
+                <ul className="write-line-width-menu" role="listbox" aria-label={t("write_select_line_width")}>
                   {LINE_WIDTHS.map((lw) => (
                     <li key={lw.id} role="presentation">
                       <button
@@ -1582,8 +1639,8 @@ export default function NovelWrite() {
             <button
               type="button"
               className={`write-icon-btn write-focus-btn${focusMode ? " is-active" : ""}`}
-              title={focusMode ? "退出专注模式 (Ctrl+.)" : "专注模式 (Ctrl+.)"}
-              aria-label="专注模式"
+              title={focusMode ? t("write_exit_focus_mode_shortcut") : t("write_focus_mode_shortcut")}
+              aria-label={t("write_focus_mode")}
               onClick={() => setFocusMode((v) => !v)}
             >
               <span className="write-focus-icon" aria-hidden>
@@ -1596,15 +1653,15 @@ export default function NovelWrite() {
         <aside className={`write-left-sidebar${sidebarOpen ? " is-open" : ""}`}>
           <div className="write-left-inner card">
             <div className="write-left-head">
-              <strong>章节</strong>
+              <strong>{t("write_chapters")}</strong>
               <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={(e) => { e.stopPropagation(); void onAddChapter(); }}>
-                新建
+                {t("write_new_chapter")}
               </button>
             </div>
             <div className="chapter-list stack-sm">
               {chapters.length === 0 ? (
                 <p className="muted" style={{ margin: 0, fontSize: "0.88rem" }}>
-                  暂无章节
+                  {t("write_no_chapters")}
                 </p>
               ) : (
                 chapters.map((c, idx) => (
@@ -1614,13 +1671,13 @@ export default function NovelWrite() {
                       className={`chapter-item${c.id === activeId ? " active" : ""}`}
                       onClick={(e) => { e.stopPropagation(); void selectChapter(c.id); }}
                     >
-                      {c.title?.trim() || `第 ${idx + 1} 章`}
+                      {c.title?.trim() || `${t("write_chapter_n")} ${idx + 1}${t("write_chapter_n_suffix")}`}
                     </button>
                     <button
                       type="button"
                       className="chapter-del"
-                      title="删除章节"
-                      aria-label="删除章节"
+                      title={t("write_delete_chapter")}
+                      aria-label={t("write_delete_chapter")}
                       onClick={(e) => {
                         e.stopPropagation();
                         void onDeleteChapterById(c.id);
@@ -1650,7 +1707,7 @@ export default function NovelWrite() {
                     className="editor-title editor-title--improved"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="章节标题"
+                    placeholder={t("write_chapter_title_placeholder")}
                   />
                 </div>
                 <div className={`write-body-wrapper write-body-wrapper--${lineWidthId}`}>
@@ -1665,22 +1722,22 @@ export default function NovelWrite() {
                       onMouseUp={syncSelectionFromTextarea}
                       onSelect={syncSelectionFromTextarea}
                       onKeyUp={syncSelectionFromTextarea}
-                      placeholder="开始写作..."
+                      placeholder={t("write_start_writing")}
                     />
                   </div>
                 </div>
                 <div className="write-editor-footer">
                   <div className="write-word-stats">
                     <span className="write-word-stat-item">
-                      <span className="write-word-stat-label">字数</span>
+                      <span className="write-word-stat-label">{t("write_stat_words")}</span>
                       <span className="write-word-stat-value">{wordCount}</span>
                     </span>
                     <span className="write-word-stat-item">
-                      <span className="write-word-stat-label">字符</span>
+                      <span className="write-word-stat-label">{t("write_stat_chars")}</span>
                       <span className="write-word-stat-value">{charCount}</span>
                     </span>
                     <span className="write-word-stat-item">
-                      <span className="write-word-stat-label">段落</span>
+                      <span className="write-word-stat-label">{t("write_stat_paragraphs")}</span>
                       <span className="write-word-stat-value">{paragraphCount}</span>
                     </span>
                   </div>
@@ -1690,14 +1747,14 @@ export default function NovelWrite() {
                       className="btn btn-ghost write-exit-focus-btn"
                       onClick={() => setFocusMode(false)}
                     >
-                      退出专注模式 (ESC)
+                      {t("write_exit_focus_mode_esc")}
                     </button>
                   ) : null}
                 </div>
               </>
             ) : (
               <p className="muted write-empty-hint" style={{ margin: 0 }}>
-                {focusMode ? "请先选择或创建章节" : "请打开左侧边栏并选择章节，或新建一章。"}
+                {focusMode ? t("write_select_or_create_chapter") : t("write_select_chapter_or_new")}
               </p>
             )}
           </div>
@@ -1705,7 +1762,7 @@ export default function NovelWrite() {
       </div>
 
       {!focusMode && (
-        <nav className="write-ai-rail" aria-label="AI 功能">
+        <nav className="write-ai-rail" aria-label={t("write_ai_features")}>
           {RAIL_ITEMS.map(({ key, line2 }) => (
             <button
               key={key}
@@ -1714,9 +1771,9 @@ export default function NovelWrite() {
               disabled={!canOpenTool(key)}
               title={
                 !hasLlm
-                  ? "未配置 LLM"
+                  ? t("write_err_no_llm")
                   : needsChapter(key) && !activeId
-                    ? "请先选择章节"
+                    ? t("write_please_select_chapter")
                     : `AI${line2}`
               }
               onClick={() => toggleTool(key)}
@@ -1734,22 +1791,22 @@ export default function NovelWrite() {
         <div className="write-ai-drawer">
           <div className="write-ai-drawer-head">
             <span>
-              {rightTool === "generate" && "AI 生成"}
-              {rightTool === "rewrite" && "AI 改写"}
-              {rightTool === "append" && "AI 追加"}
-              {rightTool === "naming" && "AI 起名"}
-              {rightTool === "ask" && "AI 提问"}
-              {rightTool === "evaluate" && "AI 评估"}
-              {rightTool === "versions" && "版本历史"}
+              {rightTool === "generate" && t("write_ai_generate")}
+              {rightTool === "rewrite" && t("write_ai_rewrite")}
+              {rightTool === "append" && t("write_ai_append")}
+              {rightTool === "naming" && t("write_ai_naming")}
+              {rightTool === "ask" && t("write_ai_ask")}
+              {rightTool === "evaluate" && t("write_ai_evaluate")}
+              {rightTool === "versions" && t("write_version_versions")}
             </span>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
-              关闭
+              {t("write_close")}
             </button>
           </div>
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && activeId ? (
               <div className="write-ai-section">
-                <div className="write-generate-tabs" role="tablist" aria-label="生成模式">
+                <div className="write-generate-tabs" role="tablist" aria-label={t("write_gen_mode")}>
                   <button
                     type="button"
                     role="tab"
@@ -1757,7 +1814,7 @@ export default function NovelWrite() {
                     className={`write-generate-tab${generateTab === "single" ? " is-active" : ""}`}
                     onClick={() => setGenerateTab("single")}
                   >
-                    单章生成
+                    {t("write_single_chapter")}
                   </button>
                   {isLatestChapter ? (
                     <button
@@ -1767,22 +1824,22 @@ export default function NovelWrite() {
                       className={`write-generate-tab${generateTab === "batch" ? " is-active" : ""}`}
                       onClick={() => setGenerateTab("batch")}
                     >
-                      批量生成
+                      {t("write_batch_chapters")}
                     </button>
                   ) : null}
                 </div>
 
                 {generateTab === "single" ? (
                   <>
-                    <p className="hint">为当前章节生成正文</p>
+                    <p className="hint">{t("write_gen_for_current")}</p>
                     <div className="field">
                       <div className="write-ai-field-label">
-                        <label htmlFor="write-ai-chapter-summary">本章概要</label>
+                        <label htmlFor="write-ai-chapter-summary">{t("write_chapter_summary")}</label>
                         <button
                           type="button"
                           className={`write-summary-inspire-btn${showSingleInspireCta ? " write-summary-inspire-btn--with-text" : ""}`}
-                          title="根据本书设定与已有章节，生成本章概要灵感"
-                          aria-label="概要灵感"
+                          title={t("write_summary_inspire_tooltip")}
+                          aria-label={t("write_summary_inspire_aria")}
                           disabled={!hasLlm || summaryInspireBusy}
                           onClick={() => void onSummaryInspire()}
                         >
@@ -1804,7 +1861,7 @@ export default function NovelWrite() {
                               />
                             </svg>
                           )}
-                          {showSingleInspireCta ? <span>生成本章灵感</span> : null}
+                          {showSingleInspireCta ? <span>{t("write_generate_summary_inspire")}</span> : null}
                         </button>
                       </div>
                       <textarea
@@ -1813,17 +1870,17 @@ export default function NovelWrite() {
                         rows={5}
                         value={summary}
                         onChange={(e) => setSummary(e.target.value)}
-                        placeholder="本章要写的情节与要点…"
+                        placeholder={t("write_summary_placeholder")}
                       />
                     </div>
                     <div className="field">
-                      <label htmlFor="write-ai-generate-title">生成标题（可选）</label>
+                      <label htmlFor="write-ai-generate-title">{t("write_generate_title_optional")}</label>
                       <input
                         id="write-ai-generate-title"
                         className="input"
                         value={singleGenerateTitle}
                         onChange={(e) => setSingleGenerateTitle(e.target.value)}
-                        placeholder="留空则由 AI 根据新内容重新拟题"
+                        placeholder={t("write_title_ai_decide")}
                       />
                     </div>
                     <label className="write-generate-lock">
@@ -1832,10 +1889,10 @@ export default function NovelWrite() {
                         checked={singleGenerateLockTitle}
                         onChange={(e) => setSingleGenerateLockTitle(e.target.checked)}
                       />
-                      <span>固定使用上方标题，不让 AI 改题</span>
+                      <span>{t("write_lock_title_desc")}</span>
                     </label>
                     <div className="field">
-                      <label htmlFor="write-ai-word-count">目标正文字数（可选）</label>
+                      <label htmlFor="write-ai-word-count">{t("write_target_word_count")}</label>
                       <select
                         id="write-ai-word-count"
                         className="select"
@@ -1845,22 +1902,22 @@ export default function NovelWrite() {
                           setGenerateWordCount(val ? parseInt(val, 10) : null);
                         }}
                       >
-                        <option value="">不指定（AI 自行决定）</option>
-                        <option value="500">500 字</option>
-                        <option value="1000">1000 字</option>
-                        <option value="1500">1500 字</option>
-                        <option value="2000">2000 字</option>
-                        <option value="2500">2500 字</option>
-                        <option value="3000">3000 字</option>
-                        <option value="3500">3500 字</option>
-                        <option value="4000">4000 字</option>
+                        <option value="">{t("write_word_count_ai_decide")}</option>
+                        <option value="500">500 {t("write_stat_words")}</option>
+                        <option value="1000">1000 {t("write_stat_words")}</option>
+                        <option value="1500">1500 {t("write_stat_words")}</option>
+                        <option value="2000">2000 {t("write_stat_words")}</option>
+                        <option value="2500">2500 {t("write_stat_words")}</option>
+                        <option value="3000">3000 {t("write_stat_words")}</option>
+                        <option value="3500">3500 {t("write_stat_words")}</option>
+                        <option value="4000">4000 {t("write_stat_words")}</option>
                       </select>
                       <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
-                        AI 会尽量接近指定字数，但不保证严格符合
+                        {t("write_word_count_approx")}
                       </p>
                     </div>
                     <div className="field" style={{ marginBottom: "1rem" }}>
-                      <label>生成模式</label>
+                      <label>{t("write_generate_mode")}</label>
                       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
                         <button
                           type="button"
@@ -1868,7 +1925,7 @@ export default function NovelWrite() {
                           onClick={() => setGenerateMode("foreground")}
                           style={{ flex: 1 }}
                         >
-                          前台生成（实时查看）
+                          {t("write_foreground_realtime")}
                         </button>
                         <button
                           type="button"
@@ -1876,12 +1933,12 @@ export default function NovelWrite() {
                           onClick={() => setGenerateMode("background")}
                           style={{ flex: 1 }}
                         >
-                          后台写作（可离开）
+                          {t("write_background_leave")}
                         </button>
                       </div>
                       {generateMode === "background" && (
                         <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                          后台写作模式会在服务器后台执行任务，您可以离开页面去做其他事情，完成后可在「后台任务」页面查看结果。
+                          {t("write_background_desc")}
                         </p>
                       )}
                     </div>
@@ -1891,7 +1948,7 @@ export default function NovelWrite() {
                       disabled={busy}
                       onClick={generateMode === "background" ? () => void onGenerateBackground() : onGenerate}
                     >
-                      {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : generateMode === "background" ? "提交后台任务" : "生成"}
+                      {busy ? t("write_generating") : hasBody ? t("write_regenerate_overwrite") : generateMode === "background" ? t("write_submit_background") : t("write_generate")}
                     </button>
 
                     {previewResult ? (
@@ -1904,14 +1961,14 @@ export default function NovelWrite() {
                         >
                           <p style={{ margin: 0, fontWeight: 500 }}>
                             {previewResult.needs_revision
-                              ? "⚠️ 内容评分较低，建议修改后保存"
-                              : "✅ 内容已生成，请预览"}
+                              ? t("write_preview_low_score")
+                              : t("write_preview_ready")}
                           </p>
                           {previewResult.evaluate_result && (
                             <p style={{ margin: "0.25rem 0 0", fontSize: "0.875rem" }}>
-                              去 AI 化评分：<strong>{previewResult.evaluate_result.de_ai_score}</strong> 分
+                              {t("write_deai_score").replace("{score}", String(previewResult.evaluate_result.de_ai_score))}
                               {previewResult.evaluate_result.issues.length > 0 && (
-                                <span>（发现 {previewResult.evaluate_result.issues.length} 个问题点）</span>
+                                <span>{t("write_issues_found").replace("{count}", String(previewResult.evaluate_result.issues.length))}</span>
                               )}
                             </p>
                           )}
@@ -1923,7 +1980,7 @@ export default function NovelWrite() {
                             disabled={previewLoading}
                             onClick={() => void onConfirmPreview()}
                           >
-                            {previewLoading ? "保存中…" : "确认保存"}
+                            {previewLoading ? t("write_saving") : t("write_confirm_save")}
                           </button>
                           <button
                             type="button"
@@ -1931,7 +1988,7 @@ export default function NovelWrite() {
                             disabled={previewLoading}
                             onClick={onCancelPreview}
                           >
-                            取消
+                            {t("write_cancel")}
                           </button>
                         </div>
                       </div>
@@ -1939,9 +1996,9 @@ export default function NovelWrite() {
                   </>
                 ) : (
                   <>
-                    <p className="hint">连续生成多章</p>
+                    <p className="hint">{t("write_gen_multiple_chapters")}</p>
                     <div className="field">
-                      <label htmlFor="write-ai-batch-count">生成章节数</label>
+                      <label htmlFor="write-ai-batch-count">{t("write_chapter_count")}</label>
                       <input
                         id="write-ai-batch-count"
                         className="input"
@@ -1960,11 +2017,11 @@ export default function NovelWrite() {
                     </div>
                     {!isLatestChapter ? (
                       <p className="muted" style={{ margin: "-0.2rem 0 0.85rem", fontSize: "0.84rem" }}>
-                        为避免影响既有章节顺序，批量生成仅在最新章节可用。
+                        {t("write_batch_latest_only_note")}
                       </p>
                     ) : null}
                     <div className="field">
-                      <label htmlFor="write-ai-batch-word-count">每章目标正文字数（可选）</label>
+                      <label htmlFor="write-ai-batch-word-count">{t("write_per_chapter_word_count")}</label>
                       <select
                         id="write-ai-batch-word-count"
                         className="select"
@@ -1974,28 +2031,28 @@ export default function NovelWrite() {
                           setGenerateWordCount(val ? parseInt(val, 10) : null);
                         }}
                       >
-                        <option value="">不指定（AI 自行决定）</option>
-                        <option value="500">500 字</option>
-                        <option value="1000">1000 字</option>
-                        <option value="1500">1500 字</option>
-                        <option value="2000">2000 字</option>
-                        <option value="2500">2500 字</option>
-                        <option value="3000">3000 字</option>
-                        <option value="3500">3500 字</option>
-                        <option value="4000">4000 字</option>
+                        <option value="">{t("write_word_count_ai_decide")}</option>
+                        <option value="500">500 {t("write_stat_words")}</option>
+                        <option value="1000">1000 {t("write_stat_words")}</option>
+                        <option value="1500">1500 {t("write_stat_words")}</option>
+                        <option value="2000">2000 {t("write_stat_words")}</option>
+                        <option value="2500">2500 {t("write_stat_words")}</option>
+                        <option value="3000">3000 {t("write_stat_words")}</option>
+                        <option value="3500">3500 {t("write_stat_words")}</option>
+                        <option value="4000">4000 {t("write_stat_words")}</option>
                       </select>
                       <p className="muted" style={{ margin: "0.25rem 0 0", fontSize: "0.8rem" }}>
-                        AI 会尽量接近指定字数，但不保证严格符合
+                        {t("write_word_count_approx")}
                       </p>
                     </div>
                     <div className="field">
                       <div className="write-ai-field-label">
-                        <label htmlFor="write-ai-batch-summary">后续总概要</label>
+                        <label htmlFor="write-ai-batch-summary">{t("write_overall_summary")}</label>
                         <button
                           type="button"
                           className={`write-summary-inspire-btn${showBatchInspireCta ? " write-summary-inspire-btn--with-text" : ""}`}
-                          title="根据本书设定、已有章节，生成后续数章的总体剧情灵感"
-                          aria-label="批量概要灵感"
+                          title={t("write_batch_summary_inspire_tooltip")}
+                          aria-label={t("write_batch_summary_inspire_aria")}
                           disabled={!hasLlm || batchSummaryInspireBusy}
                           onClick={() => void onBatchSummaryInspire()}
                         >
@@ -2017,7 +2074,7 @@ export default function NovelWrite() {
                               />
                             </svg>
                           )}
-                          {showBatchInspireCta ? <span>生成后续灵感</span> : null}
+                          {showBatchInspireCta ? <span>{t("write_generate_batch_inspire")}</span> : null}
                         </button>
                       </div>
                       <textarea
@@ -2026,11 +2083,11 @@ export default function NovelWrite() {
                         rows={7}
                         value={batchSummary}
                         onChange={(e) => setBatchSummary(e.target.value)}
-                        placeholder="描述接下来几章的大体主线、冲突推进与阶段目标…"
+                        placeholder={t("write_batch_summary_placeholder")}
                       />
                     </div>
                     <div className="field" style={{ marginBottom: "1rem" }}>
-                      <label>生成模式</label>
+                      <label>{t("write_generate_mode")}</label>
                       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
                         <button
                           type="button"
@@ -2038,7 +2095,7 @@ export default function NovelWrite() {
                           onClick={() => setGenerateMode("foreground")}
                           style={{ flex: 1 }}
                         >
-                          前台生成（实时查看）
+                          {t("write_foreground_realtime")}
                         </button>
                         <button
                           type="button"
@@ -2046,12 +2103,12 @@ export default function NovelWrite() {
                           onClick={() => setGenerateMode("background")}
                           style={{ flex: 1 }}
                         >
-                          后台写作（可离开）
+                          {t("write_background_leave")}
                         </button>
                       </div>
                       {generateMode === "background" && (
                         <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-                          后台写作模式会在服务器后台执行批量生成任务，您可以离开页面去做其他事情，完成后可在「后台任务」页面查看结果。
+                          {t("write_background_batch_desc")}
                         </p>
                       )}
                     </div>
@@ -2061,7 +2118,7 @@ export default function NovelWrite() {
                       disabled={busy || !isLatestChapter}
                       onClick={generateMode === "background" ? () => void onBatchGenerateBackground() : onBatchGenerate}
                     >
-                      {busy ? "批量生成中…" : generateMode === "background" ? `提交后台任务（${batchChapterCount ?? 0} 章）` : `批量生成 ${batchChapterCount ?? 0} 章`}
+                      {busy ? t("write_batch_generating") : generateMode === "background" ? t("write_submit_background") : `${t("write_batch_generate_n")} ${batchChapterCount ?? 0} ${t("write_batch_generate_n_suffix")}`}
                     </button>
                     {generateMode === "foreground" && batchStreaming ? (
                       <pre className="write-generate-log">{batchStreaming}</pre>
@@ -2073,41 +2130,41 @@ export default function NovelWrite() {
 
             {rightTool === "rewrite" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">说明希望如何修改正文，将本章内容替换为模型输出。</p>
+                <p className="hint">{t("write_rewrite_hint")}</p>
                 <textarea
                   className="textarea"
                   rows={5}
                   value={rewriteInstr}
                   onChange={(e) => setRewriteInstr(e.target.value)}
-                  placeholder="例如：加强对话节奏、删去重复描写…"
+                  placeholder={t("write_rewrite_placeholder")}
                 />
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunRewrite}>
-                  {busy ? "处理中…" : "改写"}
+                  {busy ? t("write_processing") : t("write_rewrite")}
                 </button>
               </div>
             ) : null}
 
             {rightTool === "append" && activeId ? (
               <div className="write-ai-section">
-                <p className="hint">说明要在文末追加的内容。</p>
+                <p className="hint">{t("write_append_hint")}</p>
                 <textarea
                   className="textarea"
                   rows={5}
                   value={appendInstr}
                   onChange={(e) => setAppendInstr(e.target.value)}
-                  placeholder="例如：接一段回忆、补一场对话…"
+                  placeholder={t("write_append_placeholder")}
                 />
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunAppend}>
-                  {busy ? "处理中…" : "追加"}
+                  {busy ? t("write_processing") : t("write_append")}
                 </button>
               </div>
             ) : null}
 
             {rightTool === "naming" ? (
               <div className="write-ai-section">
-                <p className="hint">为人物、物品、功法等请求备选名称。</p>
+                <p className="hint">{t("write_naming_hint")}</p>
                 <div className="field">
-                  <label>类别</label>
+                  <label>{t("write_naming_category")}</label>
                   <select
                     className="input"
                     value={namingCategory}
@@ -2115,37 +2172,48 @@ export default function NovelWrite() {
                       setNamingCategory(e.target.value as typeof namingCategory)
                     }
                   >
-                    <option value="character">人物 / 角色</option>
-                    <option value="item">物品 / 器物</option>
-                    <option value="skill">功法 / 招式</option>
-                    <option value="other">其他</option>
+                    <option value="character">{t("write_naming_cat_character")}</option>
+                    <option value="item">{t("write_naming_cat_item")}</option>
+                    <option value="skill">{t("write_naming_cat_skill")}</option>
+                    <option value="other">{t("write_naming_cat_other")}</option>
                   </select>
                 </div>
                 <div className="field">
-                  <label>要命名的对象</label>
+                  <label>{t("write_naming_object")}</label>
                   <textarea
                     className="textarea"
                     rows={3}
                     value={namingDesc}
                     onChange={(e) => setNamingDesc(e.target.value)}
-                    placeholder="例如：擅长用毒的黑市药师；上古飞剑；火系入门功法…"
+                    placeholder={t("write_naming_object_placeholder")}
                   />
                 </div>
                 <div className="field">
-                  <label>补充（可选）</label>
+                  <label>{t("write_naming_hint_label")}</label>
                   <textarea
                     className="textarea textarea-compact"
                     rows={2}
                     value={namingHint}
                     onChange={(e) => setNamingHint(e.target.value)}
-                    placeholder="字数、风格、避讳…"
+                    placeholder={t("write_naming_hint_placeholder")}
                   />
                 </div>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunNaming}>
-                  {busy ? "生成中…" : "生成备选名"}
+                <button type="button" className="btn btn-primary" disabled={busy || namingBusy} onClick={onRunNaming}>
+                  {namingBusy ? t("write_generating") : t("write_naming_generate")}
                 </button>
-                {namingResult ? (
-                  <pre className="write-ai-naming-out">{namingResult}</pre>
+                {namingResult && namingResult.length > 0 ? (
+                  <div className="write-naming-results stack-sm" style={{ marginTop: "1rem" }}>
+                    {namingResult.map((name, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`write-naming-result-btn${namingSelectedIndex === idx ? " is-selected" : ""}`}
+                        onClick={() => setNamingSelectedIndex(idx)}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -2153,7 +2221,7 @@ export default function NovelWrite() {
             {rightTool === "evaluate" && activeId ? (
               <div className="write-ai-section">
                 <p className="hint">
-                AI评估本章内容
+                {t("write_evaluate_title")}
                 </p>
                 <p className="muted" style={{ margin: "0.25rem 0 0.75rem", fontSize: "0.82rem" }}>
                 </p>
@@ -2163,25 +2231,25 @@ export default function NovelWrite() {
                   disabled={evaluateBusy || busy}
                   onClick={() => void onRunEvaluate()}
                 >
-                  {evaluateBusy ? "评估中…" : "评估本章"}
+                  {evaluateBusy ? t("write_evaluating") : t("write_evaluate_chapter")}
                 </button>
                 {evaluateResult ? (
                   <div className="write-eval-block" style={{ marginTop: "1rem" }}>
-                    <div className="write-eval-score" aria-label="去 AI 化分数">
+                    <div className="write-eval-score" aria-label={t("write_deai_score_aria")}>
                       <span className="write-eval-score-num">{evaluateResult.de_ai_score}</span>
                       <span className="write-eval-score-denom">/ 100</span>
-                      <span className="muted write-eval-score-label">分数越高表示越接近自然人类创作</span>
+                      <span className="muted write-eval-score-label">{t("write_deai_score_desc")}</span>
                     </div>
                     {evaluateResult.issues.length === 0 ? (
                       <p className="muted" style={{ margin: "0.75rem 0 0", fontSize: "0.9rem" }}>
-                        未发现明显问题（或正文过短）。你可改写后再试。
+                        {t("write_evaluate_no_issues")}
                       </p>
                     ) : (
                       <ul className="write-eval-issues stack-sm" style={{ margin: "0.75rem 0 0", paddingLeft: "1.1rem" }}>
                         {evaluateResult.issues.map((it, i) => (
                           <li key={i} style={{ fontSize: "0.9rem" }}>
                             <strong>{it.aspect}</strong>
-                            <span className="muted"> — </span>
+                            <span className="muted">{t("write_eval_issue_separator")}</span>
                             {it.detail}
                           </li>
                         ))}
@@ -2197,7 +2265,7 @@ export default function NovelWrite() {
                 <div style={{ marginBottom: "1rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
                     <span className="muted" style={{ fontSize: "0.85rem" }}>
-                      本章节共有 {versions.length} 个历史版本
+                      {t("write_version_count").replace("{count}", String(versions.length))}
                     </span>
                     <button
                       type="button"
@@ -2206,17 +2274,17 @@ export default function NovelWrite() {
                       disabled={versionsLoading}
                       onClick={() => loadVersions()}
                     >
-                      刷新
+                      {t("common_refresh")}
                     </button>
                   </div>
                   
                   {versionsLoading ? (
                     <p className="muted" style={{ textAlign: "center", padding: "1rem" }}>
-                      加载版本列表中…
+                      {t("write_loading_versions")}
                     </p>
                   ) : versions.length === 0 ? (
                     <p className="muted" style={{ textAlign: "center", padding: "1rem" }}>
-                      暂无历史版本。当您修改章节内容后，系统会自动保存历史版本。
+                      {t("write_no_versions")}
                     </p>
                   ) : (
                     <div style={{ maxHeight: "400px", overflowY: "auto" }}>
@@ -2235,7 +2303,7 @@ export default function NovelWrite() {
                               <div style={{ flex: 1 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
                                   <strong style={{ fontSize: "0.9rem" }}>
-                                    版本 {v.version_number}
+                                    {t("write_version_n")} {v.version_number}
                                   </strong>
                                   <span
                                     className="version-type-badge"
@@ -2247,25 +2315,25 @@ export default function NovelWrite() {
                                       color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#1976d2" : "#666",
                                     }}
                                   >
-                                    {v.change_type === "manual" && "手动修改"}
-                                    {v.change_type === "ai_generate" && "AI生成"}
-                                    {v.change_type === "ai_rewrite" && "AI改写"}
-                                    {v.change_type === "ai_append" && "AI追加"}
-                                    {v.change_type === "selection_expand" && "AI扩写"}
-                                    {v.change_type === "selection_polish" && "AI润色"}
-                                    {v.change_type === "rollback" && "版本回滚"}
+                                    {v.change_type === "manual" && t("write_change_type_manual")}
+                                    {v.change_type === "ai_generate" && t("write_change_type_ai_generate")}
+                                    {v.change_type === "ai_rewrite" && t("write_change_type_ai_rewrite")}
+                                    {v.change_type === "ai_append" && t("write_change_type_ai_append")}
+                                    {v.change_type === "selection_expand" && t("write_change_type_selection_expand")}
+                                    {v.change_type === "selection_polish" && t("write_change_type_selection_polish")}
+                                    {v.change_type === "rollback" && t("write_change_type_rollback")}
                                   </span>
                                 </div>
                                 {v.title && (
                                   <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
-                                    标题: {v.title.length > 30 ? v.title.slice(0, 30) + "…" : v.title}
+                                    {t("write_version_title").replace("{title}", v.title.length > 30 ? v.title.slice(0, 30) + "…" : v.title)}
                                   </p>
                                 )}
                                 <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "#888" }}>
-                                  {new Date(v.created_at).toLocaleString("zh-CN")}
+                                  {new Date(v.created_at).toLocaleString()}
                                 </p>
                                 <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "#aaa" }}>
-                                  {v.content.replace(/\s/g, "").length} 字
+                                  {t("write_version_word_count").replace("{count}", String(v.content.replace(/\s/g, "").length))}
                                 </p>
                               </div>
                             </div>
@@ -2280,7 +2348,7 @@ export default function NovelWrite() {
                                     disabled={versionDiffLoading || versionActionLoading}
                                     onClick={() => compareSelectedVersionWithCurrent(v.id)}
                                   >
-                                    {versionDiffLoading ? "对比中…" : "与当前对比"}
+                                    {versionDiffLoading ? t("write_version_compare_loading") : t("write_version_compare_current")}
                                   </button>
                                   <button
                                     type="button"
@@ -2289,7 +2357,7 @@ export default function NovelWrite() {
                                     disabled={versionActionLoading}
                                     onClick={() => handleRollback(v.id, true)}
                                   >
-                                    回滚（保存当前）
+                                    {t("write_version_restore_save")}
                                   </button>
                                   <button
                                     type="button"
@@ -2298,7 +2366,7 @@ export default function NovelWrite() {
                                     disabled={versionActionLoading}
                                     onClick={() => handleRollback(v.id, false)}
                                   >
-                                    直接回滚
+                                    {t("write_version_restore_direct")}
                                   </button>
                                 </div>
                               </div>
@@ -2311,11 +2379,11 @@ export default function NovelWrite() {
                   
                   {versionDiff && (
                     <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
-                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>差异对比</h4>
+                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_diff_title")}</h4>
                       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", fontSize: "0.8rem" }}>
-                        <span style={{ color: "#4caf50" }}>+ 新增: {versionDiff.added_count} 行</span>
-                        <span style={{ color: "#f44336" }}>- 删除: {versionDiff.removed_count} 行</span>
-                        <span style={{ color: "#ff9800" }}>~ 修改: {versionDiff.changed_count} 行</span>
+                        <span style={{ color: "#4caf50" }}>{t("write_version_diff_added").replace("{count}", String(versionDiff.added_count))}</span>
+                        <span style={{ color: "#f44336" }}>{t("write_version_diff_removed").replace("{count}", String(versionDiff.removed_count))}</span>
+                        <span style={{ color: "#ff9800" }}>{t("write_version_diff_changed").replace("{count}", String(versionDiff.changed_count))}</span>
                       </div>
                       <div
                         className="version-diff-container"
@@ -2336,17 +2404,17 @@ export default function NovelWrite() {
                   
                   {selectedVersion && !versionDiff && (
                     <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
-                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>版本内容预览</h4>
+                      <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_preview_title")}</h4>
                       {selectedVersion.summary && (
                         <div style={{ marginBottom: "0.5rem" }}>
-                          <strong style={{ fontSize: "0.85rem" }}>概要:</strong>
+                          <strong style={{ fontSize: "0.85rem" }}>{t("write_version_summary")}</strong>
                           <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
                             {selectedVersion.summary}
                           </p>
                         </div>
                       )}
                       <div>
-                        <strong style={{ fontSize: "0.85rem" }}>正文:</strong>
+                        <strong style={{ fontSize: "0.85rem" }}>{t("write_version_content")}</strong>
                         <pre
                           style={{
                             margin: "0.25rem 0",
@@ -2374,7 +2442,7 @@ export default function NovelWrite() {
                 <div className="write-ai-messages">
                   {askHistory.length === 0 ? (
                     <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-                      围绕本书设定提问，例如结构、人物、节奏等。
+                      {t("write_ask_hint")}
                     </p>
                   ) : (
                     askHistory.map((m, i) => (
@@ -2394,7 +2462,7 @@ export default function NovelWrite() {
                     rows={2}
                     value={askInput}
                     onChange={(e) => setAskInput(e.target.value)}
-                    placeholder="输入问题…"
+                    placeholder={t("write_ask_placeholder")}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -2403,7 +2471,7 @@ export default function NovelWrite() {
                     }}
                   />
                   <button type="button" className="btn btn-primary" disabled={busy || !askInput.trim()} onClick={onAskSend}>
-                    发送
+                    {t("write_ask_send")}
                   </button>
                 </div>
               </div>
@@ -2416,7 +2484,7 @@ export default function NovelWrite() {
         <div
           className="write-selection-float"
           role="toolbar"
-          aria-label="选中文本 AI"
+          aria-label={t("write_selection_ai_aria")}
           style={{ top: selectionMenuPos.top, left: selectionMenuPos.left }}
         >
           <button
@@ -2432,7 +2500,7 @@ export default function NovelWrite() {
                 d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
               />
             </svg>
-            扩写
+            {t("write_selection_expand")}
           </button>
           <button
             type="button"
@@ -2455,7 +2523,7 @@ export default function NovelWrite() {
                 d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
               />
             </svg>
-            润色
+            {t("write_selection_polish")}
           </button>
         </div>
       )}
@@ -2474,13 +2542,13 @@ export default function NovelWrite() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="write-selection-card-title" className="write-selection-card__title">
-              {selectionPanel.mode === "expand" ? "AI 扩写" : "AI 润色"}
+              {selectionPanel.mode === "expand" ? t("write_selection_expand_title") : t("write_selection_polish_title")}
             </h2>
             <div className="write-selection-card__body">
-              {selectionPanel.streaming || (busy ? "生成中…" : "")}
+              {selectionPanel.streaming || (busy ? t("write_generating") : "")}
             </div>
             <p className="write-selection-card__disclaimer">
-              内容由 AI 生成，仅供参考；请自行核对后使用。
+              {t("write_selection_disclaimer")}
             </p>
             <div className="write-selection-card__actions">
               <button
@@ -2489,7 +2557,7 @@ export default function NovelWrite() {
                 disabled={busy || !selectionPanel.text.trim()}
                 onClick={applySelectionReplace}
               >
-                替换
+                {t("write_selection_replace")}
               </button>
               <button
                 type="button"
@@ -2497,17 +2565,17 @@ export default function NovelWrite() {
                 disabled={busy || !selectionPanel.text.trim()}
                 onClick={() => void copySelectionResult()}
               >
-                复制
+                {t("write_selection_copy")}
               </button>
               <button type="button" className="btn btn-ghost" onClick={closeSelectionPanel}>
-                退出
+                {t("write_selection_exit")}
               </button>
               <div className="write-selection-card__actions-right">
                 <button
                   type="button"
                   className="write-selection-icon-btn"
-                  title="重新生成"
-                  aria-label="重新生成"
+                  title={t("write_selection_regenerate")}
+                  aria-label={t("write_selection_regenerate")}
                   disabled={busy}
                   onClick={() =>
                     void runSelectionAi(selectionPanel.mode, {

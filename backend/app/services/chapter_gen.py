@@ -23,6 +23,8 @@ from app.services.chapter_llm import (
     list_existing_chapter_titles,
     messages_suggest_chapter_title,
 )
+from app.language import Language
+from app.prompts import get_prompt
 
 _BG_MAX = 2200
 _WRITING_STYLE_MAX = 700
@@ -75,6 +77,7 @@ def build_generation_prompt(
     *,
     fixed_title: str | None = None,
     word_count: int | None = None,
+    language: Language = "zh",
 ) -> tuple[str, str]:
     """构建章节生成的 system prompt 和 user prompt。
 
@@ -84,46 +87,26 @@ def build_generation_prompt(
 
     word_count_req = ""
     if word_count and 500 <= word_count <= 4000:
-        word_count_req = f"\n5. 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+        word_count_req = get_prompt("gen_word_count_req", language, count=word_count)
 
     if fixed_title:
-        system = f"""你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章正文。
-要求：
-1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
-2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
-3. JSON 只能有一个键 body，值为字符串：本章完整正文。
-4. 正文中不要写章节标题、章节号或「本章」等结构标签。
-5. 【重要】前文情节概要是已完成的内容，绝对不要重复或改写！本章必须续写全新的情节，推动故事向前发展。
-6. 【重要】不要复述前文情节，直接开始写本章的新内容。{word_count_req}"""
-
-        title_line = f"\n【本章标题（已定，勿写入正文）】{fixed_title.strip()}"
+        system = get_prompt("gen_system_fixed_title", language, word_count_req=word_count_req)
+        title_line = get_prompt("gen_title_line_fixed", language, title=fixed_title.strip())
     else:
-        system = f"""你是一位专业中文小说作者。请根据作品背景、已有章节语境与本章概要，创作本章。
-要求：
-1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
-2. 你必须只输出一个 JSON 对象（UTF-8），不要 markdown 代码块以外的解释文字。
-3. JSON 必须包含两个字符串键：title（章节标题，不超过15字，勿加书名号）与 body（本章完整正文）。
-4. 正文中不要写章节标题行、章节号或「本章」等结构标签。
-5. 【重要】前文情节概要是已完成的内容，绝对不要重复或改写！本章必须续写全新的情节，推动故事向前发展。
-6. 【重要】不要复述前文情节，直接开始写本章的新内容。{word_count_req}"""
+        system = get_prompt("gen_system_dynamic_title", language, word_count_req=word_count_req)
         title_line = ""
         if target_chapter and (target_chapter.title or "").strip():
-            title_line = f"\n【当前章节已有标题（可改写或沿用模型生成的 title）】{target_chapter.title.strip()}"
+            title_line = get_prompt("gen_title_line_existing", language, title=target_chapter.title.strip())
 
     context = memory.build_context(chapter_summary)
 
-    user = f"""{context}
-
-【本章任务】
-本章概要：{_clip(chapter_summary, _TASK_SUMMARY_MAX) or '（无）'}
-{title_line}
-
-【特别提醒】
-- 前文情节概要是已完成的内容，不要重复、不要改写、不要复述
-- 本章必须写全新的内容，推动故事向前发展
-- 直接开始写本章正文，不要有任何回顾前文的内容
-
-请严格按 system 要求的 JSON 结构输出。"""
+    summary_display = _clip(chapter_summary, _TASK_SUMMARY_MAX) or get_prompt("common_none", language)
+    user = (
+        context + "\n\n" +
+        get_prompt("gen_user_task", language, summary=summary_display) +
+        title_line + "\n\n" +
+        get_prompt("gen_user_warning", language)
+    )
 
     return system, user
 
@@ -139,6 +122,7 @@ def run_react_chapter_generation(
     max_iterations: int = 8,
     new_sort_order: int | None = None,
     word_count: int | None = None,
+    language: Language = "zh",
 ):
     """使用 ReAct Agent 执行章节生成（推理-工具-生成循环）。
 
@@ -159,36 +143,31 @@ def run_react_chapter_generation(
         GetPreviousChaptersTool(db, novel),
         GetCharacterProfilesTool(db, novel),
         GetNovelContextTool(db, novel),
-        GenerateChapterTool(db, novel, llm, word_count=word_count),
+        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language),
     ]
 
-    task = _build_react_task(chapter_summary, fixed_title, word_count=word_count)
+    task = _build_react_task(chapter_summary, fixed_title, word_count=word_count, language=language)
 
     agent = ReActAgent(llm, tools, max_iterations=max_iterations)
 
-    # 收集 chunks（流式输出为纯正文，过滤 think 标签）
     result_chunks: list[str] = []
     for chunk in filter_think_chunks(
         agent.run(
             task,
             stream=True,
-            fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count},
+            fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count, "language": language},
         )
     ):
         result_chunks.append(chunk)
-        yield chunk  # 实时流式 yield 给调用者
+        yield chunk
 
-    # run_stream() 输出纯正文，无需 JSON 解析
     body_text = _sanitize_generated_body("".join(result_chunks))
     
     if fixed_title is not None:
-        # 用户手动填写并锁定了标题
         title_out = fixed_title
     elif target_chapter and (target_chapter.title or "").strip():
-        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
         title_out = target_chapter.title.strip()
     else:
-        # 章节没有标题，需要生成
         title_out = _generate_chapter_title(
             db,
             llm,
@@ -196,6 +175,7 @@ def run_react_chapter_generation(
             target_chapter,
             chapter_summary=chapter_summary,
             body_text=body_text,
+            language=language,
         )
 
     if target_chapter is None:
@@ -226,27 +206,24 @@ def run_react_chapter_generation(
     yield ch
 
 
-def _build_react_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None) -> str:
+def _build_react_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None, *, language: Language = "zh") -> str:
     """构建 ReAct Agent 的任务描述。"""
-    title_req = f"本章标题已指定为「{fixed_title}」，请在生成正文时不要写入标题。" if fixed_title else "标题将在生成后自动提取或由用户指定。"
+    if fixed_title:
+        title_req = get_prompt("react_title_req_fixed", language, title=fixed_title)
+    else:
+        title_req = get_prompt("react_title_req_dynamic", language)
     
     word_count_req = ""
     if word_count and 500 <= word_count <= 4000:
-        word_count_req = f"\n- 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+        word_count_req = get_prompt("react_word_count_req", language, count=word_count)
     
-    return f"""请根据以下信息创作小说章节正文。
-
-【本章概要】
-{chapter_summary}
-
-【核心要求】
-- {title_req}
-- 正文应符合作品设定、文风和类型
-- 情节需与前文衔接自然，人物言行符合其设定
-- 请使用工具获取必要的上下文信息（作品设定、前文情节、人物设定）{word_count_req}
-
-【下一步】
-请调用工具获取上下文信息，然后生成正文。不要直接输出 Final。"""
+    return get_prompt(
+        "react_task_intro", 
+        language, 
+        summary=chapter_summary, 
+        title_req=title_req,
+        word_count_req=word_count_req
+    )
 
 
 def _sanitize_generated_body(raw: str) -> str:
@@ -291,6 +268,7 @@ def run_flexible_chapter_generation(
     timeout_seconds: float = 180.0,
     new_sort_order: int | None = None,
     word_count: int | None = None,
+    language: Language = "zh",
 ):
     """使用 FlexibleNovelAgent 执行章节生成。
 
@@ -317,11 +295,11 @@ def run_flexible_chapter_generation(
         GetPreviousChaptersTool(db, novel),
         GetCharacterProfilesTool(db, novel),
         GetNovelContextTool(db, novel),
-        GenerateChapterTool(db, novel, llm, word_count=word_count),
+        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language),
         FinishTool(),
     ]
 
-    task = _build_flexible_task(chapter_summary, fixed_title, word_count=word_count)
+    task = _build_flexible_task(chapter_summary, fixed_title, word_count=word_count, language=language)
 
     agent = FlexibleNovelAgent(
         llm, 
@@ -334,7 +312,7 @@ def run_flexible_chapter_generation(
     for chunk in agent.run(
         task,
         stream=True,
-        fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count},
+        fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count, "language": language},
     ):
         all_chunks.append(chunk)
         if not (chunk.startswith("[思考]") or chunk.startswith("[调用工具]") or chunk.startswith("[工具结果]") or chunk.startswith("[完成]") or chunk.startswith("[开始生成正文]") or chunk.startswith("[系统]") or chunk.startswith("[错误]")):
@@ -345,13 +323,10 @@ def run_flexible_chapter_generation(
     body_text = _sanitize_generated_body("".join(body_chunks))
     
     if fixed_title is not None:
-        # 用户手动填写并锁定了标题
         title_out = fixed_title
     elif target_chapter and (target_chapter.title or "").strip():
-        # 章节已有标题，沿用旧标题（不调用 LLM，节省时间）
         title_out = target_chapter.title.strip()
     else:
-        # 章节没有标题，需要生成
         title_out = _generate_chapter_title(
             db,
             llm,
@@ -359,6 +334,7 @@ def run_flexible_chapter_generation(
             target_chapter,
             chapter_summary=chapter_summary,
             body_text=body_text,
+            language=language,
         )
 
     if target_chapter is None:
@@ -389,39 +365,24 @@ def run_flexible_chapter_generation(
     yield ch
 
 
-def _build_flexible_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None) -> str:
+def _build_flexible_task(chapter_summary: str, fixed_title: str | None, word_count: int | None = None, *, language: Language = "zh") -> str:
     """构建 FlexibleNovelAgent 的任务描述。"""
-    title_req = f"本章标题已指定为「{fixed_title}」，请在生成正文时不要写入标题。" if fixed_title else "标题将在生成后自动提取或由用户指定。"
+    if fixed_title:
+        title_req = get_prompt("flexible_title_req_fixed", language, title=fixed_title)
+    else:
+        title_req = get_prompt("flexible_title_req_dynamic", language)
     
     word_count_req = ""
     if word_count and 500 <= word_count <= 4000:
-        word_count_req = f"\n- 正文长度尽量控制在 {word_count} 字左右（允许上下浮动 10%）。"
+        word_count_req = get_prompt("flexible_word_count_req", language, count=word_count)
     
-    return f"""请为小说创作本章正文。
-
-【本章概要】
-{chapter_summary}
-
-【任务目标】
-1. {title_req}
-2. 正文应符合作品设定、文风和类型。
-3. 情节需与前文衔接自然，人物言行符合其设定。
-4. 请根据需要调用工具获取必要的上下文信息（作品设定、前文情节、人物设定）。
-5. 在收集到足够的上下文信息后，调用 generate_chapter 工具生成正文。
-6. 生成正文后，调用 finish 工具完成任务。{word_count_req}
-
-【工作流程建议】
-虽然你可以自由决定行动顺序，但建议遵循以下流程：
-1. 调用 get_novel_context 获取作品基础设定
-2. 调用 get_previous_chapters 获取前文情节
-3. 调用 get_character_profiles 获取相关人物设定
-4. 调用 generate_chapter 生成章节正文
-5. 调用 finish 完成任务
-
-【重要规则】
-1. 只有在调用 generate_chapter 生成正文后，才能调用 finish
-2. 不要在没有生成正文的情况下就调用 finish
-3. 请确保你的输出始终是有效的 JSON 格式"""
+    return get_prompt(
+        "flexible_task_intro", 
+        language, 
+        summary=chapter_summary, 
+        title_req=title_req,
+        word_count_req=word_count_req
+    )
 
 
 def _generate_chapter_title(
@@ -432,6 +393,7 @@ def _generate_chapter_title(
     *,
     chapter_summary: str,
     body_text: str,
+    language: Language = "zh",
 ) -> str:
     if not body_text.strip():
         return (target_chapter.title or "").strip() if target_chapter else ""
@@ -448,9 +410,9 @@ def _generate_chapter_title(
         content=body_text,
         sort_order=target_chapter.sort_order if target_chapter else 0,
     )
-    system, user = messages_suggest_chapter_title(novel, candidate, existing_titles=existing_titles)
+    system, user = messages_suggest_chapter_title(novel, candidate, existing_titles=existing_titles, language=language)
     raw = "".join(filter_think_chunks(llm.stream_complete(system, user))).strip()
-    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles)
+    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles, language=language)
 
 
 def plan_batch_chapters(
@@ -461,6 +423,7 @@ def plan_batch_chapters(
     total_summary: str,
     chapter_count: int,
     after_chapter: Chapter | None = None,
+    language: Language = "zh",
 ) -> list[dict[str, str]]:
     memory = NovelMemory(db, novel)
     context = memory.build_context(total_summary)
@@ -470,31 +433,21 @@ def plan_batch_chapters(
         exclude_chapter_id=after_chapter.id if after_chapter else None,
     )
 
-    system = (
-        "你是资深中文长篇小说策划编辑。请把用户给出的后续总概要拆分成逐章计划。\n"
-        "【重要】禁止输出思考过程、推理步骤或 think 标签。\n"
-        "你必须只输出合法 JSON 对象，结构为 {\"chapters\": [{\"title\": \"...\", \"summary\": \"...\"}]}。\n"
-        "chapters 数组长度必须严格等于用户要求的章节数。\n"
-        "每章都要有不重复的标题与摘要；标题不得与已存在章节重名；summary 用 2～4 句概括本章主要推进。\n"
-        "当章节数较多时，要注意整体节奏递进，让前几章偏铺垫，中间推动冲突，结尾形成阶段性结果。"
+    system = get_prompt("batch_plan_system", language)
+    existing_block = "\n".join(f"- {t}" for t in existing_titles[:80]) or get_prompt("batch_plan_no_existing", language)
+    after_title = after_chapter.title.strip() if after_chapter and (after_chapter.title or "").strip() else get_prompt("batch_plan_current_chapter", language)
+    
+    total_summary_display = _clip(total_summary, _TASK_SUMMARY_MAX) or get_prompt("common_none", language)
+    user = (
+        context + "\n\n" +
+        get_prompt("batch_plan_user_existing", language, existing_titles=existing_block) +
+        get_prompt("batch_plan_user_position", language, after_title=after_title, chapter_count=chapter_count) +
+        get_prompt("batch_plan_user_summary", language, total_summary=total_summary_display) +
+        get_prompt("batch_plan_user_closing", language)
     )
-    existing_block = "\n".join(f"- {t}" for t in existing_titles[:80]) or "（无）"
-    after_title = after_chapter.title.strip() if after_chapter and (after_chapter.title or "").strip() else "当前章节"
-    user = f"""{context}
-
-【已有章节标题（禁止重名）】
-{existing_block}
-
-【生成位置】
-从《{after_title}》之后开始，连续规划 {chapter_count} 章。
-
-【后续总概要】
-{_clip(total_summary, _TASK_SUMMARY_MAX) or '（无）'}
-
-请严格输出 JSON。"""
 
     raw = "".join(filter_think_chunks(llm.stream_complete(system, user))).strip()
-    return _parse_batch_plan(raw, chapter_count=chapter_count, existing_titles=existing_titles)
+    return _parse_batch_plan(raw, chapter_count=chapter_count, existing_titles=existing_titles, language=language)
 
 
 def _parse_batch_plan(
@@ -502,6 +455,7 @@ def _parse_batch_plan(
     *,
     chapter_count: int,
     existing_titles: list[str] | None = None,
+    language: Language = "zh",
 ) -> list[dict[str, str]]:
     text = _strip_code_fence(raw)
     try:
@@ -519,11 +473,11 @@ def _parse_batch_plan(
             break
         if not isinstance(item, dict):
             continue
-        raw_title = finalize_suggested_title(str(item.get("title") or "").strip()) or f"第{i}章"
-        title = ensure_unique_chapter_title(raw_title, seen_titles)
+        raw_title = finalize_suggested_title(str(item.get("title") or "").strip()) or get_prompt("common_chapter", language, i=i)
+        title = ensure_unique_chapter_title(raw_title, seen_titles, language=language)
         summary = str(item.get("summary") or "").strip()
         if not summary:
-            summary = f"围绕后续主线推进第{i}章剧情，并与前文自然衔接。"
+            summary = get_prompt("batch_plan_default_summary", language, idx=i)
         plan.append({"title": title, "summary": summary})
         seen_titles.append(title)
 
@@ -532,11 +486,11 @@ def _parse_batch_plan(
 
     while len(plan) < chapter_count:
         idx = len(plan) + 1
-        title = ensure_unique_chapter_title(f"第{idx}章", seen_titles)
+        title = ensure_unique_chapter_title(get_prompt("common_chapter", language, i=idx), seen_titles, language=language)
         plan.append(
             {
                 "title": title,
-                "summary": f"承接后续总概要，推进第{idx}章剧情，并形成明确的场景与冲突。",
+                "summary": get_prompt("batch_plan_default_summary_alt", language, idx=idx),
             }
         )
         seen_titles.append(title)
@@ -555,6 +509,7 @@ def run_direct_chapter_generation(
     new_sort_order: int | None = None,
     word_count: int | None = None,
     save_to_db: bool = True,
+    language: Language = "zh",
 ) -> tuple[str, str] | tuple[str, str, Chapter]:
     """直接调用 LLM 生成章节，不经过 Agent 循环。
 
@@ -572,7 +527,7 @@ def run_direct_chapter_generation(
 
     system, user = build_generation_prompt(
         db, novel, chapter_summary, target_chapter,
-        fixed_title=fixed_title, word_count=word_count
+        fixed_title=fixed_title, word_count=word_count, language=language
     )
 
     raw = llm.complete(system, user)
@@ -587,7 +542,7 @@ def run_direct_chapter_generation(
     elif not title_out.strip():
         title_out = _generate_chapter_title(
             db, llm, novel, target_chapter,
-            chapter_summary=chapter_summary, body_text=body_text
+            chapter_summary=chapter_summary, body_text=body_text, language=language
         )
 
     if not save_to_db:
