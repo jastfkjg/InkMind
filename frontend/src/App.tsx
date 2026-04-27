@@ -14,6 +14,7 @@ import NovelWrite from "@/pages/NovelWrite";
 import Register from "@/pages/Register";
 import UsageDashboard from "@/pages/UsageDashboard";
 import AiSettings from "@/pages/AiSettings";
+import BackgroundTasks from "@/pages/BackgroundTasks";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AiSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks"
+        element={
+          <ProtectedRoute>
+            <BackgroundTasks />
           </ProtectedRoute>
         }
       />

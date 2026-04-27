@@ -23,6 +23,7 @@ import {
   SunOutlined,
   MoonOutlined,
   EyeOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import { apiErrorMessage, fetchNovel } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
@@ -100,6 +101,12 @@ export default function NovelLayout() {
       icon: <BarChartOutlined />,
       label: "Token 用量",
       onClick: () => nav("/usage"),
+    },
+    {
+      key: "tasks",
+      icon: <HistoryOutlined />,
+      label: "后台任务",
+      onClick: () => nav("/tasks"),
     },
     {
       key: "divider",

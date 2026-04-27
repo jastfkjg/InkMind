@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/favicon.png?v=2" width="128" alt="InkMind Logo"/>
+<img src="images/favicon.png?v=2" width="180" alt="InkMind Logo"/>
 
 # InkMind
 

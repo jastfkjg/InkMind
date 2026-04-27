@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { Chapter, ChapterVersion, ChapterVersionDiff, Character, LlmUsageSummary, Memo, Novel, User } from "@/types";
+import type { BackgroundTask, Chapter, ChapterVersion, ChapterVersionDiff, Character, CreateBatchTaskRequest, CreateSingleTaskRequest, LlmUsageSummary, Memo, Novel, TaskProgress, User } from "@/types";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
@@ -550,4 +550,64 @@ export async function rollbackChapterToVersion(
     { version_id: versionId, save_current: saveCurrent }
   );
   return data;
+}
+
+export async function fetchBackgroundTasks(options?: {
+  novelId?: number | null;
+  status?: string | null;
+  limit?: number;
+  offset?: number;
+}) {
+  const params = new URLSearchParams();
+  if (options?.novelId) params.append("novel_id", String(options.novelId));
+  if (options?.status) params.append("status", options.status);
+  if (options?.limit) params.append("limit", String(options.limit));
+  if (options?.offset) params.append("offset", String(options.offset));
+  
+  const query = params.toString();
+  const { data } = await api.get<BackgroundTask[]>(`/background-tasks${query ? `?${query}` : ""}`);
+  return data;
+}
+
+export async function fetchBackgroundTask(taskId: number) {
+  const { data } = await api.get<BackgroundTask>(`/background-tasks/${taskId}`);
+  return data;
+}
+
+export async function fetchTaskProgress(taskId: number): Promise<TaskProgress> {
+  const { data } = await api.get<TaskProgress>(`/background-tasks/${taskId}/progress`);
+  return data;
+}
+
+export async function createSingleBackgroundTask(payload: CreateSingleTaskRequest): Promise<BackgroundTask> {
+  const { data } = await api.post<BackgroundTask>("/background-tasks/single", {
+    novel_id: payload.novel_id,
+    chapter_id: payload.chapter_id ?? null,
+    title: payload.title?.trim() || null,
+    summary: payload.summary,
+    fixed_title: payload.fixed_title?.trim() || null,
+    word_count: (payload.word_count && payload.word_count >= 500 && payload.word_count <= 4000) ? payload.word_count : null,
+    task_type: payload.task_type || "single_chapter",
+  });
+  return data;
+}
+
+export async function createBatchBackgroundTask(payload: CreateBatchTaskRequest): Promise<BackgroundTask> {
+  const { data } = await api.post<BackgroundTask>("/background-tasks/batch", {
+    novel_id: payload.novel_id,
+    after_chapter_id: payload.after_chapter_id ?? null,
+    total_summary: payload.total_summary,
+    chapter_count: Math.max(1, Math.min(20, payload.chapter_count)),
+    word_count: (payload.word_count && payload.word_count >= 500 && payload.word_count <= 4000) ? payload.word_count : null,
+  });
+  return data;
+}
+
+export async function cancelBackgroundTask(taskId: number): Promise<BackgroundTask> {
+  const { data } = await api.post<BackgroundTask>(`/background-tasks/${taskId}/cancel`);
+  return data;
+}
+
+export async function deleteBackgroundTask(taskId: number): Promise<void> {
+  await api.delete(`/background-tasks/${taskId}`);
 }

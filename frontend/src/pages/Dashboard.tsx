@@ -31,6 +31,7 @@ import {
   MoonOutlined,
   EyeOutlined,
   SettingOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -145,6 +146,12 @@ export default function Dashboard() {
       icon: <BarChartOutlined />,
       label: "Token 用量",
       onClick: () => nav("/usage"),
+    },
+    {
+      key: "tasks",
+      icon: <HistoryOutlined />,
+      label: "后台任务",
+      onClick: () => nav("/tasks"),
     },
     {
       key: "divider",
@@ -471,7 +478,7 @@ export default function Dashboard() {
                                   transition: "color 0.3s ease",
                                 }}
                               >
-                                最后更新：{new Date(novel.updated_at).toLocaleString()}
+                                创建于：{new Date(novel.updated_at).toLocaleString()}
                               </Text>
                             </div>
                           }

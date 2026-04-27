@@ -100,3 +100,74 @@ export type ChapterVersionDiff = {
     updated_at: string;
   };
 };
+
+export type TaskStatus = "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export type TaskType = "single_chapter" | "batch_chapters" | "rewrite_chapter" | "append_chapter";
+
+export type TaskItem = {
+  id: number;
+  background_task_id: number;
+  chapter_id: number | null;
+  sort_order: number;
+  status: TaskStatus;
+  title: string | null;
+  summary: string | null;
+  generated_title: string | null;
+  generated_content: string | null;
+  error_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type BackgroundTask = {
+  id: number;
+  user_id: number;
+  novel_id: number;
+  task_type: TaskType;
+  status: TaskStatus;
+  title: string | null;
+  summary: string | null;
+  batch_count: number;
+  current_index: number;
+  completed_count: number;
+  error_message: string | null;
+  progress_message: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  total_tokens: number;
+  task_items: TaskItem[];
+};
+
+export type TaskProgress = {
+  task_id: number;
+  status: TaskStatus;
+  progress: number;
+  current_index: number;
+  completed_count: number;
+  batch_count: number;
+  progress_message: string | null;
+  error_message: string | null;
+  total_tokens: number;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type CreateSingleTaskRequest = {
+  novel_id: number;
+  chapter_id?: number | null;
+  title?: string | null;
+  summary: string;
+  fixed_title?: string | null;
+  word_count?: number | null;
+  task_type?: "single_chapter" | "rewrite_chapter" | "append_chapter";
+};
+
+export type CreateBatchTaskRequest = {
+  novel_id: number;
+  after_chapter_id?: number | null;
+  total_summary: string;
+  chapter_count: number;
+  word_count?: number | null;
+};

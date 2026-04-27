@@ -24,6 +24,8 @@ VersionChangeType = Literal[
 ]
 
 AgentMode = Literal["flexible", "react", "direct"]
+TaskStatus = Literal["pending", "running", "paused", "completed", "failed", "cancelled"]
+TaskType = Literal["single_chapter", "batch_chapters", "rewrite_chapter", "append_chapter"]
 
 
 class User(Base):
@@ -158,3 +160,64 @@ class LLMUsageEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="llm_usage_events")
+
+
+class BackgroundTask(Base):
+    __tablename__ = "background_tasks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    novel_id: Mapped[int] = mapped_column(ForeignKey("novels.id", ondelete="CASCADE"), index=True)
+    
+    task_type: Mapped[str] = mapped_column(String(32), default="single_chapter")
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    batch_plan_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    batch_count: Mapped[int] = mapped_column(Integer, default=1)
+    current_index: Mapped[int] = mapped_column(Integer, default=0)
+    completed_count: Mapped[int] = mapped_column(Integer, default=0)
+    
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress_message: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    
+    novel: Mapped["Novel"] = relationship("Novel")
+    task_items: Mapped[list["TaskItem"]] = relationship(
+        "TaskItem", 
+        back_populates="background_task", 
+        cascade="all, delete-orphan",
+        order_by="TaskItem.sort_order"
+    )
+
+
+class TaskItem(Base):
+    __tablename__ = "task_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    background_task_id: Mapped[int] = mapped_column(ForeignKey("background_tasks.id", ondelete="CASCADE"), index=True)
+    chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    generated_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    
+    background_task: Mapped["BackgroundTask"] = relationship("BackgroundTask", back_populates="task_items")
+    chapter: Mapped["Chapter | None"] = relationship("Chapter")

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   apiErrorMessage,
   compareVersionWithCurrent,
   confirmChapterGeneration,
   createChapter,
+  createSingleBackgroundTask,
+  createBatchBackgroundTask,
   deleteChapter,
   chapterSelectionAi,
   evaluateChapter,
@@ -211,6 +213,7 @@ function parseBatchChapterCountInput(value: string): number | null {
 export default function NovelWrite() {
   const { novelId } = useParams();
   const id = Number(novelId);
+  const nav = useNavigate();
   const { user } = useAuth();
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -264,6 +267,7 @@ export default function NovelWrite() {
   const [summaryInspireBusy, setSummaryInspireBusy] = useState(false);
   const [batchSummaryInspireBusy, setBatchSummaryInspireBusy] = useState(false);
   const [generateTab, setGenerateTab] = useState<GenerateTab>("single");
+  const [generateMode, setGenerateMode] = useState<"foreground" | "background">("foreground");
   const [singleGenerateTitle, setSingleGenerateTitle] = useState("");
   const [singleGenerateLockTitle, setSingleGenerateLockTitle] = useState(false);
   const [generateWordCount, setGenerateWordCount] = useState<number | null>(null);
@@ -1092,6 +1096,77 @@ export default function NovelWrite() {
     }
   }
 
+  async function onGenerateBackground() {
+    const nid = id;
+    const s = summary.trim();
+    if (!s) {
+      setErr("请填写本章概要");
+      return;
+    }
+    if (!activeId) return;
+    
+    setBusy(true);
+    setErr("");
+    try {
+      await createSingleBackgroundTask({
+        novel_id: nid,
+        chapter_id: activeId,
+        title: singleGenerateTitle.trim() || null,
+        summary: s,
+        fixed_title: singleGenerateLockTitle ? (singleGenerateTitle.trim() || null) : null,
+        word_count: generateWordCount,
+        task_type: hasBody ? "rewrite_chapter" : "single_chapter",
+      });
+      
+      nav("/tasks");
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onBatchGenerateBackground() {
+    const nid = id;
+    if (!activeId) return;
+    if (!isLatestChapter) {
+      setErr("批量生成仅支持从最新章节开始");
+      return;
+    }
+    if (!batchChapterCount) {
+      setErr("请填写 1 到 20 之间的生成章节数");
+      return;
+    }
+    const total = batchSummary.trim();
+    if (!total) {
+      setErr("请填写后续章节总概要");
+      return;
+    }
+    
+    setBusy(true);
+    setErr("");
+    try {
+      await flushSave();
+      if (novelIdRef.current !== nid) return;
+      
+      await createBatchBackgroundTask({
+        novel_id: nid,
+        after_chapter_id: activeId,
+        total_summary: total,
+        chapter_count: batchChapterCount,
+        word_count: generateWordCount,
+      });
+      
+      nav("/tasks");
+    } catch (e) {
+      if (novelIdRef.current === nid) {
+        setErr(apiErrorMessage(e));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onRunRewrite() {
     const nid = id;
     if (!activeId || !rewriteInstr.trim()) {
@@ -1784,8 +1859,39 @@ export default function NovelWrite() {
                         AI 会尽量接近指定字数，但不保证严格符合
                       </p>
                     </div>
-                    <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerate}>
-                      {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : "生成"}
+                    <div className="field" style={{ marginBottom: "1rem" }}>
+                      <label>生成模式</label>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                        <button
+                          type="button"
+                          className={`btn ${generateMode === "foreground" ? "btn-primary" : "btn-ghost"}`}
+                          onClick={() => setGenerateMode("foreground")}
+                          style={{ flex: 1 }}
+                        >
+                          前台生成（实时查看）
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn ${generateMode === "background" ? "btn-primary" : "btn-ghost"}`}
+                          onClick={() => setGenerateMode("background")}
+                          style={{ flex: 1 }}
+                        >
+                          后台写作（可离开）
+                        </button>
+                      </div>
+                      {generateMode === "background" && (
+                        <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
+                          后台写作模式会在服务器后台执行任务，您可以离开页面去做其他事情，完成后可在「后台任务」页面查看结果。
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy}
+                      onClick={generateMode === "background" ? () => void onGenerateBackground() : onGenerate}
+                    >
+                      {busy ? "生成中…" : hasBody ? "重新生成并覆盖" : generateMode === "background" ? "提交后台任务" : "生成"}
                     </button>
 
                     {previewResult ? (
@@ -1923,15 +2029,41 @@ export default function NovelWrite() {
                         placeholder="描述接下来几章的大体主线、冲突推进与阶段目标…"
                       />
                     </div>
+                    <div className="field" style={{ marginBottom: "1rem" }}>
+                      <label>生成模式</label>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                        <button
+                          type="button"
+                          className={`btn ${generateMode === "foreground" ? "btn-primary" : "btn-ghost"}`}
+                          onClick={() => setGenerateMode("foreground")}
+                          style={{ flex: 1 }}
+                        >
+                          前台生成（实时查看）
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn ${generateMode === "background" ? "btn-primary" : "btn-ghost"}`}
+                          onClick={() => setGenerateMode("background")}
+                          style={{ flex: 1 }}
+                        >
+                          后台写作（可离开）
+                        </button>
+                      </div>
+                      {generateMode === "background" && (
+                        <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
+                          后台写作模式会在服务器后台执行批量生成任务，您可以离开页面去做其他事情，完成后可在「后台任务」页面查看结果。
+                        </p>
+                      )}
+                    </div>
                     <button
                       type="button"
                       className="btn btn-primary"
                       disabled={busy || !isLatestChapter}
-                      onClick={onBatchGenerate}
+                      onClick={generateMode === "background" ? () => void onBatchGenerateBackground() : onBatchGenerate}
                     >
-                      {busy ? "批量生成中…" : `批量生成 ${batchChapterCount ?? 0} 章`}
+                      {busy ? "批量生成中…" : generateMode === "background" ? `提交后台任务（${batchChapterCount ?? 0} 章）` : `批量生成 ${batchChapterCount ?? 0} 章`}
                     </button>
-                    {batchStreaming ? (
+                    {generateMode === "foreground" && batchStreaming ? (
                       <pre className="write-generate-log">{batchStreaming}</pre>
                     ) : null}
                   </>
