@@ -37,11 +37,13 @@ import {
   UserOutlined,
   SettingOutlined,
   HistoryOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useNavigation } from "@/context/NavigationContext";
+import { useI18n } from "@/i18n";
 import { 
   apiErrorMessage, 
   fetchBackgroundTasks, 
@@ -54,45 +56,6 @@ import type { BackgroundTask, TaskProgress } from "@/types";
 const { Header, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
 
-function fmtTime(iso: string | null) {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
-}
-
-function getStatusInfo(status: string) {
-  const map: Record<string, { color: string; label: string; icon: React.ReactNode }> = {
-    pending: { color: "default", label: "等待中", icon: <ClockCircleOutlined /> },
-    running: { color: "processing", label: "运行中", icon: <PlayCircleOutlined spin /> },
-    paused: { color: "warning", label: "已暂停", icon: <PauseCircleOutlined /> },
-    completed: { color: "success", label: "已完成", icon: <CheckCircleOutlined /> },
-    failed: { color: "error", label: "失败", icon: <CloseCircleOutlined /> },
-    cancelled: { color: "default", label: "已取消", icon: <StopOutlined /> },
-  };
-  return map[status] || { color: "default", label: status, icon: null };
-}
-
-function getTaskTypeLabel(type: string) {
-  const map: Record<string, string> = {
-    single_chapter: "单章节",
-    batch_chapters: "批量章节",
-    rewrite_chapter: "改写章节",
-    append_chapter: "追加章节",
-  };
-  return map[type] || type;
-}
-
-function getTaskTypeColor(type: string) {
-  const map: Record<string, string> = {
-    single_chapter: "blue",
-    batch_chapters: "cyan",
-    rewrite_chapter: "orange",
-    append_chapter: "green",
-  };
-  return map[type] || "default";
-}
-
 interface TaskWithProgress extends BackgroundTask {
   progressData?: TaskProgress;
 }
@@ -100,6 +63,7 @@ interface TaskWithProgress extends BackgroundTask {
 export default function BackgroundTasksPage() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
   const { goBackSmart } = useNavigation();
   const [tasks, setTasks] = useState<TaskWithProgress[]>([]);
@@ -108,6 +72,46 @@ export default function BackgroundTasksPage() {
   const [selectedTask, setSelectedTask] = useState<TaskWithProgress | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const fmtTime = (iso: string | null) => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(isZh ? "zh-CN" : "en-US");
+  };
+
+  const getStatusInfo = (status: string) => {
+    const map: Record<string, { color: string; labelKey: string; icon: React.ReactNode }> = {
+      pending: { color: "default", labelKey: "tasks_status_pending", icon: <ClockCircleOutlined /> },
+      running: { color: "processing", labelKey: "tasks_status_running", icon: <PlayCircleOutlined spin /> },
+      paused: { color: "warning", labelKey: "tasks_status_paused", icon: <PauseCircleOutlined /> },
+      completed: { color: "success", labelKey: "tasks_status_completed", icon: <CheckCircleOutlined /> },
+      failed: { color: "error", labelKey: "tasks_status_failed", icon: <CloseCircleOutlined /> },
+      cancelled: { color: "default", labelKey: "tasks_status_cancelled", icon: <StopOutlined /> },
+    };
+    const info = map[status] || { color: "default", labelKey: status, icon: null };
+    return { ...info, label: t(info.labelKey) };
+  };
+
+  const getTaskTypeLabel = (type: string) => {
+    const map: Record<string, string> = {
+      single_chapter: "tasks_type_single",
+      batch_chapters: "tasks_type_batch",
+      rewrite_chapter: "tasks_type_rewrite",
+      append_chapter: "tasks_type_append",
+    };
+    return map[type] ? t(map[type]) : type;
+  };
+
+  const getTaskTypeColor = (type: string) => {
+    const map: Record<string, string> = {
+      single_chapter: "blue",
+      batch_chapters: "cyan",
+      rewrite_chapter: "orange",
+      append_chapter: "green",
+    };
+    return map[type] || "default";
+  };
 
   const loadTasks = useCallback(async () => {
     setErr("");
@@ -146,25 +150,40 @@ export default function BackgroundTasksPage() {
     return () => clearInterval(interval);
   }, [loadTasks]);
 
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
   const themeMenuItems = [
     {
       key: "light",
       icon: <SunOutlined />,
-      label: "日间",
+      label: t("theme_light"),
       onClick: () => setTheme("light"),
       disabled: theme === "light",
     },
     {
       key: "sepia",
       icon: <EyeOutlined />,
-      label: "护眼",
+      label: t("theme_sepia"),
       onClick: () => setTheme("sepia"),
       disabled: theme === "sepia",
     },
     {
       key: "dark",
       icon: <MoonOutlined />,
-      label: "夜间",
+      label: t("theme_dark"),
       onClick: () => setTheme("dark"),
       disabled: theme === "dark",
     },
@@ -174,19 +193,19 @@ export default function BackgroundTasksPage() {
     {
       key: "settings",
       icon: <SettingOutlined />,
-      label: "AI 设置",
+      label: t("nav_ai_settings"),
       onClick: () => nav("/settings"),
     },
     {
       key: "usage",
       icon: <BarChartOutlined />,
-      label: "Token 用量",
+      label: t("nav_usage"),
       onClick: () => nav("/usage"),
     },
     {
       key: "tasks",
       icon: <HistoryOutlined />,
-      label: "后台任务",
+      label: t("nav_background_tasks"),
       disabled: true,
     },
     {
@@ -196,7 +215,7 @@ export default function BackgroundTasksPage() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("nav_logout"),
       danger: true,
       onClick: () => logout(),
     },
@@ -252,7 +271,7 @@ export default function BackgroundTasksPage() {
 
   const columns = [
     {
-      title: "任务类型",
+      title: t("tasks_table_type"),
       dataIndex: "task_type" as const,
       key: "task_type",
       render: (type: string) => (
@@ -261,7 +280,7 @@ export default function BackgroundTasksPage() {
       width: 120,
     },
     {
-      title: "状态",
+      title: t("tasks_table_status"),
       dataIndex: "status" as const,
       key: "status",
       render: (status: string, record: TaskWithProgress) => {
@@ -288,13 +307,15 @@ export default function BackgroundTasksPage() {
       width: 180,
     },
     {
-      title: "进度",
+      title: t("tasks_table_progress"),
       key: "progress",
       render: (_: unknown, record: TaskWithProgress) => {
         if (record.batch_count > 1) {
           return (
             <Text type="secondary">
-              {record.completed_count} / {record.batch_count} 章
+              {t("common_progress_chapters")
+                .replace("{completed}", String(record.completed_count))
+                .replace("{total}", String(record.batch_count))}
             </Text>
           );
         }
@@ -303,7 +324,7 @@ export default function BackgroundTasksPage() {
       width: 100,
     },
     {
-      title: "进度消息",
+      title: t("tasks_table_progress_message"),
       dataIndex: "progress_message" as const,
       key: "progress_message",
       render: (msg: string | null, record: TaskWithProgress) => {
@@ -321,33 +342,33 @@ export default function BackgroundTasksPage() {
       width: 250,
     },
     {
-      title: "Token 消耗",
+      title: t("tasks_table_tokens"),
       dataIndex: "total_tokens" as const,
       key: "total_tokens",
       render: (n: number) => {
         if (n === 0) return <Text type="secondary">-</Text>;
         return (
           <Text strong style={{ fontFamily: "ui-monospace, monospace", color: primaryColor }}>
-            {new Intl.NumberFormat("zh-CN").format(n)}
+            {new Intl.NumberFormat(isZh ? "zh-CN" : "en-US").format(n)}
           </Text>
         );
       },
       width: 120,
     },
     {
-      title: "创建时间",
+      title: t("tasks_table_created"),
       dataIndex: "created_at" as const,
       key: "created_at",
       render: (time: string) => <Text type="secondary">{fmtTime(time)}</Text>,
       width: 180,
     },
     {
-      title: "操作",
+      title: t("tasks_table_actions"),
       key: "actions",
       render: (_: unknown, record: TaskWithProgress) => (
         <Space>
           <Button type="link" size="small" onClick={() => openDetail(record)}>
-            详情
+            {t("tasks_action_view")}
           </Button>
           {(record.status === "pending" || record.status === "running") && (
             <Button
@@ -356,7 +377,7 @@ export default function BackgroundTasksPage() {
               danger
               onClick={() => handleCancel(record.id)}
             >
-              取消
+              {t("tasks_action_cancel")}
             </Button>
           )}
           {record.status !== "pending" && record.status !== "running" && (
@@ -366,7 +387,7 @@ export default function BackgroundTasksPage() {
               danger
               onClick={() => setConfirmDeleteId(record.id)}
             >
-              删除
+              {t("tasks_action_delete")}
             </Button>
           )}
         </Space>
@@ -419,7 +440,7 @@ export default function BackgroundTasksPage() {
               transition: "color 0.3s ease",
             }}
           >
-            后台任务
+            {t("nav_background_tasks")}
           </Title>
           {runningCount > 0 && (
             <Badge count={runningCount} showZero>
@@ -435,7 +456,7 @@ export default function BackgroundTasksPage() {
             size="large"
             style={{ height: 40 }}
           >
-            返回
+            {t("nav_back")}
           </Button>
           <Button
             type="primary"
@@ -448,8 +469,22 @@ export default function BackgroundTasksPage() {
             size="large"
             style={{ height: 40 }}
           >
-            刷新
+            {t("common_refresh")}
           </Button>
+
+          <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={<GlobalOutlined />}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            >
+              {isZh ? "中文" : "EN"}
+            </Button>
+          </Dropdown>
 
           <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
             <Button
@@ -503,7 +538,7 @@ export default function BackgroundTasksPage() {
       >
         {err && (
           <Alert
-            message="加载失败"
+            message={t("common_load_failed")}
             description={err}
             type="error"
             showIcon
@@ -527,7 +562,7 @@ export default function BackgroundTasksPage() {
               <Statistic
                 title={
                   <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    运行中
+                    {t("tasks_stat_running")}
                   </Text>
                 }
                 value={runningCount}
@@ -549,7 +584,7 @@ export default function BackgroundTasksPage() {
               <Statistic
                 title={
                   <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    已完成
+                    {t("tasks_stat_completed")}
                   </Text>
                 }
                 value={completedCount}
@@ -571,7 +606,7 @@ export default function BackgroundTasksPage() {
               <Statistic
                 title={
                   <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    失败
+                    {t("tasks_stat_failed")}
                   </Text>
                 }
                 value={failedCount}
@@ -593,7 +628,7 @@ export default function BackgroundTasksPage() {
               <Statistic
                 title={
                   <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    总任务数
+                    {t("tasks_stat_total")}
                   </Text>
                 }
                 value={tasks.length}
@@ -623,11 +658,11 @@ export default function BackgroundTasksPage() {
                   transition: "color 0.3s ease",
                 }}
               >
-                任务列表
+                {t("tasks_list_title")}
               </Title>
               {runningCount > 0 && (
                 <Tag color="processing">
-                  每 3 秒自动刷新
+                  {t("tasks_auto_refresh")}
                 </Tag>
               )}
             </Space>
@@ -648,7 +683,7 @@ export default function BackgroundTasksPage() {
                     color: secondaryTextColor,
                   }}
                 >
-                  暂无后台任务。在写作页面选择「后台写作」模式即可创建任务。
+                  {t("tasks_empty_full_desc")}
                 </Text>
               </div>
             ) : (
@@ -659,7 +694,7 @@ export default function BackgroundTasksPage() {
                 pagination={{
                   pageSize: 20,
                   showSizeChanger: true,
-                  showTotal: (total) => `共 ${total} 条记录`,
+                  showTotal: (total) => t("tasks_total_records").replace("{total}", String(total)),
                   pageSizeOptions: ["10", "20", "50"],
                 }}
                 scroll={{ x: 1100 }}
@@ -673,7 +708,7 @@ export default function BackgroundTasksPage() {
         title={
           <Space>
             <Title level={4} style={{ margin: 0 }}>
-              任务详情
+              {t("tasks_details_title")}
             </Title>
             {selectedTask && (
               <Tag color={getStatusInfo(selectedTask.status).color}>
@@ -686,7 +721,7 @@ export default function BackgroundTasksPage() {
         onCancel={() => setDetailModalOpen(false)}
         footer={[
           <Button key="close" onClick={() => setDetailModalOpen(false)}>
-            关闭
+            {t("common_close")}
           </Button>,
         ]}
         width={700}
@@ -696,14 +731,14 @@ export default function BackgroundTasksPage() {
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  任务 ID
+                  {t("tasks_details_id")}
                 </Text>
                 <br />
                 <Text strong>{selectedTask.id}</Text>
               </Col>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  状态
+                  {t("tasks_details_status")}
                 </Text>
                 <br />
                 <Tag color={getStatusInfo(selectedTask.status).color}>
@@ -713,33 +748,33 @@ export default function BackgroundTasksPage() {
               </Col>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  创建时间
+                  {t("tasks_details_created")}
                 </Text>
                 <br />
                 <Text>{fmtTime(selectedTask.created_at)}</Text>
               </Col>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  开始时间
+                  {t("tasks_details_started")}
                 </Text>
                 <br />
                 <Text>{fmtTime(selectedTask.started_at)}</Text>
               </Col>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  完成时间
+                  {t("tasks_details_completed")}
                 </Text>
                 <br />
                 <Text>{fmtTime(selectedTask.completed_at)}</Text>
               </Col>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  消耗 Token
+                  {t("tasks_details_tokens")}
                 </Text>
                 <br />
                 <Text strong style={{ fontFamily: "ui-monospace, monospace" }}>
                   {selectedTask.total_tokens > 0
-                    ? new Intl.NumberFormat("zh-CN").format(selectedTask.total_tokens)
+                    ? new Intl.NumberFormat(isZh ? "zh-CN" : "en-US").format(selectedTask.total_tokens)
                     : "-"}
                 </Text>
               </Col>
@@ -747,7 +782,7 @@ export default function BackgroundTasksPage() {
 
             <div style={{ marginTop: "1.5rem" }}>
               <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                概要
+                {t("tasks_details_summary_label")}
               </Text>
               <br />
               <Paragraph ellipsis={{ rows: 3 }} style={{ marginTop: "0.25rem" }}>
@@ -758,7 +793,7 @@ export default function BackgroundTasksPage() {
             {selectedTask.progress_message && (
               <div style={{ marginTop: "1rem" }}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  进度消息
+                  {t("tasks_details_progress_message")}
                 </Text>
                 <br />
                 <Text style={{ marginTop: "0.25rem" }}>
@@ -769,7 +804,7 @@ export default function BackgroundTasksPage() {
 
             {selectedTask.error_message && (
               <Alert
-                message="错误信息"
+                message={t("tasks_details_error")}
                 description={selectedTask.error_message}
                 type="error"
                 showIcon
@@ -780,7 +815,9 @@ export default function BackgroundTasksPage() {
             {selectedTask.batch_count > 1 && selectedTask.task_items && selectedTask.task_items.length > 0 && (
               <div style={{ marginTop: "1.5rem" }}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                  章节列表 ({selectedTask.completed_count}/{selectedTask.batch_count})
+                  {t("tasks_details_chapters_list")
+                    .replace("{completed}", String(selectedTask.completed_count))
+                    .replace("{total}", String(selectedTask.batch_count))}
                 </Text>
                 <div
                   style={{
@@ -796,7 +833,7 @@ export default function BackgroundTasksPage() {
                       style={{ marginBottom: "0.5rem" }}
                       title={
                         <Space>
-                          <Text strong>第 {idx + 1} 章</Text>
+                          <Text strong>{t("tasks_details_chapter_num").replace("{n}", String(idx + 1))}</Text>
                           <Tag color={getStatusInfo(item.status).color}>
                             {getStatusInfo(item.status).label}
                           </Tag>
@@ -805,13 +842,13 @@ export default function BackgroundTasksPage() {
                     >
                       {item.generated_title && (
                         <div>
-                          <Text type="secondary">标题：</Text>
+                          <Text type="secondary">{t("tasks_details_chapter_title_label")}</Text>
                           <Text strong>{item.generated_title}</Text>
                         </div>
                       )}
                       {item.summary && (
                         <div>
-                          <Text type="secondary">概要：</Text>
+                          <Text type="secondary">{t("tasks_details_chapter_summary_label")}</Text>
                           <Text ellipsis>{item.summary}</Text>
                         </div>
                       )}
@@ -833,16 +870,16 @@ export default function BackgroundTasksPage() {
       </Modal>
 
       <Modal
-        title="确认删除"
+        title={t("tasks_delete_confirm_title")}
         open={confirmDeleteId !== null}
         onOk={() => confirmDeleteId !== null && void handleDelete(confirmDeleteId)}
         onCancel={() => setConfirmDeleteId(null)}
-        okText="删除"
-        cancelText="取消"
+        okText={t("tasks_action_delete")}
+        cancelText={t("common_cancel")}
         okButtonProps={{ danger: true }}
       >
         <Paragraph>
-          确定要删除这个后台任务吗？此操作不可恢复。
+          {t("tasks_delete_confirm_content")}
         </Paragraph>
       </Modal>
     </Layout>

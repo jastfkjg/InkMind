@@ -11,21 +11,25 @@ import {
   Row,
   Col,
   message,
+  Dropdown,
 } from "antd";
 import {
   UserOutlined,
   LockOutlined,
   BookOutlined,
   SmileOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import { apiErrorMessage } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { Content } = Layout;
 
 export default function Register() {
   const { user, register } = useAuth();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -34,6 +38,19 @@ export default function Register() {
   useEffect(() => {
     if (user) nav("/", { replace: true });
   }, [user, nav]);
+
+  const languageMenuItems = [
+    {
+      key: "zh",
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
 
   const onFinish = async (values: {
     email: string;
@@ -44,7 +61,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(values.email, values.password, values.displayName);
-      message.success("注册成功！");
+      message.success(t("register_success"));
       nav("/", { replace: true });
     } catch (ex) {
       setErrorMsg(apiErrorMessage(ex));
@@ -64,6 +81,21 @@ export default function Register() {
         `,
       }}
     >
+      <div
+        style={{
+          position: "absolute",
+          top: "1rem",
+          right: "1rem",
+          zIndex: 100,
+        }}
+      >
+        <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+          <Button type="text" icon={<GlobalOutlined />} size="large">
+            {isZh ? "中文" : "EN"}
+          </Button>
+        </Dropdown>
+      </div>
+
       <Content
         style={{
           display: "flex",
@@ -98,7 +130,7 @@ export default function Register() {
                     fontSize: "2.25rem",
                   }}
                 >
-                  InkMind
+                  {t("app_name")}
                 </Title>
               </div>
               <Title
@@ -111,7 +143,7 @@ export default function Register() {
                   fontSize: "1.5rem",
                 }}
               >
-                开启你的创作之旅
+                {t("register_welcome_subtitle")}
               </Title>
               <Text
                 style={{
@@ -120,8 +152,7 @@ export default function Register() {
                   lineHeight: 1.8,
                 }}
               >
-                加入 InkMind，让 AI 成为你的创作伙伴。智能生成章节、改写内容、评估文本，
-                让你的故事从想象变为现实。
+                {t("register_welcome_desc")}
               </Text>
             </div>
           </Col>
@@ -150,16 +181,16 @@ export default function Register() {
                     color: "#1c1917",
                   }}
                 >
-                  创建账户
+                  {t("register_title")}
                 </Title>
                 <Text type="secondary" style={{ fontSize: "0.9rem" }}>
-                  注册一个新账户，开始你的创作之旅
+                  {t("register_subtitle")}
                 </Text>
               </div>
 
               {errorMsg && (
                 <Alert
-                  message="注册失败"
+                  message={t("register_failed")}
                   description={errorMsg}
                   type="error"
                   showIcon
@@ -176,15 +207,15 @@ export default function Register() {
               >
                 <Form.Item
                   name="email"
-                  label="邮箱地址"
+                  label={t("register_email")}
                   rules={[
-                    { required: true, message: "请输入邮箱地址" },
-                    { type: "email", message: "请输入有效的邮箱地址" },
+                    { required: true, message: t("validation_email_required") },
+                    { type: "email", message: t("validation_email_invalid") },
                   ]}
                 >
                   <Input
                     prefix={<UserOutlined style={{ color: "#78716c" }} />}
-                    placeholder="请输入邮箱地址"
+                    placeholder={t("register_email_placeholder")}
                     autoComplete="email"
                     style={{ height: 44 }}
                   />
@@ -192,15 +223,15 @@ export default function Register() {
 
                 <Form.Item
                   name="password"
-                  label="密码"
+                  label={t("register_password")}
                   rules={[
-                    { required: true, message: "请输入密码" },
-                    { min: 6, message: "密码至少需要 6 位" },
+                    { required: true, message: t("validation_password_required") },
+                    { min: 6, message: t("validation_password_min").replace("{min}", "6") },
                   ]}
                 >
                   <Input.Password
                     prefix={<LockOutlined style={{ color: "#78716c" }} />}
-                    placeholder="请输入密码（至少 6 位）"
+                    placeholder={t("register_password_placeholder")}
                     autoComplete="new-password"
                     style={{ height: 44 }}
                   />
@@ -208,11 +239,11 @@ export default function Register() {
 
                 <Form.Item
                   name="displayName"
-                  label="用户名（可选）"
+                  label={t("register_display_name")}
                 >
                   <Input
                     prefix={<SmileOutlined style={{ color: "#78716c" }} />}
-                    placeholder="请输入用户名（可选）"
+                    placeholder={t("register_display_name_placeholder")}
                     style={{ height: 44 }}
                   />
                 </Form.Item>
@@ -230,7 +261,7 @@ export default function Register() {
                       fontWeight: 600,
                     }}
                   >
-                    创建账户
+                    {t("register_button")}
                   </Button>
                 </Form.Item>
               </Form>
@@ -243,7 +274,7 @@ export default function Register() {
                   paddingTop: "1.5rem",
                 }}
               >
-                <Text type="secondary">已有账户？</Text>{" "}
+                <Text type="secondary">{t("register_has_account")}</Text>{" "}
                 <Link
                   to="/login"
                   style={{
@@ -252,7 +283,7 @@ export default function Register() {
                     textDecoration: "none",
                   }}
                 >
-                  立即登录
+                  {t("register_login_now")}
                 </Link>
               </div>
             </Card>

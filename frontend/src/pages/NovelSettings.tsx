@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 import { apiErrorMessage, updateNovel } from "@/api/client";
 import type { Novel } from "@/types";
+import { useI18n } from "@/i18n";
 
 type Ctx = { novel: Novel | null; setNovel: React.Dispatch<React.SetStateAction<Novel | null>> };
 
@@ -31,6 +32,7 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 export default function NovelSettings() {
+  const { t } = useI18n();
   const { novelId } = useParams();
   const id = Number(novelId);
   const { novel, setNovel } = useOutletContext<Ctx>();
@@ -66,8 +68,8 @@ export default function NovelSettings() {
         writing_style: values.writingStyle || "",
       });
       setNovel(n);
-      message.success("作品设定已保存");
-      setSuccessMsg("作品设定已保存");
+      message.success(t("settings_success"));
+      setSuccessMsg(t("settings_success"));
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (e) {
       setErrorMsg(apiErrorMessage(e));
@@ -106,7 +108,7 @@ export default function NovelSettings() {
               type="secondary"
               style={{ marginLeft: "1rem", fontSize: "1rem" }}
             >
-              加载作品信息…
+              {t("loading_novel_info")}
             </Text>
           </div>
         </Card>
@@ -140,17 +142,17 @@ export default function NovelSettings() {
                 color: "#1c1917",
               }}
             >
-              作品设定
+              {t("settings_title")}
             </Title>
           </div>
         }
         extra={
-          <Text type="secondary">管理作品的基础信息</Text>
+          <Text type="secondary">{t("manage_novel_basic_info")}</Text>
         }
       >
         {successMsg && (
           <Alert
-            message="保存成功"
+            message={t("save_success_title")}
             description={successMsg}
             type="success"
             showIcon
@@ -160,7 +162,7 @@ export default function NovelSettings() {
 
         {errorMsg && (
           <Alert
-            message="保存失败"
+            message={t("save_error_title")}
             description={errorMsg}
             type="error"
             showIcon
@@ -185,7 +187,7 @@ export default function NovelSettings() {
             title={
               <Space>
                 <BookOutlined style={{ color: "#7c2d12" }} />
-                <span>基本信息</span>
+                <span>{t("settings_general")}</span>
               </Space>
             }
             style={{
@@ -200,14 +202,14 @@ export default function NovelSettings() {
                   name="title"
                   label={
                     <Space>
-                      <span>作品名称</span>
+                      <span>{t("novel_title")}</span>
                       <span style={{ color: "#ff4d4f" }}>*</span>
                     </Space>
                   }
-                  rules={[{ required: true, message: "请输入作品名称" }]}
+                  rules={[{ required: true, message: t("please_enter_novel_title") }]}
                 >
                   <Input
-                    placeholder="输入作品名称"
+                    placeholder={t("enter_novel_title_placeholder")}
                     size="large"
                     prefix={<BookOutlined style={{ color: "#78716c" }} />}
                     style={{ height: 44 }}
@@ -219,8 +221,8 @@ export default function NovelSettings() {
                   name="genre"
                   label={
                     <Space>
-                      <span>类型</span>
-                      <AntdTooltip title="帮助 AI 更好地理解你的创作风格">
+                      <span>{t("novel_genre")}</span>
+                      <AntdTooltip title={t("genre_tooltip")}>
                         <QuestionCircleOutlined
                           style={{ color: "#78716c", cursor: "help" }}
                         />
@@ -229,7 +231,7 @@ export default function NovelSettings() {
                   }
                 >
                   <Input
-                    placeholder="例如：科幻、武侠、言情、悬疑…"
+                    placeholder={t("genre_placeholder")}
                     size="large"
                     style={{ height: 44 }}
                   />
@@ -243,7 +245,7 @@ export default function NovelSettings() {
             title={
               <Space>
                 <EditOutlined style={{ color: "#7c2d12" }} />
-                <span>创作风格与背景</span>
+                <span>{t("writing_style_and_background")}</span>
               </Space>
             }
             style={{
@@ -256,8 +258,8 @@ export default function NovelSettings() {
               name="writingStyle"
               label={
                 <Space>
-                  <span>写作风格</span>
-                  <AntdTooltip title="描述你希望的写作风格，AI 会参考这些信息进行创作">
+                  <span>{t("writing_style")}</span>
+                  <AntdTooltip title={t("writing_style_tooltip")}>
                     <QuestionCircleOutlined
                       style={{ color: "#78716c", cursor: "help" }}
                     />
@@ -267,7 +269,7 @@ export default function NovelSettings() {
             >
               <TextArea
                 rows={2}
-                placeholder="例如：第三人称、细腻心理描写、节奏偏慢、幽默风格…"
+                placeholder={t("writing_style_placeholder")}
                 style={{
                   minHeight: 60,
                   lineHeight: 1.8,
@@ -279,8 +281,8 @@ export default function NovelSettings() {
               name="background"
               label={
                 <Space>
-                  <span>背景设定</span>
-                  <AntdTooltip title="这是 AI 生成内容时的重要参考。简洁明了地描述故事发生的世界">
+                  <span>{t("background_setting")}</span>
+                  <AntdTooltip title={t("background_tooltip")}>
                     <QuestionCircleOutlined
                       style={{ color: "#78716c", cursor: "help" }}
                     />
@@ -290,7 +292,7 @@ export default function NovelSettings() {
             >
               <TextArea
                 rows={3}
-                placeholder="例如：时代、地点、世界观、核心矛盾…（宜短，不必写全书大纲）"
+                placeholder={t("background_placeholder")}
                 style={{
                   minHeight: 80,
                   lineHeight: 1.8,
@@ -300,8 +302,8 @@ export default function NovelSettings() {
           </Card>
 
           <Alert
-            message="小提示"
-            description="完善的作品设定可以帮助 AI 生成更符合你期望的内容。建议至少填写作品类型和简要的背景设定。"
+            message={t("tip_title")}
+            description={t("tip_description")}
             type="info"
             showIcon
             icon={<BulbOutlined />}
@@ -323,7 +325,7 @@ export default function NovelSettings() {
                 paddingRight: 32,
               }}
             >
-              保存设定
+              {t("settings_save")}
             </Button>
           </Form.Item>
         </Form>

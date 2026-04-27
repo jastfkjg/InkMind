@@ -24,10 +24,12 @@ import {
   MoonOutlined,
   EyeOutlined,
   HistoryOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import { apiErrorMessage, fetchNovel } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useI18n } from "@/i18n";
 import type { Novel } from "@/types";
 
 const { Header, Content } = Layout;
@@ -40,6 +42,7 @@ export default function NovelLayout() {
   const loc = useLocation();
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
 
   const peopleTabActive = loc.pathname.startsWith(`/novels/${id}/people`);
   const memosTabActive = loc.pathname.startsWith(`/novels/${id}/memos`);
@@ -65,25 +68,40 @@ export default function NovelLayout() {
     return null;
   }
 
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
   const themeMenuItems = [
     {
       key: "light",
       icon: <SunOutlined />,
-      label: "日间",
+      label: t("theme_light"),
       onClick: () => setTheme("light"),
       disabled: theme === "light",
     },
     {
       key: "sepia",
       icon: <EyeOutlined />,
-      label: "护眼",
+      label: t("theme_sepia"),
       onClick: () => setTheme("sepia"),
       disabled: theme === "sepia",
     },
     {
       key: "dark",
       icon: <MoonOutlined />,
-      label: "夜间",
+      label: t("theme_dark"),
       onClick: () => setTheme("dark"),
       disabled: theme === "dark",
     },
@@ -93,19 +111,19 @@ export default function NovelLayout() {
     {
       key: "settings",
       icon: <SettingOutlined />,
-      label: "AI 设置",
+      label: t("nav_ai_settings"),
       onClick: () => nav("/settings"),
     },
     {
       key: "usage",
       icon: <BarChartOutlined />,
-      label: "Token 用量",
+      label: t("nav_usage"),
       onClick: () => nav("/usage"),
     },
     {
       key: "tasks",
       icon: <HistoryOutlined />,
-      label: "后台任务",
+      label: t("nav_background_tasks"),
       onClick: () => nav("/tasks"),
     },
     {
@@ -115,7 +133,7 @@ export default function NovelLayout() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("nav_logout"),
       danger: true,
       onClick: () => {
         logout();
@@ -129,7 +147,7 @@ export default function NovelLayout() {
       label: (
         <Space>
           <SettingOutlined />
-          <span>设定</span>
+          <span>{t("novel_tab_settings")}</span>
         </Space>
       ),
     },
@@ -138,7 +156,7 @@ export default function NovelLayout() {
       label: (
         <Space>
           <EditOutlined />
-          <span>写作</span>
+          <span>{t("novel_tab_write")}</span>
         </Space>
       ),
     },
@@ -147,7 +165,7 @@ export default function NovelLayout() {
       label: (
         <Space>
           <TeamOutlined />
-          <span>人物</span>
+          <span>{t("novel_tab_people")}</span>
         </Space>
       ),
     },
@@ -156,7 +174,7 @@ export default function NovelLayout() {
       label: (
         <Space>
           <FileTextOutlined />
-          <span>备忘</span>
+          <span>{t("novel_tab_memos")}</span>
         </Space>
       ),
     },
@@ -231,7 +249,7 @@ export default function NovelLayout() {
             onClick={() => nav("/")}
             size="large"
           >
-            返回
+            {t("nav_back")}
           </Button>
 
           {novel && (
@@ -245,7 +263,7 @@ export default function NovelLayout() {
                   transition: "color 0.3s ease",
                 }}
               >
-                {novel.title || "未命名作品"}
+                {novel.title || t("novel_untitled")}
               </Title>
               {novel.genre && (
                 <Tag color="blue" style={{ margin: 0 }}>
@@ -265,6 +283,20 @@ export default function NovelLayout() {
         </div>
 
         <Space size="small">
+          <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={<GlobalOutlined />}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            >
+              {isZh ? "中文" : "EN"}
+            </Button>
+          </Dropdown>
+
           <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
             <Button
               type="text"
@@ -310,7 +342,7 @@ export default function NovelLayout() {
       {err && (
         <div style={{ padding: "0 1.5rem", paddingTop: "1rem" }}>
           <Alert
-            message="操作失败"
+            message={t("operation_failed_title")}
             description={err}
             type="error"
             showIcon

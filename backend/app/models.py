@@ -45,6 +45,7 @@ class User(Base):
     enable_auto_audit: Mapped[bool] = mapped_column(Boolean, default=True)
     preview_before_save: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_audit_min_score: Mapped[int] = mapped_column(Integer, default=60)
+    ai_language: Mapped[str | None] = mapped_column(String(8), nullable=True, default=None)
 
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
     llm_usage_events: Mapped[list["LLMUsageEvent"]] = relationship(

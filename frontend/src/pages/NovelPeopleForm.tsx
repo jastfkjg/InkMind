@@ -25,11 +25,13 @@ import {
 } from "@ant-design/icons";
 import NovelAiNamingAskDock from "@/components/NovelAiNamingAskDock";
 import { apiErrorMessage, createCharacter, fetchCharacters, updateCharacter } from "@/api/client";
+import { useI18n } from "@/i18n";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 export default function NovelPeopleForm() {
+  const { t } = useI18n();
   const { novelId, characterId } = useParams();
   const id = Number(novelId);
   const cid = characterId ? Number(characterId) : NaN;
@@ -49,7 +51,7 @@ export default function NovelPeopleForm() {
         const list = await fetchCharacters(id);
         const c = list.find((x) => x.id === cid);
         if (!c) {
-          setErrorMsg("找不到该人物");
+          setErrorMsg(t("peopleform_character_not_found"));
           return;
         }
         form.setFieldsValue({
@@ -63,7 +65,7 @@ export default function NovelPeopleForm() {
         setLoading(false);
       }
     })();
-  }, [id, cid, isEdit, form]);
+  }, [id, cid, isEdit, form, t]);
 
   const onFinish = async (values: {
     name: string;
@@ -79,14 +81,14 @@ export default function NovelPeopleForm() {
           profile: values.profile || "",
           notes: values.notes || "",
         });
-        message.success("人物信息已保存");
+        message.success(t("peopleform_saved"));
       } else {
         await createCharacter(id, {
           name: values.name,
           profile: values.profile || "",
           notes: values.notes || "",
         });
-        message.success("人物已添加");
+        message.success(t("peopleform_added"));
       }
       nav(`/novels/${id}/people`);
     } catch (e) {
@@ -126,7 +128,7 @@ export default function NovelPeopleForm() {
               type="secondary"
               style={{ marginLeft: "1rem", fontSize: "1rem" }}
             >
-              加载人物信息…
+              {t("peopleform_loading_character")}
             </Text>
           </div>
         </Card>
@@ -160,10 +162,10 @@ export default function NovelPeopleForm() {
                 color: "#1c1917",
               }}
             >
-              {isEdit ? "编辑人物" : "新建人物"}
+              {isEdit ? t("peopleform_edit_character") : t("peopleform_new_character")}
             </Title>
             <Tag color={isEdit ? "blue" : "green"}>
-              {isEdit ? "编辑模式" : "新建模式"}
+              {isEdit ? t("peopleform_edit_mode") : t("peopleform_new_mode")}
             </Tag>
           </div>
         }
@@ -172,13 +174,13 @@ export default function NovelPeopleForm() {
             icon={<ArrowLeftOutlined />}
             onClick={() => nav(`/novels/${id}/people`)}
           >
-            返回列表
+            {t("peopleform_back_to_list")}
           </Button>
         }
       >
         {errorMsg && (
           <Alert
-            message="操作失败"
+            message={t("operation_failed_title")}
             description={errorMsg}
             type="error"
             showIcon
@@ -202,7 +204,7 @@ export default function NovelPeopleForm() {
             title={
               <Space>
                 <InfoCircleOutlined style={{ color: "#7c2d12" }} />
-                <span>基本信息</span>
+                <span>{t("peopleform_basic_info")}</span>
               </Space>
             }
             style={{
@@ -215,8 +217,8 @@ export default function NovelPeopleForm() {
               name="name"
               label={
                 <Space>
-                  <span>人物姓名</span>
-                  <AntdTooltip title="这是人物的核心标识，AI 会在生成内容时参考这个名字">
+                  <span>{t("peopleform_character_name")}</span>
+                  <AntdTooltip title={t("peopleform_name_tooltip")}>
                     <QuestionCircleOutlined
                       style={{ color: "#78716c", cursor: "help" }}
                     />
@@ -224,10 +226,10 @@ export default function NovelPeopleForm() {
                   <span style={{ color: "#ff4d4f" }}>*</span>
                 </Space>
               }
-              rules={[{ required: true, message: "请输入人物姓名" }]}
+              rules={[{ required: true, message: t("peopleform_name_required") }]}
             >
               <Input
-                placeholder="例如：林清风、叶听雨…"
+                placeholder={t("peopleform_name_placeholder")}
                 size="large"
                 prefix={<UserOutlined style={{ color: "#78716c" }} />}
                 style={{ height: 44 }}
@@ -240,7 +242,7 @@ export default function NovelPeopleForm() {
             title={
               <Space>
                 <UserOutlined style={{ color: "#7c2d12" }} />
-                <span>人物设定</span>
+                <span>{t("peopleform_character_profile")}</span>
               </Space>
             }
             style={{
@@ -253,25 +255,19 @@ export default function NovelPeopleForm() {
               name="profile"
               label={
                 <Space>
-                  <span>性格与设定</span>
-                  <AntdTooltip title="详细描述人物的性格、外貌、背景、习惯等。这是 AI 保持人物一致性的关键参考">
+                  <span>{t("peopleform_personality")}</span>
+                  <AntdTooltip title={t("peopleform_personality_tooltip")}>
                     <QuestionCircleOutlined
                       style={{ color: "#78716c", cursor: "help" }}
                     />
                   </AntdTooltip>
-                  <Tag color="default">可选</Tag>
+                  <Tag color="default">{t("peopleform_optional")}</Tag>
                 </Space>
               }
             >
               <TextArea
                 rows={5}
-                placeholder={`例如：
-- 性格：冷静理智，外冷内热
-- 外貌：黑发黑眸，气质清冷
-- 背景：出身书香门第，自幼饱读诗书
-- 习惯：思考时喜欢轻敲桌面
-
-越详细的设定，AI 生成的人物形象越一致。`}
+                placeholder={t("peopleform_personality_placeholder")}
                 style={{
                   minHeight: 120,
                   lineHeight: 1.8,
@@ -285,7 +281,7 @@ export default function NovelPeopleForm() {
             title={
               <Space>
                 <InfoCircleOutlined style={{ color: "#7c2d12" }} />
-                <span>补充信息</span>
+                <span>{t("peopleform_additional_info")}</span>
               </Space>
             }
             style={{
@@ -298,24 +294,19 @@ export default function NovelPeopleForm() {
               name="notes"
               label={
                 <Space>
-                  <span>其他描述</span>
-                  <AntdTooltip title="用于记录人物的补充信息，如人际关系、隐藏身份、口头禅等">
+                  <span>{t("peopleform_other_notes")}</span>
+                  <AntdTooltip title={t("peopleform_notes_tooltip")}>
                     <QuestionCircleOutlined
                       style={{ color: "#78716c", cursor: "help" }}
                     />
                   </AntdTooltip>
-                  <Tag color="default">可选</Tag>
+                  <Tag color="default">{t("peopleform_optional")}</Tag>
                 </Space>
               }
             >
               <TextArea
                 rows={3}
-                placeholder={`例如：
-- 与主角的关系：青梅竹马
-- 隐藏身份：某个神秘组织的成员
-- 口头禅："凡事都有代价。"
-
-可以记录任何你不想放在主要设定中的补充信息。`}
+                placeholder={t("peopleform_notes_placeholder")}
                 style={{
                   minHeight: 80,
                   lineHeight: 1.8,
@@ -325,8 +316,8 @@ export default function NovelPeopleForm() {
           </Card>
 
           <Alert
-            message="小提示"
-            description="完善的人物设定可以帮助 AI 生成更一致、更生动的角色形象。建议至少填写人物的核心性格特征。"
+            message={t("peopleform_tip_title")}
+            description={t("peopleform_tip_content")}
             type="info"
             showIcon
             style={{ marginBottom: "1.5rem" }}
@@ -348,7 +339,7 @@ export default function NovelPeopleForm() {
                     fontWeight: 600,
                   }}
                 >
-                  {isEdit ? "保存修改" : "添加人物"}
+                  {isEdit ? t("peopleform_save_changes") : t("peopleform_add_character")}
                 </Button>
               </Col>
               <Col xs={24} sm={12}>
@@ -363,7 +354,7 @@ export default function NovelPeopleForm() {
                     fontSize: "1rem",
                   }}
                 >
-                  取消
+                  {t("peopleform_cancel")}
                 </Button>
               </Col>
             </Row>

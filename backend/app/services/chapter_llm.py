@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.llm.base import LLMProvider
 from app.models import Chapter, Novel
+from app.language import Language
+from app.prompts import get_prompt
 
 _REVISE_CONTENT_MAX = 10000
 _APPEND_EXISTING_MAX = 12000
@@ -21,57 +23,57 @@ def messages_selection_ai(
     chapter_content_full: str,
     selected_text: str,
     mode: Literal["expand", "polish"],
+    language: Language = "zh",
 ) -> tuple[str, str]:
     """选区扩写 / 润色。chapter_content_full 为当前编辑器中的章节全文。"""
     sel = (selected_text or "").strip()[:_SELECTION_MAX]
-    overview = (
-        f"【作品】{novel.title or '未命名'}\n"
-        f"【类型】{novel.genre or '未指定'}\n"
-        f"【文风】{(novel.writing_style or '未指定')[:1600]}\n"
-        f"【章节标题】{chapter.title or '（无）'}\n"
-        f"【本章概要】\n{(chapter.summary or '（无）')[:2000]}\n"
+    
+    title = novel.title or get_prompt("common_untitled", language)
+    genre = novel.genre or get_prompt("common_unspecified", language)
+    writing_style = novel.writing_style or get_prompt("common_unspecified", language)
+    chapter_title = chapter.title or get_prompt("common_none", language)
+    chapter_summary = chapter.summary or get_prompt("common_none", language)
+    
+    overview = get_prompt(
+        "selection_overview", 
+        language, 
+        title=title, 
+        genre=genre, 
+        writing_style=writing_style[:1600],
+        chapter_title=chapter_title,
+        chapter_summary=chapter_summary[:2000]
     )
+    
     full_ctx = (chapter_content_full or "").strip()[:_SELECTION_CTX_MAX]
+    full_ctx_display = full_ctx or get_prompt("common_none", language)
+    
     if mode == "expand":
-        system = (
-            "你是小说作者。用户选中了文中一段文字，请对其进行扩写。"
-            "保持与全书类型、文风一致、情节连贯；增加细节、描写或节奏，使片段更丰满。"
-            "只输出扩写后的正文片段，不要解释、不要前后缀、不要引用说明。"
+        system = get_prompt("selection_expand_system", language)
+        user_msg = (
+            overview +
+            get_prompt("selection_full_context", language, context=full_ctx_display) +
+            get_prompt("selection_selected", language, selected=sel) +
+            get_prompt("selection_expand_closing", language)
         )
-        user_msg = f"""{overview}
-【全文节选供上下文参考】
-{full_ctx or '（无）'}
-
-【选中片段】
-{sel}
-
-请只输出扩写后的正文片段，不要包含标题或说明。"""
     else:
-        system = (
-            "你是小说编辑。用户选中了文中一段文字，请对其进行润色。"
-            "保持原意与叙事节奏，优化句式、用词与节奏；避免口水套话与模板化表达。"
-            "只输出润色后的正文片段，不要解释、不要前后缀。"
+        system = get_prompt("selection_polish_system", language)
+        user_msg = (
+            overview +
+            get_prompt("selection_full_context", language, context=full_ctx_display) +
+            get_prompt("selection_selected", language, selected=sel) +
+            get_prompt("selection_polish_closing", language)
         )
-        user_msg = f"""{overview}
-【全文节选供上下文参考】
-{full_ctx or '（无）'}
-
-【选中片段】
-{sel}
-
-请只输出润色后的正文片段。"""
     return system, user_msg
 
 
-def summarize_chapter_body(llm: LLMProvider, title: str, content: str) -> str:
-    system = (
-        "你是文学编辑。请用尽量简短的 1～4 句简体中文概括本章正文要点，"
-        "不要加标题、编号或引号，不要评价文笔。"
-    )
+def summarize_chapter_body(llm: LLMProvider, title: str, content: str, *, language: Language = "zh") -> str:
+    system = get_prompt("summarize_body_system", language)
     body = (content or "").strip()
     if not body:
         return ""
-    user_msg = f"章节标题：{title or '（无）'}\n\n正文：\n{body[:_SUMMARY_INPUT_MAX]}"
+    
+    title_display = title or get_prompt("common_none", language)
+    user_msg = get_prompt("summarize_body_user", language, title=title_display, content=body[:_SUMMARY_INPUT_MAX])
     return llm.complete(system, user_msg).strip()
 
 
@@ -79,23 +81,23 @@ def messages_revise_chapter_body(
     novel: Novel,
     chapter: Chapter,
     instruction: str,
+    *,
+    language: Language = "zh",
 ) -> tuple[str, str]:
-    system = (
-        "你是小说作者与编辑。根据用户的修改要求，改写本章正文。"
-        "保持与作品类型、文风及前文语境一致；只输出改写后的完整正文，不要前言或解释。"
-    )
+    system = get_prompt("revise_system", language)
     ct = (chapter.content or "")[:_REVISE_CONTENT_MAX]
-    user_msg = f"""【类型】{novel.genre or '未指定'}
-【文风】{(novel.writing_style or '未指定')[:1600]}
-【章节标题】{chapter.title or '（无）'}
-
-【当前正文】
-{ct or '（空）'}
-
-【修改要求】
-{instruction.strip()}
-
-请输出修改后的完整正文。"""
+    
+    genre = novel.genre or get_prompt("common_unspecified", language)
+    writing_style = novel.writing_style or get_prompt("common_unspecified", language)
+    chapter_title = chapter.title or get_prompt("common_none", language)
+    content_display = ct or get_prompt("revise_empty_note", language)
+    
+    user_msg = (
+        get_prompt("revise_user_intro", language, genre=genre, writing_style=writing_style[:1600], chapter_title=chapter_title) +
+        get_prompt("revise_user_current", language, content=content_display) +
+        get_prompt("revise_user_instruction", language, instruction=instruction.strip()) +
+        get_prompt("revise_user_closing", language)
+    )
     return system, user_msg
 
 
@@ -104,8 +106,10 @@ def revise_chapter_body(
     novel: Novel,
     chapter: Chapter,
     instruction: str,
+    *,
+    language: Language = "zh",
 ) -> str:
-    s, u = messages_revise_chapter_body(novel, chapter, instruction)
+    s, u = messages_revise_chapter_body(novel, chapter, instruction, language=language)
     return llm.complete(s, u).strip()
 
 
@@ -113,24 +117,27 @@ def messages_append_chapter_body(
     novel: Novel,
     chapter: Chapter,
     instruction: str,
+    *,
+    language: Language = "zh",
 ) -> tuple[str, str]:
-    system = (
-        "你是小说作者。根据用户要求，在现有正文之后撰写新增内容。"
-        "保持与作品类型、文风一致；不要复述或重复已有段落。"
-        "只输出要追加的新正文，不要包含「已有正文」中的句子。"
-    )
+    system = get_prompt("append_system", language)
     existing = (chapter.content or "").strip()[:_APPEND_EXISTING_MAX]
-    user_msg = f"""【类型】{novel.genre or '未指定'}
-【文风】{(novel.writing_style or '未指定')[:1600]}
-【章节标题】{chapter.title or '（无）'}
-
-【已有正文】
-{existing or '（尚无正文，请直接按下列要求撰写开篇段落）'}
-
-【追加要求】
-{instruction.strip()}
-
-请只输出要接在文末的新增正文。"""
+    
+    genre = novel.genre or get_prompt("common_unspecified", language)
+    writing_style = novel.writing_style or get_prompt("common_unspecified", language)
+    chapter_title = chapter.title or get_prompt("common_none", language)
+    
+    if not existing:
+        existing_display = get_prompt("append_user_empty", language)
+    else:
+        existing_display = existing
+    
+    user_msg = (
+        get_prompt("append_user_intro", language, genre=genre, writing_style=writing_style[:1600], chapter_title=chapter_title) +
+        get_prompt("append_user_existing", language, content=existing_display) +
+        get_prompt("append_user_instruction", language, instruction=instruction.strip()) +
+        get_prompt("append_user_closing", language)
+    )
     return system, user_msg
 
 
@@ -139,8 +146,10 @@ def append_chapter_body(
     novel: Novel,
     chapter: Chapter,
     instruction: str,
+    *,
+    language: Language = "zh",
 ) -> str:
-    s, u = messages_append_chapter_body(novel, chapter, instruction)
+    s, u = messages_append_chapter_body(novel, chapter, instruction, language=language)
     addition = llm.complete(s, u).strip()
     existing = (chapter.content or "").strip()
     if not existing:
@@ -154,25 +163,30 @@ def messages_suggest_chapter_title(
     hint: str = "",
     *,
     existing_titles: list[str] | None = None,
+    language: Language = "zh",
 ) -> tuple[str, str]:
-    system = (
-        "你是文学编辑。请根据作品信息与本章内容，给出唯一一个合适的章节标题。"
-        "标题不得与本书已有章节标题重复。"
-        "只输出标题本身：不超过18个汉字，不要书名号、引号、编号或任何解释。"
-    )
+    system = get_prompt("title_suggest_system", language)
+    
     excerpt = (chapter.content or "").strip()
     if len(excerpt) > _SUGGEST_EXCERPT_MAX:
         excerpt = excerpt[:_SUGGEST_EXCERPT_MAX] + "…"
+    
     hint_s = (hint or "").strip()
-    existing_block = "\n".join(f"- {t}" for t in (existing_titles or [])[:50]) or "（无）"
-    user_msg = f"""【作品】{novel.title or '未命名'}
-【类型】{novel.genre or '未指定'}
-【已有章节标题（禁止重名）】
-{existing_block}
-【本章摘要】{(chapter.summary or '（无）')[:800]}
-【本章正文节选】
-{excerpt or '（尚无正文）'}
-【用户补充说明】{hint_s or '（无）'}"""
+    existing_block = "\n".join(f"- {t}" for t in (existing_titles or [])[:50]) or get_prompt("batch_plan_no_existing", language)
+    
+    title = novel.title or get_prompt("common_untitled", language)
+    genre = novel.genre or get_prompt("common_unspecified", language)
+    summary = chapter.summary or get_prompt("common_none", language)
+    excerpt_display = excerpt or get_prompt("title_suggest_no_content", language)
+    hint_display = hint_s or get_prompt("common_none", language)
+    
+    user_msg = (
+        get_prompt("title_suggest_user_intro", language, title=title, genre=genre) +
+        get_prompt("title_suggest_user_existing", language, existing_titles=existing_block) +
+        get_prompt("title_suggest_user_summary", language, summary=summary[:800]) +
+        get_prompt("title_suggest_user_excerpt", language, excerpt=excerpt_display) +
+        get_prompt("title_suggest_user_hint", language, hint=hint_display)
+    )
     return system, user_msg
 
 
@@ -210,14 +224,14 @@ def list_existing_chapter_titles(
     return out
 
 
-def ensure_unique_chapter_title(title: str, existing_titles: list[str] | None = None) -> str:
-    candidate = (title or "").strip() or "新章"
+def ensure_unique_chapter_title(title: str, existing_titles: list[str] | None = None, *, language: Language = "zh") -> str:
+    candidate = (title or "").strip() or get_prompt("common_new_chapter", language)
     existing_titles = existing_titles or []
     existing_norm = {_normalize_title(t) for t in existing_titles if (t or "").strip()}
     if _normalize_title(candidate) not in existing_norm:
         return candidate[:512]
 
-    base = re.sub(r"[（(]\d+[)）]\s*$", "", candidate).strip() or "新章"
+    base = re.sub(r"[（(]\d+[)）]\s*$", "", candidate).strip() or get_prompt("common_new_chapter", language)
     n = 2
     while True:
         deduped = f"{base}（{n}）"
@@ -239,7 +253,8 @@ def suggest_chapter_title(
     hint: str = "",
     *,
     existing_titles: list[str] | None = None,
+    language: Language = "zh",
 ) -> str:
-    s, u = messages_suggest_chapter_title(novel, chapter, hint, existing_titles=existing_titles)
+    s, u = messages_suggest_chapter_title(novel, chapter, hint, existing_titles=existing_titles, language=language)
     raw = llm.complete(s, u).strip()
-    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles)
+    return ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles, language=language)

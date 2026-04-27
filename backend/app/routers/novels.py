@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
+from app.language import Language
 from app.llm.llm_errors import LLMRequestError
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
@@ -71,6 +72,7 @@ def novel_ai_chat(
     body: NovelAiChatIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
@@ -78,7 +80,7 @@ def novel_ai_chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置任何 LLM API Key",
         )
-    system, user_msg = novel_writing_chat_messages(novel, body.message, body.history)
+    system, user_msg = novel_writing_chat_messages(novel, body.message, body.history, language=language)
 
     def gen():
         try:
@@ -107,6 +109,7 @@ def novel_ai_naming(
     body: NovelNamingIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
@@ -114,7 +117,7 @@ def novel_ai_naming(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置任何 LLM API Key",
         )
-    system, user_msg = novel_naming_messages(novel, body)
+    system, user_msg = novel_naming_messages(novel, body, language=language)
 
     def gen():
         try:
@@ -143,6 +146,7 @@ def novel_ai_chapter_summary_inspire_ep(
     body: NovelChapterSummaryInspireIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
@@ -170,6 +174,7 @@ def novel_ai_chapter_summary_inspire_ep(
         novel,
         previous,
         chapter_count=body.chapter_count,
+        language=language,
     )
 
     def gen():

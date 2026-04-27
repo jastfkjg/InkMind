@@ -12,6 +12,7 @@ export type User = {
   enable_auto_audit?: boolean;
   preview_before_save?: boolean;
   auto_audit_min_score?: number;
+  ai_language?: string | null;
 };
 
 export type Novel = {

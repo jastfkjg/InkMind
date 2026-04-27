@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
+from app.language import Language
 from app.llm.llm_errors import LLMRequestError
+from app.prompts import get_prompt
 from app.llm.metered_llm import llm_usage_session
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, normalize_provider_name, resolve_llm_for_user
@@ -86,6 +88,7 @@ def generate_chapter(
     body: ChapterGenerateIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
@@ -131,12 +134,12 @@ def generate_chapter(
                 ch: Chapter | None = None
 
                 if agent_mode == "direct":
-                    yield ndjson_line({"t": "[直接模式] 正在生成章节...\n"})
+                    yield ndjson_line({"t": get_prompt("stream_direct_mode", language)})
                     with ai_span("chapter.generate.direct", novel_id=novel_id):
                         result = run_direct_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            save_to_db=save_to_db
+                            save_to_db=save_to_db, language=language
                         )
                         if save_to_db:
                             title_out, body_text, ch = result  # type: ignore
@@ -144,12 +147,12 @@ def generate_chapter(
                             title_out, body_text = result  # type: ignore
 
                 elif agent_mode == "react":
-                    yield ndjson_line({"t": "[ReAct模式] 正在生成章节...\n"})
+                    yield ndjson_line({"t": get_prompt("stream_react_mode", language)})
                     with ai_span("chapter.generate.react_agent", novel_id=novel_id):
                         result = run_react_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations
+                            max_iterations=max_iterations, language=language
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -167,12 +170,12 @@ def generate_chapter(
                         body_text = _sanitize_generated_body("".join(body_parts))
 
                 else:
-                    yield ndjson_line({"t": "[Flexible模式] 正在生成章节...\n"})
+                    yield ndjson_line({"t": get_prompt("stream_flexible_mode", language)})
                     with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
                         result = run_flexible_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations
+                            max_iterations=max_iterations, language=language
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -193,7 +196,7 @@ def generate_chapter(
                 needs_revision = False
 
                 if enable_auto_audit and body_text.strip():
-                    yield ndjson_line({"t": "\n[自动审核] 正在评估内容质量...\n"})
+                    yield ndjson_line({"t": get_prompt("stream_auto_audit", language)})
                     try:
                         eval_buf: list[str] = []
                         with ai_span("chapter.auto_evaluate", novel_id=novel_id):
@@ -203,6 +206,7 @@ def generate_chapter(
                                 title=title_out or "",
                                 summary=body.summary.strip(),
                                 content=body_text,
+                                language=language,
                             )):
                                 eval_buf.append(part)
                                 yield ndjson_line({"t": part})
@@ -212,9 +216,9 @@ def generate_chapter(
 
                         if evaluate_result.de_ai_score < auto_audit_min_score:
                             needs_revision = True
-                            yield ndjson_line({"t": f"\n[提示] 内容评分（{evaluate_result.de_ai_score}分）低于阈值（{auto_audit_min_score}分），建议修改后保存。\n"})
+                            yield ndjson_line({"t": get_prompt("stream_score_warning", language, score=evaluate_result.de_ai_score, threshold=auto_audit_min_score)})
                     except Exception as e:
-                        yield ndjson_line({"t": f"\n[警告] 自动审核失败: {str(e)}\n"})
+                        yield ndjson_line({"t": get_prompt("stream_audit_failed", language, error=str(e))})
 
                 if preview_before_save:
                     preview_out = ChapterPreviewOut(
@@ -291,6 +295,7 @@ def generate_chapter_batch(
     body: ChapterBatchGenerateIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
@@ -328,7 +333,7 @@ def generate_chapter_batch(
 
             generated: list[Chapter] = []
             try:
-                yield ndjson_line({"t": f"正在规划接下来 {body.chapter_count} 章...\n"})
+                yield ndjson_line({"t": get_prompt("stream_planning_chapters", language, count=body.chapter_count)})
                 start_from_current = anchor is not None and not (anchor.content or "").strip()
                 plan_anchor = None if start_from_current else anchor
                 with ai_span("chapter.generate_batch.plan", novel_id=novel_id):
@@ -339,6 +344,7 @@ def generate_chapter_batch(
                         total_summary=body.total_summary.strip(),
                         chapter_count=body.chapter_count,
                         after_chapter=plan_anchor,
+                        language=language,
                     )
 
                 insert_order = (anchor.sort_order + (0 if start_from_current else 1)) if anchor is not None else (
@@ -355,7 +361,7 @@ def generate_chapter_batch(
                     db.commit()
 
                 for idx, item in enumerate(plan, start=1):
-                    yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 正在生成《{item['title']}》...\n"})
+                    yield ndjson_line({"t": get_prompt("stream_generating_chapter", language, current=idx, total=body.chapter_count, title=item['title'])})
                     target_chapter = anchor if start_from_current and idx == 1 else None
                     sort_order = None if target_chapter is not None else insert_order + idx - (1 if start_from_current else 0)
                     result = run_flexible_chapter_generation(
@@ -367,6 +373,7 @@ def generate_chapter_batch(
                         fixed_title=item["title"],
                         new_sort_order=sort_order,
                         word_count=word_count,
+                        language=language,
                     )
                     created: Chapter | None = None
                     for piece in result:
@@ -374,7 +381,7 @@ def generate_chapter_batch(
                             created = piece
                     if created is not None:
                         generated.append(created)
-                        yield ndjson_line({"t": f"[{idx}/{body.chapter_count}] 已完成《{created.title}》\n"})
+                        yield ndjson_line({"t": get_prompt("stream_chapter_done", language, current=idx, total=body.chapter_count, title=created.title)})
 
                 yield ndjson_line(
                     {"chapters": [ChapterOut.model_validate(ch).model_dump(mode="json") for ch in generated]}
@@ -400,6 +407,7 @@ def suggest_title_for_chapter(
     body: ChapterSuggestTitleIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     if not list_available_providers():
@@ -417,6 +425,7 @@ def suggest_title_for_chapter(
         ch,
         body.hint or "",
         existing_titles=existing_titles,
+        language=language,
     )
 
     def gen():
@@ -455,6 +464,7 @@ def ai_evaluate_chapter(
     body: ChapterEvaluateIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     """根据当前章节（可选用编辑器未保存内容）给出弱点与去 AI 化分数。"""
     novel = _get_owned_novel(db, user.id, novel_id)
@@ -498,6 +508,7 @@ def ai_evaluate_chapter(
                     title=title_eff or "",
                     summary=summary_eff or "",
                     content=content_eff or "",
+                    language=language,
                 )):
                     buf.append(part)
                     yield ndjson_line({"t": part})
@@ -539,6 +550,7 @@ def selection_ai(
     body: ChapterSelectionAiIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     """正文选区：扩写或润色（NDJSON 流 + 最终 text）。"""
     novel = _get_owned_novel(db, user.id, novel_id)
@@ -579,6 +591,7 @@ def selection_ai(
             chapter_content_full=body.chapter_content,
             selected_text=body.selected_text,
             mode=body.mode,
+            language=language,
         )
         buf: list[str] = []
         try:
@@ -612,6 +625,7 @@ def revise_chapter(
     body: ChapterReviseIn,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
+    language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
     available = list_available_providers()
@@ -651,7 +665,7 @@ def revise_chapter(
         
         try:
             if mode_eff == "append":
-                sys_a, usr_a = messages_append_chapter_body(novel, ch, body.instruction)
+                sys_a, usr_a = messages_append_chapter_body(novel, ch, body.instruction, language=language)
                 buf: list[str] = []
                 with ai_span("chapter.revise.append_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
                     for part in filter_think_chunks(llm.stream_complete(sys_a, usr_a)):
@@ -661,7 +675,7 @@ def revise_chapter(
                 existing = (ch.content or "").strip()
                 new_content = addition if not existing else existing.rstrip() + "\n\n" + addition
             else:
-                sys_r, usr_r = messages_revise_chapter_body(novel, ch, body.instruction)
+                sys_r, usr_r = messages_revise_chapter_body(novel, ch, body.instruction, language=language)
                 buf2: list[str] = []
                 with ai_span("chapter.revise.rewrite_stream_complete", novel_id=novel_id, chapter_id=chapter_id):
                     for part in filter_think_chunks(llm.stream_complete(sys_r, usr_r)):

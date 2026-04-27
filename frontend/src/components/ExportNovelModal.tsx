@@ -11,6 +11,7 @@ import {
   sortChaptersForExport,
   type ExportFormat,
 } from "@/utils/exportNovel";
+import { useI18n } from "@/i18n";
 
 type Props = {
   novel: Novel;
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export default function ExportNovelModal({ novel, onClose }: Props) {
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [novelFull, setNovelFull] = useState<Novel>(novel);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -114,30 +116,30 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
       <div className="export-modal-panel" onClick={(e) => e.stopPropagation()}>
         <div className="export-modal-head">
           <h2 id="export-modal-title" style={{ margin: 0, fontFamily: "var(--font-serif)", fontSize: "1.2rem" }}>
-            导出作品
+            {t("exportmodal_title")}
           </h2>
           <button type="button" className="btn btn-ghost" style={{ fontSize: "0.85rem" }} onClick={onClose}>
-            关闭
+            {t("exportmodal_close")}
           </button>
         </div>
         <div className="export-modal-body">
           <p className="muted" style={{ margin: "0 0 1rem", fontSize: "0.9rem" }}>
-            《{novelFull.title || "未命名"}》
+            《{novelFull.title || t("exportmodal_untitled")}》
           </p>
           <p className="hint" style={{ margin: "0 0 1rem", fontSize: "0.82rem" }}>
-            导出内容含作品背景与各章标题、正文，不含章节概要。
+            {t("exportmodal_content_hint")}
           </p>
 
           {err ? <p className="form-error">{err}</p> : null}
 
           {loading ? (
             <p className="muted" style={{ margin: 0 }}>
-              加载章节…
+              {t("exportmodal_loading_chapters")}
             </p>
           ) : (
             <>
               <fieldset className="export-modal-fieldset">
-                <legend>范围</legend>
+                <legend>{t("exportmodal_scope")}</legend>
                 <label className="export-modal-radio">
                   <input
                     type="radio"
@@ -145,7 +147,7 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
                     checked={scope === "all"}
                     onChange={() => setScope("all")}
                   />
-                  整本书（全部章节按顺序）
+                  {t("exportmodal_scope_all")}
                 </label>
                 <label className="export-modal-radio">
                   <input
@@ -154,7 +156,7 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
                     checked={scope === "partial"}
                     onChange={() => setScope("partial")}
                   />
-                  选定章节
+                  {t("exportmodal_scope_partial")}
                 </label>
               </fieldset>
 
@@ -162,16 +164,16 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
                 <div className="export-modal-chapters">
                   <div className="export-modal-chapter-actions">
                     <button type="button" className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={selectAllChapters}>
-                      全选
+                      {t("exportmodal_select_all")}
                     </button>
                     <button type="button" className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={clearChapterSelection}>
-                      全不选
+                      {t("exportmodal_select_none")}
                     </button>
                   </div>
-                  <div className="export-modal-chapter-list" role="group" aria-label="章节列表">
+                  <div className="export-modal-chapter-list" role="group" aria-label={t("exportmodal_chapter_list")}>
                     {chapters.length === 0 ? (
                       <p className="muted" style={{ margin: 0 }}>
-                        暂无章节
+                        {t("exportmodal_no_chapters")}
                       </p>
                     ) : (
                       chapters.map((c, i) => (
@@ -182,7 +184,7 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
                             onChange={() => toggleId(c.id)}
                           />
                           <span>
-                            {c.title?.trim() || `第 ${i + 1} 章`}
+                            {c.title?.trim() || t("exportmodal_chapter_num").replace("{n}", String(i + 1))}
                             <span className="muted" style={{ fontSize: "0.8rem", marginLeft: "0.35rem" }}>
                               #{c.sort_order}
                             </span>
@@ -193,14 +195,14 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
                   </div>
                   {scope === "partial" && selected.size === 0 ? (
                     <p className="form-error" style={{ margin: "0.5rem 0 0", fontSize: "0.85rem" }}>
-                      请至少勾选一章
+                      {t("exportmodal_select_at_least_one")}
                     </p>
                   ) : null}
                 </div>
               ) : null}
 
               <div className="field" style={{ marginTop: "1rem" }}>
-                <label htmlFor="export-format">格式</label>
+                <label htmlFor="export-format">{t("exportmodal_format")}</label>
                 <select
                   id="export-format"
                   className="input"
@@ -215,7 +217,7 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
 
               {format === "pdf" ? (
                 <p className="hint" style={{ margin: "0.75rem 0 0", fontSize: "0.85rem" }}>
-                  PDF 为服务器按纯文本排版生成：若本机无合适中文字体，可能用西文字体且中文显示为问号，可改用 TXT 全文备份。
+                  {t("exportmodal_pdf_note")}
                 </p>
               ) : null}
             </>
@@ -223,10 +225,10 @@ export default function ExportNovelModal({ novel, onClose }: Props) {
         </div>
         <div className="export-modal-foot">
           <button type="button" className="btn btn-ghost" disabled={busy} onClick={onClose}>
-            取消
+            {t("exportmodal_cancel")}
           </button>
           <button type="button" className="btn btn-primary" disabled={!canExport || busy} onClick={() => void onExport()}>
-            {busy ? "生成中…" : "下载"}
+            {busy ? t("exportmodal_generating") : t("exportmodal_download")}
           </button>
         </div>
       </div>

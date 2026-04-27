@@ -30,61 +30,75 @@ import {
   UserOutlined,
   SettingOutlined,
   HistoryOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useNavigation } from "@/context/NavigationContext";
+import { useI18n } from "@/i18n";
 import { apiErrorMessage, fetchLlmUsage } from "@/api/client";
 import type { LlmUsageSummary } from "@/types";
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
 
-function fmtNum(value: number | string | undefined): string {
-  if (typeof value === "number") {
-    return new Intl.NumberFormat("zh-CN").format(value);
-  }
-  return String(value ?? "0");
-}
-
 function fmtK(value: number | string | undefined): string {
   const n = typeof value === "number" ? value : 0;
   return `${(n / 1000).toFixed(1)}K`;
 }
 
-function fmtTime(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
-}
-
-function getActionTag(action: string) {
-  const actionMap: Record<string, { color: string; label: string }> = {
-    generate: { color: "blue", label: "生成" },
-    rewrite: { color: "orange", label: "改写" },
-    append: { color: "green", label: "追加" },
-    evaluate: { color: "purple", label: "评估" },
-    expand: { color: "cyan", label: "扩写" },
-    polish: { color: "geekblue", label: "润色" },
-    naming: { color: "magenta", label: "起名" },
-    chat: { color: "gold", label: "对话" },
-  };
-  const mapped = actionMap[action];
-  if (mapped) {
-    return <Tag color={mapped.color}>{mapped.label}</Tag>;
-  }
-  return <Tag>{action || "-"}</Tag>;
-}
-
 export default function UsageDashboard() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
   const { goBackSmart } = useNavigation();
   const [data, setData] = useState<LlmUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  const fmtNum = (value: number | string | undefined): string => {
+    if (typeof value === "number") {
+      return new Intl.NumberFormat(isZh ? "zh-CN" : "en-US").format(value);
+    }
+    return String(value ?? "0");
+  };
+
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(isZh ? "zh-CN" : "en-US");
+  };
+
+  const getActionLabel = (action: string): string => {
+    const map: Record<string, string> = {
+      generate: "usage_action_generate",
+      rewrite: "usage_action_rewrite",
+      append: "usage_action_append",
+      evaluate: "usage_action_evaluate",
+      expand: "usage_action_expand",
+      polish: "usage_action_polish",
+      naming: "usage_action_naming",
+      chat: "usage_action_chat",
+    };
+    return map[action] ? t(map[action]) : action || "-";
+  };
+
+  const getActionTag = (action: string) => {
+    const colorMap: Record<string, string> = {
+      generate: "blue",
+      rewrite: "orange",
+      append: "green",
+      evaluate: "purple",
+      expand: "cyan",
+      polish: "geekblue",
+      naming: "magenta",
+      chat: "gold",
+    };
+    const color = colorMap[action] || "default";
+    return <Tag color={color}>{getActionLabel(action)}</Tag>;
+  };
 
   async function load() {
     setErr("");
@@ -103,25 +117,40 @@ export default function UsageDashboard() {
     void load();
   }, []);
 
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
   const themeMenuItems = [
     {
       key: "light",
       icon: <SunOutlined />,
-      label: "日间",
+      label: t("theme_light"),
       onClick: () => setTheme("light"),
       disabled: theme === "light",
     },
     {
       key: "sepia",
       icon: <EyeOutlined />,
-      label: "护眼",
+      label: t("theme_sepia"),
       onClick: () => setTheme("sepia"),
       disabled: theme === "sepia",
     },
     {
       key: "dark",
       icon: <MoonOutlined />,
-      label: "夜间",
+      label: t("theme_dark"),
       onClick: () => setTheme("dark"),
       disabled: theme === "dark",
     },
@@ -131,19 +160,19 @@ export default function UsageDashboard() {
     {
       key: "settings",
       icon: <SettingOutlined />,
-      label: "AI 设置",
+      label: t("nav_ai_settings"),
       onClick: () => nav("/settings"),
     },
     {
       key: "usage",
       icon: <BarChartOutlined />,
-      label: "Token 用量",
+      label: t("nav_usage"),
       disabled: true,
     },
     {
       key: "tasks",
       icon: <HistoryOutlined />,
-      label: "后台任务",
+      label: t("nav_background_tasks"),
       onClick: () => nav("/tasks"),
     },
     {
@@ -153,7 +182,7 @@ export default function UsageDashboard() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("nav_logout"),
       danger: true,
       onClick: () => logout(),
     },
@@ -181,21 +210,21 @@ export default function UsageDashboard() {
 
   const columns = [
     {
-      title: "时间",
+      title: t("usage_table_time"),
       dataIndex: "created_at" as const,
       key: "created_at",
       render: (text: string) => <Text type="secondary">{fmtTime(text)}</Text>,
       width: 180,
     },
     {
-      title: "类型",
+      title: t("usage_table_action"),
       dataIndex: "action" as const,
       key: "action",
       render: (action: string) => getActionTag(action),
       width: 100,
     },
     {
-      title: "模型厂商",
+      title: t("usage_table_provider"),
       dataIndex: "provider" as const,
       key: "provider",
       render: (provider: string) => (
@@ -206,7 +235,7 @@ export default function UsageDashboard() {
       width: 140,
     },
     {
-      title: "输入 Token",
+      title: t("usage_table_input"),
       dataIndex: "input_tokens" as const,
       key: "input_tokens",
       render: (n: number) => (
@@ -217,7 +246,7 @@ export default function UsageDashboard() {
       width: 120,
     },
     {
-      title: "输出 Token",
+      title: t("usage_table_output"),
       dataIndex: "output_tokens" as const,
       key: "output_tokens",
       render: (n: number) => (
@@ -228,7 +257,7 @@ export default function UsageDashboard() {
       width: 120,
     },
     {
-      title: "总 Token",
+      title: t("usage_table_total"),
       dataIndex: "total_tokens" as const,
       key: "total_tokens",
       render: (n: number) => (
@@ -290,7 +319,7 @@ export default function UsageDashboard() {
               transition: "color 0.3s ease",
             }}
           >
-            Token 用量统计
+            {t("usage_title")}
           </Title>
         </div>
 
@@ -301,7 +330,7 @@ export default function UsageDashboard() {
             size="large"
             style={{ height: 40 }}
           >
-            返回
+            {t("nav_back")}
           </Button>
           <Button
             type="primary"
@@ -311,8 +340,22 @@ export default function UsageDashboard() {
             size="large"
             style={{ height: 40 }}
           >
-            刷新
+            {t("common_refresh")}
           </Button>
+
+          <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={<GlobalOutlined />}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            >
+              {isZh ? "中文" : "EN"}
+            </Button>
+          </Dropdown>
 
           <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
             <Button
@@ -366,7 +409,7 @@ export default function UsageDashboard() {
       >
         {err && (
           <Alert
-            message="加载失败"
+            message={t("common_load_failed")}
             description={err}
             type="error"
             showIcon
@@ -389,7 +432,7 @@ export default function UsageDashboard() {
                 <Statistic
                   title={
                     <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      总调用次数
+                      {t("usage_total_calls")}
                     </Text>
                   }
                   value={data.total_calls}
@@ -412,7 +455,7 @@ export default function UsageDashboard() {
                 <Statistic
                   title={
                     <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      总输入 Token
+                      {t("usage_total_input")}
                     </Text>
                   }
                   value={data.total_input_tokens}
@@ -435,7 +478,7 @@ export default function UsageDashboard() {
                 <Statistic
                   title={
                     <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      总输出 Token
+                      {t("usage_total_output")}
                     </Text>
                   }
                   value={data.total_output_tokens}
@@ -467,11 +510,11 @@ export default function UsageDashboard() {
                   transition: "color 0.3s ease",
                 }}
               >
-                用量记录
+                {t("usage_records")}
               </Title>
               {data && (
                 <Tag color="blue" style={{ margin: 0 }}>
-                  共 {data.items.length} 条
+                  {t("usage_records_count").replace("{count}", String(data.items.length))}
                 </Tag>
               )}
             </Space>
@@ -492,7 +535,7 @@ export default function UsageDashboard() {
                     color: secondaryTextColor,
                   }}
                 >
-                  暂无用量记录。先使用一次 AI 生成功能再刷新看看。
+                  {t("usage_no_data_full_desc")}
                 </Text>
               </div>
             ) : (
@@ -503,7 +546,7 @@ export default function UsageDashboard() {
                 pagination={{
                   pageSize: 20,
                   showSizeChanger: true,
-                  showTotal: (total) => `共 ${total} 条记录`,
+                  showTotal: (total) => t("usage_total_records").replace("{total}", String(total)),
                   pageSizeOptions: ["10", "20", "50", "100"],
                 }}
                 scroll={{ x: 800 }}

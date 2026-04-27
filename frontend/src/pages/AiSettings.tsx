@@ -31,11 +31,13 @@ import {
   BarChartOutlined,
   HistoryOutlined,
   LogoutOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useNavigation } from "@/context/NavigationContext";
+import { useI18n } from "@/i18n";
 
 const { Header, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -43,27 +45,34 @@ const { Option } = Select;
 
 type AgentMode = "flexible" | "react" | "direct";
 
-const AGENT_MODE_LABELS: Record<AgentMode, string> = {
-  flexible: "Flexible Agent (推荐)",
-  react: "ReAct 模式",
-  direct: "直接调用 LLM",
-};
-
-const AGENT_MODE_DESCRIPTIONS: Record<AgentMode, string> = {
-  flexible: "使用 JSON 结构化输出，让模型自主决定何时调用工具和完成任务，灵活性最高。",
-  react: "使用 Thought/Action/Observation 格式的 ReAct 循环，可控性强。",
-  direct: "直接调用 LLM，不经过 Agent 循环。适合简单任务，速度快、消耗少。",
-};
-
 export default function AiSettings() {
   const { user, updateAiSettings, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const { goBackSmart } = useNavigation();
+
+  const getAgentModeLabel = (mode: AgentMode): string => {
+    const map: Record<AgentMode, string> = {
+      flexible: "ai_settings_flexible",
+      react: "ai_settings_react",
+      direct: "ai_settings_direct",
+    };
+    return t(map[mode]);
+  };
+
+  const getAgentModeDescription = (mode: AgentMode): string => {
+    const map: Record<AgentMode, string> = {
+      flexible: "ai_settings_flexible_desc",
+      react: "ai_settings_react_desc",
+      direct: "ai_settings_direct_desc",
+    };
+    return t(map[mode]);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -74,6 +83,7 @@ export default function AiSettings() {
       enable_auto_audit: user.enable_auto_audit ?? true,
       preview_before_save: user.preview_before_save ?? true,
       auto_audit_min_score: user.auto_audit_min_score || 60,
+      ai_language: user.ai_language || null,
     });
   }, [user, form]);
 
@@ -84,6 +94,7 @@ export default function AiSettings() {
     enable_auto_audit: boolean;
     preview_before_save: boolean;
     auto_audit_min_score: number;
+    ai_language: string | null;
   }) => {
     setErrorMsg("");
     setSuccessMsg("");
@@ -96,12 +107,13 @@ export default function AiSettings() {
         enable_auto_audit: values.enable_auto_audit,
         preview_before_save: values.preview_before_save,
         auto_audit_min_score: values.auto_audit_min_score,
+        ai_language: values.ai_language,
       });
-      message.success("AI 设置已保存");
-      setSuccessMsg("AI 设置已保存");
+      message.success(t("ai_settings_save_success"));
+      setSuccessMsg(t("ai_settings_save_success"));
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (e) {
-      setErrorMsg(String(e) || "保存失败");
+      setErrorMsg(String(e) || t("ai_settings_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -134,23 +146,38 @@ export default function AiSettings() {
     {
       key: "light",
       icon: <SunOutlined />,
-      label: "日间",
+      label: t("theme_light"),
       onClick: () => setTheme("light"),
       disabled: theme === "light",
     },
     {
       key: "sepia",
       icon: <EyeOutlined />,
-      label: "护眼",
+      label: t("theme_sepia"),
       onClick: () => setTheme("sepia"),
       disabled: theme === "sepia",
     },
     {
       key: "dark",
       icon: <MoonOutlined />,
-      label: "夜间",
+      label: t("theme_dark"),
       onClick: () => setTheme("dark"),
       disabled: theme === "dark",
+    },
+  ];
+
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
     },
   ];
 
@@ -158,19 +185,19 @@ export default function AiSettings() {
     {
       key: "settings",
       icon: <SettingOutlined />,
-      label: "AI 设置",
+      label: t("nav_ai_settings"),
       disabled: true,
     },
     {
       key: "usage",
       icon: <BarChartOutlined />,
-      label: "Token 用量",
+      label: t("nav_usage"),
       onClick: () => nav("/usage"),
     },
     {
       key: "tasks",
       icon: <HistoryOutlined />,
-      label: "后台任务",
+      label: t("nav_background_tasks"),
       onClick: () => nav("/tasks"),
     },
     {
@@ -180,7 +207,7 @@ export default function AiSettings() {
     {
       key: "logout",
       icon: <LogoutOutlined />,
-      label: "退出登录",
+      label: t("nav_logout"),
       danger: true,
       onClick: () => logout(),
     },
@@ -236,7 +263,7 @@ export default function AiSettings() {
               transition: "color 0.3s ease",
             }}
           >
-            AI 设置
+            {t("ai_settings_title")}
           </Title>
         </div>
 
@@ -247,8 +274,22 @@ export default function AiSettings() {
             size="large"
             style={{ height: 40 }}
           >
-            返回
+            {t("nav_back")}
           </Button>
+
+          <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={<GlobalOutlined />}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            >
+              {isZh ? "中文" : "EN"}
+            </Button>
+          </Dropdown>
 
           <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
             <Button
@@ -302,7 +343,7 @@ export default function AiSettings() {
       >
         {successMsg && (
           <Alert
-            message="保存成功"
+            message={t("ai_settings_save_success")}
             description={successMsg}
             type="success"
             showIcon
@@ -312,7 +353,7 @@ export default function AiSettings() {
 
         {errorMsg && (
           <Alert
-            message="保存失败"
+            message={t("ai_settings_save_failed")}
             description={errorMsg}
             type="error"
             showIcon
@@ -343,13 +384,13 @@ export default function AiSettings() {
                   color: textColor,
                 }}
               >
-                AI 设置
+                {t("ai_settings_title")}
               </Title>
             </div>
           }
           extra={
             <Text type="secondary" style={{ color: secondaryTextColor }}>
-              自定义 AI 行为和生成策略
+              {t("ai_settings_subtitle")}
             </Text>
           }
         >
@@ -372,7 +413,7 @@ export default function AiSettings() {
               title={
                 <Space>
                   <RobotOutlined style={{ color: isDark ? "#f97316" : "#7c2d12" }} />
-                  <span style={{ color: textColor }}>Agent 工作模式</span>
+                  <span style={{ color: textColor }}>{t("ai_settings_agent_mode")}</span>
                 </Space>
               }
               style={{
@@ -385,7 +426,7 @@ export default function AiSettings() {
                 name="agent_mode"
                 label={
                   <Text strong style={{ color: textColor }}>
-                    选择 Agent 模式
+                    {t("ai_settings_select_mode")}
                   </Text>
                 }
               >
@@ -394,10 +435,10 @@ export default function AiSettings() {
                     <Option key={mode} value={mode}>
                       <Space direction="vertical" size={0} style={{ width: "100%" }}>
                         <Text strong style={{ color: textColor }}>
-                          {AGENT_MODE_LABELS[mode]}
+                          {getAgentModeLabel(mode)}
                         </Text>
                         <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
-                          {AGENT_MODE_DESCRIPTIONS[mode]}
+                          {getAgentModeDescription(mode)}
                         </Text>
                       </Space>
                     </Option>
@@ -406,12 +447,10 @@ export default function AiSettings() {
               </Form.Item>
 
               <Alert
-                message="模式说明"
+                message={t("ai_settings_mode_note_title")}
                 description={
                   <Paragraph style={{ margin: 0, color: secondaryTextColor }}>
-                    <Text strong>Flexible Agent</Text>：适合大多数场景，让 AI 自主决策。
-                    <Text strong> ReAct</Text>：需要严格控制 AI 行为时使用。
-                    <Text strong> 直接调用</Text>：简单任务（如续写单章节），速度最快、Token 消耗最少。
+                    {t("ai_settings_mode_note")}
                   </Paragraph>
                 }
                 type="info"
@@ -426,7 +465,7 @@ export default function AiSettings() {
               title={
                 <Space>
                   <GoldOutlined style={{ color: isDark ? "#f97316" : "#7c2d12" }} />
-                  <span style={{ color: textColor }}>资源限制</span>
+                  <span style={{ color: textColor }}>{t("ai_settings_resource_limit")}</span>
                 </Space>
               }
               style={{
@@ -441,21 +480,21 @@ export default function AiSettings() {
                     name="max_llm_iterations"
                     label={
                       <Text strong style={{ color: textColor }}>
-                        最大 LLM 交互轮数
+                        {t("ai_settings_max_iterations")}
                       </Text>
                     }
-                    rules={[{ type: "number", min: 1, max: 50, message: "请输入 1-50 之间的数值" }]}
+                    rules={[{ type: "number", min: 1, max: 50, message: t("validation_number_range").replace("{min}", "1").replace("{max}", "50") }]}
                   >
                     <InputNumber
                       min={1}
                       max={50}
                       size="large"
                       style={{ width: "100%", height: 44 }}
-                      addonAfter="轮"
+                      addonAfter={t("common_rounds")}
                     />
                   </Form.Item>
                   <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
-                    限制 Agent 循环的最大次数，防止无限循环
+                    {t("ai_settings_max_iterations_desc")}
                   </Text>
                 </Col>
                 <Col xs={24} md={12}>
@@ -463,10 +502,10 @@ export default function AiSettings() {
                     name="max_tokens_per_task"
                     label={
                       <Text strong style={{ color: textColor }}>
-                        最大 Token 消耗阈值
+                        {t("ai_settings_max_tokens")}
                       </Text>
                     }
-                    rules={[{ type: "number", min: 1000, max: 500000, message: "请输入 1000-500000 之间的数值" }]}
+                    rules={[{ type: "number", min: 1000, max: 500000, message: t("validation_number_range").replace("{min}", "1000").replace("{max}", "500000") }]}
                   >
                     <InputNumber
                       min={1000}
@@ -478,7 +517,7 @@ export default function AiSettings() {
                     />
                   </Form.Item>
                   <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
-                    单次任务的最大 Token 消耗限制
+                    {t("ai_settings_max_tokens_desc")}
                   </Text>
                 </Col>
               </Row>
@@ -489,7 +528,7 @@ export default function AiSettings() {
               title={
                 <Space>
                   <SafetyOutlined style={{ color: isDark ? "#f97316" : "#7c2d12" }} />
-                  <span style={{ color: textColor }}>质量与安全</span>
+                  <span style={{ color: textColor }}>{t("ai_settings_quality_safety")}</span>
                 </Space>
               }
               style={{
@@ -504,18 +543,18 @@ export default function AiSettings() {
                     name="enable_auto_audit"
                     label={
                       <Text strong style={{ color: textColor }}>
-                        自动审核
+                        {t("ai_settings_auto_audit")}
                       </Text>
                     }
                     valuePropName="checked"
                   >
                     <Switch
                       checkedChildren={<CheckCircleOutlined />}
-                      unCheckedChildren="关闭"
+                      unCheckedChildren={t("ai_settings_switch_off")}
                     />
                   </Form.Item>
                   <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
-                    生成后自动评估内容质量（去AI化评分、问题点）
+                    {t("ai_settings_auto_audit_desc")}
                   </Text>
                 </Col>
                 <Col xs={24} md={12}>
@@ -523,23 +562,23 @@ export default function AiSettings() {
                     name="auto_audit_min_score"
                     label={
                       <Text strong style={{ color: textColor }}>
-                        自动审核最低分数
+                        {t("ai_settings_auto_audit_min_score")}
                       </Text>
                     }
                     dependencies={["enable_auto_audit"]}
-                    rules={[{ type: "number", min: 0, max: 100, message: "请输入 0-100 之间的数值" }]}
+                    rules={[{ type: "number", min: 0, max: 100, message: t("validation_number_range").replace("{min}", "0").replace("{max}", "100") }]}
                   >
                     <InputNumber
                       min={0}
                       max={100}
                       size="large"
                       style={{ width: "100%", height: 44 }}
-                      addonAfter="分"
+                      addonAfter={t("common_points")}
                       disabled={!form.getFieldValue("enable_auto_audit")}
                     />
                   </Form.Item>
                   <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
-                    低于此分数的内容会标记为需要修订
+                    {t("ai_settings_auto_audit_min_score_desc")}
                   </Text>
                 </Col>
               </Row>
@@ -549,8 +588,59 @@ export default function AiSettings() {
               type="inner"
               title={
                 <Space>
+                  <GlobalOutlined style={{ color: isDark ? "#f97316" : "#7c2d12" }} />
+                  <span style={{ color: textColor }}>{t("ai_settings_ai_language")}</span>
+                </Space>
+              }
+              style={{
+                marginBottom: "1.5rem",
+                background: innerCardBg,
+                borderRadius: 12,
+              }}
+            >
+              <Form.Item
+                name="ai_language"
+                label={
+                  <Text strong style={{ color: textColor }}>
+                    {t("ai_settings_ai_language")}
+                  </Text>
+                }
+              >
+                <Select size="large" style={{ width: "100%" }}>
+                  <Option value={null}>
+                    <Space>
+                      <Text strong style={{ color: textColor }}>
+                        {t("ai_settings_ai_language_follow_ui")}
+                      </Text>
+                    </Space>
+                  </Option>
+                  <Option value="zh">
+                    <Space>
+                      <Text strong style={{ color: textColor }}>
+                        中文
+                      </Text>
+                    </Space>
+                  </Option>
+                  <Option value="en">
+                    <Space>
+                      <Text strong style={{ color: textColor }}>
+                        English
+                      </Text>
+                    </Space>
+                  </Option>
+                </Select>
+              </Form.Item>
+              <Text type="secondary" style={{ fontSize: "0.8rem", color: secondaryTextColor }}>
+                {t("ai_settings_ai_language_desc")}
+              </Text>
+            </Card>
+
+            <Card
+              type="inner"
+              title={
+                <Space>
                   <EyeOutlined style={{ color: isDark ? "#f97316" : "#7c2d12" }} />
-                  <span style={{ color: textColor }}>预览与确认</span>
+                  <span style={{ color: textColor }}>{t("ai_settings_preview_confirm")}</span>
                 </Space>
               }
               style={{
@@ -563,22 +653,21 @@ export default function AiSettings() {
                 name="preview_before_save"
                 label={
                   <Text strong style={{ color: textColor }}>
-                    生成后预览确认
+                    {t("ai_settings_preview_confirm")}
                   </Text>
                 }
                 valuePropName="checked"
               >
                 <Switch
                   checkedChildren={<CheckCircleOutlined />}
-                  unCheckedChildren="关闭"
+                  unCheckedChildren={t("ai_settings_switch_off")}
                 />
               </Form.Item>
               <Alert
-                message="推荐开启"
+                message={t("ai_settings_preview_confirm_recommended")}
                 description={
                   <Paragraph style={{ margin: 0, color: secondaryTextColor }}>
-                    开启后，AI 生成的内容会先展示预览，需要你点击确认后才会保存。
-                    这样可以避免不满意的内容覆盖现有章节。
+                    {t("ai_settings_preview_confirm_note")}
                   </Paragraph>
                 }
                 type="info"
@@ -602,7 +691,7 @@ export default function AiSettings() {
                   paddingRight: 32,
                 }}
               >
-                保存设置
+                {t("ai_settings_save_button")}
               </Button>
             </Form.Item>
           </Form>

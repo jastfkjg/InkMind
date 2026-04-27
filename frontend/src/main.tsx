@@ -5,6 +5,7 @@ import { ConfigProvider } from "antd";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { NavigationProvider } from "@/context/NavigationContext";
+import { I18nProvider } from "@/i18n";
 import App from "@/App";
 import { getThemeConfig } from "@/styles/theme";
 import "@/styles/global.css";
@@ -15,9 +16,11 @@ function AppWithTheme() {
 
   return (
     <ConfigProvider theme={themeConfig}>
-      <NavigationProvider>
-        <App />
-      </NavigationProvider>
+      <I18nProvider>
+        <NavigationProvider>
+          <App />
+        </NavigationProvider>
+      </I18nProvider>
     </ConfigProvider>
   );
 }

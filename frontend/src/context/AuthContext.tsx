@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@/types";
-import { authLogin, authMe, authRegister, clearToken, getToken, patchAuthMe, setToken } from "@/api/client";
+import { authLogin, authMe, authRegister, clearToken, getToken, patchAuthMe, setAiLanguage, setToken } from "@/api/client";
 
 type AuthState = {
   user: User | null;
@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const u = await authMe();
         setUser(u);
+        setAiLanguage(u.ai_language || null);
       } catch {
         clearToken();
       } finally {
@@ -55,17 +56,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await authLogin(email, password);
     setToken(data.access_token);
     setUser(data.user);
+    setAiLanguage(data.user.ai_language || null);
   }, []);
 
   const register = useCallback(async (email: string, password: string, displayName?: string) => {
     const data = await authRegister(email, password, displayName);
     setToken(data.access_token);
     setUser(data.user);
+    setAiLanguage(data.user.ai_language || null);
   }, []);
 
   const logout = useCallback(() => {
     clearToken();
     setUser(null);
+    setAiLanguage(null);
   }, []);
 
   const updatePreferredLlm = useCallback(async (preferred_llm_provider: string | null) => {
@@ -81,9 +85,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       enable_auto_audit?: boolean | null;
       preview_before_save?: boolean | null;
       auto_audit_min_score?: number | null;
+      ai_language?: string | null;
     }) => {
       const u = await patchAuthMe(settings);
       setUser(u);
+      if (settings.ai_language !== undefined) {
+        setAiLanguage(settings.ai_language);
+      }
     },
     []
   );

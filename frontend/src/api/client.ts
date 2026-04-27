@@ -33,6 +33,46 @@ export type NdjsonAiResult = {
   preview?: ChapterPreviewResult;
 };
 
+const TOKEN_KEY = "inkmind_token";
+const LANGUAGE_KEY = "inkmind_language";
+const AI_LANGUAGE_KEY = "inkmind_ai_language";
+
+export function getCurrentLanguage(): string {
+  const aiLanguage = localStorage.getItem(AI_LANGUAGE_KEY);
+  if (aiLanguage === "zh") {
+    return "zh-CN";
+  }
+  if (aiLanguage === "en") {
+    return "en";
+  }
+  
+  const uiLanguage = localStorage.getItem(LANGUAGE_KEY);
+  if (uiLanguage === "en") {
+    return "en";
+  }
+  return "zh-CN";
+}
+
+export function setAiLanguage(language: string | null): void {
+  if (language === "zh" || language === "en") {
+    localStorage.setItem(AI_LANGUAGE_KEY, language);
+  } else {
+    localStorage.removeItem(AI_LANGUAGE_KEY);
+  }
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 /** POST NDJSON 流：每行一个 JSON，含 token 片段 `t` 与最终字段（chapter / reply / text / summary / title）。 */
 export async function postNdjsonAi(
   path: string,
@@ -45,6 +85,7 @@ export async function postNdjsonAi(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Accept-Language": getCurrentLanguage(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
@@ -109,25 +150,12 @@ export async function postNdjsonAi(
   return out;
 }
 
-const TOKEN_KEY = "inkmind_token";
-
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-}
-
 api.interceptors.request.use((config) => {
   const t = getToken();
   if (t) {
     config.headers.Authorization = `Bearer ${t}`;
   }
+  config.headers["Accept-Language"] = getCurrentLanguage();
   return config;
 });
 
@@ -172,6 +200,7 @@ export async function patchAuthMe(payload: {
   enable_auto_audit?: boolean | null;
   preview_before_save?: boolean | null;
   auto_audit_min_score?: number | null;
+  ai_language?: string | null;
 }) {
   const { data } = await api.patch<User>("/auth/me", payload);
   return data;
