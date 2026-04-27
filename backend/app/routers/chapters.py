@@ -141,10 +141,29 @@ def generate_chapter(
                             llm, fixed_title=fixed_title, word_count=word_count,
                             save_to_db=save_to_db, language=language
                         )
-                        if save_to_db:
-                            title_out, body_text, ch = result  # type: ignore
-                        else:
-                            title_out, body_text = result  # type: ignore
+                    ch = None
+                    body_parts: list[str] = []
+                    last_two: list[str] = []
+                    for item in result:
+                        if isinstance(item, Chapter):
+                            ch = item
+                            title_out = ch.title
+                            body_text = ch.content
+                        elif isinstance(item, str):
+                            if save_to_db:
+                                body_parts.append(item)
+                                if item:
+                                    yield ndjson_line({"t": item})
+                            else:
+                                last_two.append(item)
+                                if len(last_two) > 2:
+                                    last_two.pop(0)
+                    if not save_to_db and len(last_two) >= 2:
+                        title_out = last_two[-2]
+                        body_text = last_two[-1]
+                    if not body_text and body_parts:
+                        from app.services.chapter_gen import _sanitize_generated_body
+                        body_text = _sanitize_generated_body("".join(body_parts))
 
                 elif agent_mode == "react":
                     yield ndjson_line({"t": get_prompt("stream_react_mode", language)})
