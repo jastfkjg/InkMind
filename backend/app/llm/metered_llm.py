@@ -36,6 +36,22 @@ class LLMUsageAccumulator:
         self._output_tokens = 0
         self._call_count = 0
 
+    @property
+    def total_tokens(self) -> int:
+        return self._input_tokens + self._output_tokens
+
+    @property
+    def input_tokens(self) -> int:
+        return self._input_tokens
+
+    @property
+    def output_tokens(self) -> int:
+        return self._output_tokens
+
+    @property
+    def call_count(self) -> int:
+        return self._call_count
+
     def accumulate(self, input_tokens: int, output_tokens: int) -> None:
         """累积一次 LLM 调用的 token 用量。"""
         self._input_tokens += input_tokens

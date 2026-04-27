@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Layout,
   Card,
@@ -41,6 +41,7 @@ import {
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useNavigation } from "@/context/NavigationContext";
 import { 
   apiErrorMessage, 
   fetchBackgroundTasks, 
@@ -100,6 +101,7 @@ export default function BackgroundTasksPage() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
   const nav = useNavigate();
+  const { goBackSmart } = useNavigation();
   const [tasks, setTasks] = useState<TaskWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -427,15 +429,14 @@ export default function BackgroundTasksPage() {
         </div>
 
         <Space size="middle">
-          <Link to="/">
-            <Button
-              icon={<ArrowLeftOutlined />}
-              size="large"
-              style={{ height: 40 }}
-            >
-              返回作品
-            </Button>
-          </Link>
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => goBackSmart()}
+            size="large"
+            style={{ height: 40 }}
+          >
+            返回
+          </Button>
           <Button
             type="primary"
             icon={<ReloadOutlined />}

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
+import { NavigationProvider } from "@/context/NavigationContext";
 import App from "@/App";
 import { getThemeConfig } from "@/styles/theme";
 import "@/styles/global.css";
@@ -14,7 +15,9 @@ function AppWithTheme() {
 
   return (
     <ConfigProvider theme={themeConfig}>
-      <App />
+      <NavigationProvider>
+        <App />
+      </NavigationProvider>
     </ConfigProvider>
   );
 }

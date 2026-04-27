@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Layout,
   Card,
@@ -29,10 +29,12 @@ import {
   EyeOutlined,
   UserOutlined,
   SettingOutlined,
+  HistoryOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useNavigation } from "@/context/NavigationContext";
 import { apiErrorMessage, fetchLlmUsage } from "@/api/client";
 import type { LlmUsageSummary } from "@/types";
 
@@ -79,6 +81,7 @@ export default function UsageDashboard() {
   const { user, logout } = useAuth();
   const { theme, setTheme, isDark, isSepia } = useTheme();
   const nav = useNavigate();
+  const { goBackSmart } = useNavigation();
   const [data, setData] = useState<LlmUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -136,6 +139,12 @@ export default function UsageDashboard() {
       icon: <BarChartOutlined />,
       label: "Token 用量",
       disabled: true,
+    },
+    {
+      key: "tasks",
+      icon: <HistoryOutlined />,
+      label: "后台任务",
+      onClick: () => nav("/tasks"),
     },
     {
       key: "divider",
@@ -286,15 +295,14 @@ export default function UsageDashboard() {
         </div>
 
         <Space size="middle">
-          <Link to="/">
-            <Button
-              icon={<ArrowLeftOutlined />}
-              size="large"
-              style={{ height: 40 }}
-            >
-              返回作品
-            </Button>
-          </Link>
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => goBackSmart()}
+            size="large"
+            style={{ height: 40 }}
+          >
+            返回
+          </Button>
           <Button
             type="primary"
             icon={<ReloadOutlined />}

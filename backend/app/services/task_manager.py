@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.llm.metered_llm import LLMUsageAccumulator
-from app.llm.providers import resolve_llm_for_user
+from app.llm.providers import normalize_provider_name, resolve_llm_for_user
 from app.models import (
     BackgroundTask,
     Chapter,
@@ -146,6 +146,52 @@ def _update_task_item_status(
     db.commit()
 
 
+def _update_task_status_safe(
+    db: Session,
+    task: BackgroundTask,
+    status: str,
+    progress_message: str | None = None,
+    current_index: int | None = None,
+    completed_count: int | None = None,
+    error_message: str | None = None,
+) -> None:
+    """安全地更新任务状态（处理数据库异常）"""
+    try:
+        _update_task_status(
+            db, task, status, progress_message, 
+            current_index, completed_count, error_message
+        )
+    except Exception as e:
+        logger.exception(f"Failed to update task status for task {task.id}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+def _update_task_item_status_safe(
+    db: Session,
+    task_item: TaskItem,
+    status: str,
+    generated_title: str | None = None,
+    generated_content: str | None = None,
+    chapter_id: int | None = None,
+    error_message: str | None = None,
+) -> None:
+    """安全地更新任务项状态（处理数据库异常）"""
+    try:
+        _update_task_item_status(
+            db, task_item, status, generated_title,
+            generated_content, chapter_id, error_message
+        )
+    except Exception as e:
+        logger.exception(f"Failed to update task item status for task_item {task_item.id}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 def _run_single_chapter_task(
     task_id: int,
     user_id: int,
@@ -160,6 +206,7 @@ def _run_single_chapter_task(
 ) -> None:
     """执行单章节生成任务"""
     db = SessionLocal()
+    task: BackgroundTask | None = None
     try:
         task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
         if not task:
@@ -170,28 +217,30 @@ def _run_single_chapter_task(
         novel = db.query(Novel).filter(Novel.id == novel_id).first()
         
         if not user or not novel:
-            _update_task_status(db, task, "failed", error_message="用户或作品不存在")
+            _update_task_status_safe(db, task, "failed", error_message="用户或作品不存在")
             return
 
         target_chapter: Chapter | None = None
         if chapter_id:
             target_chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
 
-        _update_task_status(db, task, "running", progress_message="准备生成章节...")
+        _update_task_status_safe(db, task, "running", progress_message="准备生成章节...")
 
-        accumulator = LLMUsageAccumulator(db, user.id)
+        provider_name = normalize_provider_name(None, user)
+        action = "后台章节生成"
+        accumulator = LLMUsageAccumulator(db, user.id, provider_name, action)
         llm = resolve_llm_for_user(
             user,
             None,
             db=db,
-            action="后台章节生成",
+            action=action,
             accumulator=accumulator,
         )
 
+        chapter_out: Chapter | None = None
+        
         try:
-            _update_task_status(db, task, "running", progress_message="正在生成章节内容...")
-            
-            chapter_out: Chapter | None = None
+            logger.info(f"Starting chapter generation for task {task_id}, agent_mode={agent_mode}")
             
             if agent_mode == "react":
                 for result in run_react_chapter_generation(
@@ -233,11 +282,14 @@ def _run_single_chapter_task(
                     if isinstance(result, Chapter):
                         chapter_out = result
 
-            accumulator.flush()
+            try:
+                accumulator.flush()
+            except Exception as e:
+                logger.warning(f"Failed to flush accumulator for task {task_id}: {e}")
 
             if chapter_out:
                 task.total_tokens = accumulator.total_tokens
-                _update_task_status(
+                _update_task_status_safe(
                     db, task, "completed", 
                     progress_message=f"章节「{chapter_out.title}」生成完成",
                     completed_count=1
@@ -245,22 +297,34 @@ def _run_single_chapter_task(
                 
                 if task.task_items:
                     task_item = task.task_items[0]
-                    _update_task_item_status(
+                    _update_task_item_status_safe(
                         db, task_item, "completed",
                         generated_title=chapter_out.title,
                         generated_content=chapter_out.content,
                         chapter_id=chapter_out.id,
                     )
+                logger.info(f"Task {task_id} completed successfully")
             else:
-                _update_task_status(db, task, "failed", error_message="章节生成失败，未返回章节对象")
+                _update_task_status_safe(db, task, "failed", error_message="章节生成失败，未返回章节对象")
+                logger.error(f"Task {task_id} failed: no chapter returned")
 
         except Exception as e:
             logger.exception(f"Task {task_id} execution error")
-            _update_task_status(db, task, "failed", error_message=str(e))
+            _update_task_status_safe(db, task, "failed", error_message=str(e))
 
+    except Exception as e:
+        logger.exception(f"Task {task_id} fatal error")
+        if task:
+            _update_task_status_safe(db, task, "failed", error_message=f"系统错误: {str(e)}")
     finally:
-        db.close()
-        task_manager.remove_task(task_id)
+        try:
+            db.close()
+        except Exception:
+            pass
+        try:
+            task_manager.remove_task(task_id)
+        except Exception:
+            pass
 
 
 def _run_batch_chapters_task(
@@ -276,6 +340,7 @@ def _run_batch_chapters_task(
 ) -> None:
     """执行批量章节生成任务"""
     db = SessionLocal()
+    task: BackgroundTask | None = None
     try:
         task = db.query(BackgroundTask).filter(BackgroundTask.id == task_id).first()
         if not task:
@@ -286,25 +351,30 @@ def _run_batch_chapters_task(
         novel = db.query(Novel).filter(Novel.id == novel_id).first()
         
         if not user or not novel:
-            _update_task_status(db, task, "failed", error_message="用户或作品不存在")
+            _update_task_status_safe(db, task, "failed", error_message="用户或作品不存在")
             return
 
         after_chapter: Chapter | None = None
         if after_chapter_id:
             after_chapter = db.query(Chapter).filter(Chapter.id == after_chapter_id).first()
 
-        _update_task_status(db, task, "running", progress_message="正在规划批量章节...")
+        _update_task_status_safe(db, task, "running", progress_message="正在规划批量章节...")
 
-        accumulator = LLMUsageAccumulator(db, user.id)
+        provider_name = normalize_provider_name(None, user)
+        action = "后台批量章节规划"
+        accumulator = LLMUsageAccumulator(db, user.id, provider_name, action)
         llm = resolve_llm_for_user(
             user,
             None,
             db=db,
-            action="后台批量章节规划",
+            action=action,
             accumulator=accumulator,
         )
 
+        plan = None
         try:
+            logger.info(f"Starting batch chapter planning for task {task_id}, chapter_count={chapter_count}")
+            
             plan = plan_batch_chapters(
                 db=db,
                 novel=novel,
@@ -317,22 +387,23 @@ def _run_batch_chapters_task(
             task.batch_plan_json = json.dumps(plan, ensure_ascii=False)
             db.commit()
 
-            _update_task_status(db, task, "running", progress_message="章节规划完成，开始逐章生成...")
+            _update_task_status_safe(db, task, "running", progress_message="章节规划完成，开始逐章生成...")
 
             completed_count = 0
             for idx, chapter_plan in enumerate(plan):
                 if task_manager.is_running(task_id):
                     with task_manager._running_lock:
                         if task_manager._running_tasks.get(task_id) and task_manager._running_tasks[task_id].cancelled:
-                            _update_task_status(
+                            _update_task_status_safe(
                                 db, task, "cancelled",
                                 progress_message=f"任务已取消，已完成 {completed_count} 章",
                                 current_index=idx,
                                 completed_count=completed_count,
                             )
+                            logger.info(f"Task {task_id} cancelled, completed {completed_count} chapters")
                             return
 
-                _update_task_status(
+                _update_task_status_safe(
                     db, task, "running",
                     progress_message=f"正在生成第 {idx + 1}/{chapter_count} 章：{chapter_plan.get('title', '未知')}",
                     current_index=idx,
@@ -341,7 +412,7 @@ def _run_batch_chapters_task(
 
                 task_item = next((ti for ti in task.task_items if ti.sort_order == idx), None)
                 if task_item:
-                    _update_task_item_status(db, task_item, "running")
+                    _update_task_item_status_safe(db, task_item, "running")
 
                 try:
                     chapter_llm = resolve_llm_for_user(
@@ -355,6 +426,8 @@ def _run_batch_chapters_task(
                     chapter_out: Chapter | None = None
                     chapter_title = chapter_plan.get("title")
                     chapter_summary = chapter_plan.get("summary", "")
+
+                    logger.info(f"Generating chapter {idx + 1}/{chapter_count} for task {task_id}")
 
                     if agent_mode == "react":
                         for result in run_react_chapter_generation(
@@ -399,47 +472,65 @@ def _run_batch_chapters_task(
                     if chapter_out:
                         completed_count += 1
                         if task_item:
-                            _update_task_item_status(
+                            _update_task_item_status_safe(
                                 db, task_item, "completed",
                                 generated_title=chapter_out.title,
                                 generated_content=chapter_out.content,
                                 chapter_id=chapter_out.id,
                             )
+                        logger.info(f"Chapter {idx + 1} generated successfully for task {task_id}")
                     else:
                         if task_item:
-                            _update_task_item_status(
+                            _update_task_item_status_safe(
                                 db, task_item, "failed",
                                 error_message="章节生成失败"
                             )
+                        logger.warning(f"Chapter {idx + 1} generation failed for task {task_id}: no chapter returned")
 
                 except Exception as e:
-                    logger.exception(f"Error generating chapter {idx + 1}")
+                    logger.exception(f"Error generating chapter {idx + 1} for task {task_id}")
                     if task_item:
-                        _update_task_item_status(
+                        _update_task_item_status_safe(
                             db, task_item, "failed",
                             error_message=str(e)
                         )
 
-            accumulator.flush()
+            try:
+                accumulator.flush()
+            except Exception as e:
+                logger.warning(f"Failed to flush accumulator for batch task {task_id}: {e}")
+            
             task.total_tokens = accumulator.total_tokens
 
-            _update_task_status(
+            _update_task_status_safe(
                 db, task, "completed",
                 progress_message=f"批量生成完成！成功生成 {completed_count}/{chapter_count} 章",
                 current_index=chapter_count,
                 completed_count=completed_count,
             )
+            logger.info(f"Batch task {task_id} completed successfully: {completed_count}/{chapter_count} chapters")
 
         except Exception as e:
             logger.exception(f"Batch task {task_id} execution error")
-            _update_task_status(db, task, "failed", error_message=str(e))
+            _update_task_status_safe(db, task, "failed", error_message=str(e))
 
+    except Exception as e:
+        logger.exception(f"Batch task {task_id} fatal error")
+        if task:
+            _update_task_status_safe(db, task, "failed", error_message=f"系统错误: {str(e)}")
     finally:
-        db.close()
-        task_manager.remove_task(task_id)
+        try:
+            db.close()
+        except Exception:
+            pass
+        try:
+            task_manager.remove_task(task_id)
+        except Exception:
+            pass
 
 
 def start_single_chapter_task(
+    db: Session,
     user_id: int,
     novel_id: int,
     chapter_id: int | None,
@@ -451,54 +542,50 @@ def start_single_chapter_task(
     max_iterations: int = 10,
 ) -> BackgroundTask:
     """启动单章节后台生成任务"""
-    db = SessionLocal()
-    try:
-        task = BackgroundTask(
-            user_id=user_id,
-            novel_id=novel_id,
-            task_type="single_chapter",
-            status="pending",
-            title=title,
-            summary=summary,
-            batch_count=1,
-        )
-        db.add(task)
-        db.commit()
-        db.refresh(task)
+    task = BackgroundTask(
+        user_id=user_id,
+        novel_id=novel_id,
+        task_type="single_chapter",
+        status="pending",
+        title=title,
+        summary=summary,
+        batch_count=1,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
 
-        task_item = TaskItem(
-            background_task_id=task.id,
-            sort_order=0,
-            status="pending",
-            title=title,
-            summary=summary,
-        )
-        db.add(task_item)
-        db.commit()
-        db.refresh(task)
+    task_item = TaskItem(
+        background_task_id=task.id,
+        sort_order=0,
+        status="pending",
+        title=title,
+        summary=summary,
+    )
+    db.add(task_item)
+    db.commit()
+    db.refresh(task)
 
-        task_manager.submit_task(
-            task.id,
-            _run_single_chapter_task,
-            task.id,
-            user_id,
-            novel_id,
-            chapter_id,
-            title,
-            summary,
-            fixed_title,
-            word_count,
-            agent_mode,
-            max_iterations,
-        )
+    task_manager.submit_task(
+        task.id,
+        _run_single_chapter_task,
+        task.id,
+        user_id,
+        novel_id,
+        chapter_id,
+        title,
+        summary,
+        fixed_title,
+        word_count,
+        agent_mode,
+        max_iterations,
+    )
 
-        return task
-
-    finally:
-        db.close()
+    return task
 
 
 def start_batch_chapters_task(
+    db: Session,
     user_id: int,
     novel_id: int,
     after_chapter_id: int | None,
@@ -509,46 +596,41 @@ def start_batch_chapters_task(
     max_iterations: int = 10,
 ) -> BackgroundTask:
     """启动批量章节后台生成任务"""
-    db = SessionLocal()
-    try:
-        task = BackgroundTask(
-            user_id=user_id,
-            novel_id=novel_id,
-            task_type="batch_chapters",
+    task = BackgroundTask(
+        user_id=user_id,
+        novel_id=novel_id,
+        task_type="batch_chapters",
+        status="pending",
+        summary=total_summary,
+        batch_count=chapter_count,
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+    for i in range(chapter_count):
+        task_item = TaskItem(
+            background_task_id=task.id,
+            sort_order=i,
             status="pending",
-            summary=total_summary,
-            batch_count=chapter_count,
+            summary=f"第{i+1}章（待规划）",
         )
-        db.add(task)
-        db.commit()
-        db.refresh(task)
+        db.add(task_item)
+    db.commit()
+    db.refresh(task)
 
-        for i in range(chapter_count):
-            task_item = TaskItem(
-                background_task_id=task.id,
-                sort_order=i,
-                status="pending",
-                summary=f"第{i+1}章（待规划）",
-            )
-            db.add(task_item)
-        db.commit()
-        db.refresh(task)
+    task_manager.submit_task(
+        task.id,
+        _run_batch_chapters_task,
+        task.id,
+        user_id,
+        novel_id,
+        after_chapter_id,
+        total_summary,
+        chapter_count,
+        word_count,
+        agent_mode,
+        max_iterations,
+    )
 
-        task_manager.submit_task(
-            task.id,
-            _run_batch_chapters_task,
-            task.id,
-            user_id,
-            novel_id,
-            after_chapter_id,
-            total_summary,
-            chapter_count,
-            word_count,
-            agent_mode,
-            max_iterations,
-        )
-
-        return task
-
-    finally:
-        db.close()
+    return task

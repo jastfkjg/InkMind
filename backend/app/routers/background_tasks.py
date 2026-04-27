@@ -80,6 +80,7 @@ def create_single_task(
         )
     
     task = start_single_chapter_task(
+        db,
         user_id=user.id,
         novel_id=body.novel_id,
         chapter_id=body.chapter_id,
@@ -120,6 +121,7 @@ def create_batch_task(
         )
     
     task = start_batch_chapters_task(
+        db,
         user_id=user.id,
         novel_id=body.novel_id,
         after_chapter_id=body.after_chapter_id,

@@ -13,21 +13,29 @@ import {
   Col,
   Select,
   Switch,
+  Dropdown,
+  Avatar,
 } from "antd";
 import {
   SaveOutlined,
   ArrowLeftOutlined,
-  BookOutlined,
   SettingOutlined,
   RobotOutlined,
   CheckCircleOutlined,
   SafetyOutlined,
   EyeOutlined,
   GoldOutlined,
+  SunOutlined,
+  MoonOutlined,
+  UserOutlined,
+  BarChartOutlined,
+  HistoryOutlined,
+  LogoutOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useNavigation } from "@/context/NavigationContext";
 
 const { Header, Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -48,13 +56,14 @@ const AGENT_MODE_DESCRIPTIONS: Record<AgentMode, string> = {
 };
 
 export default function AiSettings() {
-  const { user, updateAiSettings } = useAuth();
-  const { isDark, isSepia } = useTheme();
+  const { user, updateAiSettings, logout } = useAuth();
+  const { theme, setTheme, isDark, isSepia } = useTheme();
+  const nav = useNavigate();
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const nav = useNavigate();
+  const { goBackSmart } = useNavigation();
 
   useEffect(() => {
     if (!user) return;
@@ -119,6 +128,70 @@ export default function AiSettings() {
     ? "linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)"
     : "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)";
 
+  const primaryColor = isDark ? "#f97316" : "#7c2d12";
+
+  const themeMenuItems = [
+    {
+      key: "light",
+      icon: <SunOutlined />,
+      label: "日间",
+      onClick: () => setTheme("light"),
+      disabled: theme === "light",
+    },
+    {
+      key: "sepia",
+      icon: <EyeOutlined />,
+      label: "护眼",
+      onClick: () => setTheme("sepia"),
+      disabled: theme === "sepia",
+    },
+    {
+      key: "dark",
+      icon: <MoonOutlined />,
+      label: "夜间",
+      onClick: () => setTheme("dark"),
+      disabled: theme === "dark",
+    },
+  ];
+
+  const userMenuItems = [
+    {
+      key: "settings",
+      icon: <SettingOutlined />,
+      label: "AI 设置",
+      disabled: true,
+    },
+    {
+      key: "usage",
+      icon: <BarChartOutlined />,
+      label: "Token 用量",
+      onClick: () => nav("/usage"),
+    },
+    {
+      key: "tasks",
+      icon: <HistoryOutlined />,
+      label: "后台任务",
+      onClick: () => nav("/tasks"),
+    },
+    {
+      key: "divider",
+      type: "divider" as const,
+    },
+    {
+      key: "logout",
+      icon: <LogoutOutlined />,
+      label: "退出登录",
+      danger: true,
+      onClick: () => logout(),
+    },
+  ];
+
+  const getThemeIcon = () => {
+    if (theme === "dark") return <MoonOutlined />;
+    if (theme === "sepia") return <EyeOutlined />;
+    return <SunOutlined />;
+  };
+
   return (
     <Layout
       style={{
@@ -147,18 +220,10 @@ export default function AiSettings() {
             gap: "0.75rem",
           }}
         >
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => nav("/")}
-            style={{ color: textColor }}
-          >
-            返回
-          </Button>
-          <BookOutlined
+          <SettingOutlined
             style={{
               fontSize: "1.75rem",
-              color: isDark ? "#f97316" : "#7c2d12",
+              color: primaryColor,
             }}
           />
           <Title
@@ -171,18 +236,60 @@ export default function AiSettings() {
               transition: "color 0.3s ease",
             }}
           >
-            InkMind
+            AI 设置
           </Title>
         </div>
 
-        <Text
-          style={{
-            color: secondaryTextColor,
-            fontSize: "0.9rem",
-          }}
-        >
-          AI 设置
-        </Text>
+        <Space size="middle">
+          <Button
+            icon={<ArrowLeftOutlined />}
+            onClick={() => goBackSmart()}
+            size="large"
+            style={{ height: 40 }}
+          >
+            返回
+          </Button>
+
+          <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
+            <Button
+              type="text"
+              icon={getThemeIcon()}
+              size="large"
+              style={{
+                color: textColor,
+                transition: "color 0.3s ease",
+              }}
+            />
+          </Dropdown>
+
+          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: "pointer",
+                padding: "0.4rem 0.75rem",
+                borderRadius: 8,
+                transition: "background 0.2s",
+              }}
+            >
+              <Avatar
+                size={36}
+                icon={<UserOutlined />}
+                style={{
+                  background: primaryColor,
+                  transition: "background-color 0.3s ease",
+                }}
+              >
+                {user?.display_name?.charAt(0) || user?.email?.charAt(0)}
+              </Avatar>
+              <Text strong style={{ color: textColor, transition: "color 0.3s ease" }}>
+                {user?.display_name || user?.email}
+              </Text>
+            </div>
+          </Dropdown>
+        </Space>
       </Header>
 
       <Content
