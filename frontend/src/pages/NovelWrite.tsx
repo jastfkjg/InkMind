@@ -43,21 +43,6 @@ const RAIL_ITEM_KEYS: { key: AiTool; labelKey: string }[] = [
   { key: "versions", labelKey: "write_tool_versions" },
 ];
 
-const WRITE_BODY_FONT_KEY = "inkmind_write_body_font";
-
-type WriteBodyFontId = "noto" | "song" | "kai" | "fang" | "hei" | "mono";
-
-const WRITE_BODY_FONT_IDS: WriteBodyFontId[] = ["noto", "song", "kai", "fang", "hei", "mono"];
-
-const WRITE_BODY_FONT_LABEL_KEYS: Record<WriteBodyFontId, string> = {
-  noto: "write_font_noto",
-  song: "write_font_song",
-  kai: "write_font_kai",
-  fang: "write_font_fang",
-  hei: "write_font_hei",
-  mono: "write_font_mono",
-};
-
 type LineHeightId = "compact" | "normal" | "relaxed" | "loose";
 
 const LINE_HEIGHT_IDS: LineHeightId[] = ["compact", "normal", "relaxed", "loose"];
@@ -150,28 +135,6 @@ function readStoredFocusMode(): boolean {
   }
 }
 
-/** Sample each option in the menu with its own font. */
-const WRITE_FONT_PREVIEW: Record<WriteBodyFontId, string> = {
-  noto: 'var(--font-serif), "Noto Serif SC", Georgia, serif',
-  song: '"Songti SC", "SimSun", "Noto Serif SC", serif',
-  kai: '"Kaiti SC", "KaiTi", "STKaiti", serif',
-  fang: '"STFangsong", "FangSong", "SimFang", "Noto Serif SC", serif',
-  hei: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif',
-  mono: 'ui-monospace, "Cascadia Code", "Sarasa Mono SC", "Noto Sans Mono CJK SC", monospace',
-};
-
-function readStoredBodyFont(): WriteBodyFontId {
-  try {
-    const v = localStorage.getItem(WRITE_BODY_FONT_KEY);
-    if (v && WRITE_BODY_FONT_IDS.includes(v as WriteBodyFontId)) {
-      return v as WriteBodyFontId;
-    }
-  } catch {
-    /* ignore */
-  }
-  return "noto";
-}
-
 /** Font size tiers (internal mapping only) */
 type WriteBodyFontSizeId = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 
@@ -253,11 +216,6 @@ export default function NovelWrite() {
     [t]
   );
 
-  const WRITE_BODY_FONTS = useMemo(
-    () => WRITE_BODY_FONT_IDS.map((id) => ({ id, label: t(WRITE_BODY_FONT_LABEL_KEYS[id]) })),
-    [t]
-  );
-
   const LINE_HEIGHTS = useMemo(
     () => LINE_HEIGHT_IDS.map((id) => ({ id, label: t(LINE_HEIGHT_LABEL_KEYS[id]), value: LINE_HEIGHT_VALUES[id] })),
     [t]
@@ -282,9 +240,6 @@ export default function NovelWrite() {
   const [narrow, setNarrow] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 900 : false
   );
-  const [bodyFontId, setBodyFontId] = useState<WriteBodyFontId>(() =>
-    typeof window !== "undefined" ? readStoredBodyFont() : "noto"
-  );
   const [bodyFontSizeId, setBodyFontSizeId] = useState<WriteBodyFontSizeId>(() =>
     typeof window !== "undefined" ? readStoredBodyFontSizeId() : "md"
   );
@@ -297,7 +252,6 @@ export default function NovelWrite() {
   const [focusMode, setFocusMode] = useState(() =>
     typeof window !== "undefined" ? readStoredFocusMode() : false
   );
-  const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
   const [lineHeightMenuOpen, setLineHeightMenuOpen] = useState(false);
   const [lineWidthMenuOpen, setLineWidthMenuOpen] = useState(false);
@@ -309,7 +263,8 @@ export default function NovelWrite() {
   const [namingCategory, setNamingCategory] = useState<"character" | "item" | "skill" | "other">("character");
   const [namingDesc, setNamingDesc] = useState("");
   const [namingHint, setNamingHint] = useState("");
-  const [namingResult, setNamingResult] = useState("");
+  const [namingResult, setNamingResult] = useState<string[]>([]);
+  const [namingSelectedIndex, setNamingSelectedIndex] = useState<number | null>(null);
   const [askHistory, setAskHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [askInput, setAskInput] = useState("");
   const [evaluateBusy, setEvaluateBusy] = useState(false);
@@ -411,14 +366,6 @@ export default function NovelWrite() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(WRITE_BODY_FONT_KEY, bodyFontId);
-    } catch {
-      /* ignore */
-    }
-  }, [bodyFontId]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem(WRITE_BODY_FONT_SIZE_KEY, bodyFontSizeId);
     } catch {
       /* ignore */
@@ -454,10 +401,9 @@ export default function NovelWrite() {
   }, [focusMode]);
 
   useEffect(() => {
-    if (!fontMenuOpen && !sizeMenuOpen && !lineHeightMenuOpen && !lineWidthMenuOpen) return;
+    if (!sizeMenuOpen && !lineHeightMenuOpen && !lineWidthMenuOpen) return;
     const onDoc = (e: MouseEvent) => {
       if (sidebarToolsRef.current && !sidebarToolsRef.current.contains(e.target as Node)) {
-        setFontMenuOpen(false);
         setSizeMenuOpen(false);
         setLineHeightMenuOpen(false);
         setLineWidthMenuOpen(false);
@@ -465,7 +411,6 @@ export default function NovelWrite() {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setFontMenuOpen(false);
         setSizeMenuOpen(false);
         setLineHeightMenuOpen(false);
         setLineWidthMenuOpen(false);
@@ -477,7 +422,7 @@ export default function NovelWrite() {
       document.removeEventListener("mousedown", onDoc);
       document.removeEventListener("keydown", onKey);
     };
-  }, [fontMenuOpen, sizeMenuOpen, lineHeightMenuOpen, lineWidthMenuOpen]);
+  }, [sizeMenuOpen, lineHeightMenuOpen, lineWidthMenuOpen]);
 
   useEffect(() => {
     if (!Number.isFinite(id)) return;
@@ -771,7 +716,7 @@ export default function NovelWrite() {
       ta.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, [showSelectionBar, selectionRange, content, bodyFontSizePx, bodyFontId]);
+  }, [showSelectionBar, selectionRange, content, bodyFontSizePx]);
 
   function needsChapter(tool: AiTool): boolean {
     return tool === "generate" || tool === "rewrite" || tool === "append" || tool === "evaluate" || tool === "versions";
@@ -1317,8 +1262,10 @@ export default function NovelWrite() {
     }
     setBusy(true);
     setErr("");
+    setNamingSelectedIndex(null);
     try {
-      setNamingResult("");
+      setNamingResult([]);
+      let fullText = "";
       const { text } = await novelAiNaming(
         id,
         {
@@ -1326,9 +1273,20 @@ export default function NovelWrite() {
           description: d,
           hint: namingHint || null,
         },
-        (t) => setNamingResult((prev) => prev + t)
+        (chunk) => {
+          fullText += chunk;
+          const names = fullText
+            .split("\n")
+            .map((n) => n.trim())
+            .filter((n) => n);
+          setNamingResult(names);
+        }
       );
-      setNamingResult(text);
+      const finalNames = text
+        .split("\n")
+        .map((n) => n.trim())
+        .filter((n) => n);
+      setNamingResult(finalNames);
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
@@ -1444,43 +1402,6 @@ export default function NovelWrite() {
             </span>
           </button>
           <div className="write-sidenav-tools" ref={sidebarToolsRef}>
-            <div className="write-font-picker">
-              <button
-                type="button"
-                className="write-icon-btn write-font-btn"
-                title={t("write_font_body")}
-                aria-expanded={fontMenuOpen}
-                aria-haspopup="listbox"
-                aria-label={t("write_font_body")}
-                onClick={() => {
-                  setSizeMenuOpen(false);
-                  setFontMenuOpen((v) => !v);
-                }}
-              >
-                Aa
-              </button>
-              {fontMenuOpen ? (
-                <ul className="write-font-menu" role="listbox" aria-label={t("write_select_font")}>
-                  {WRITE_BODY_FONTS.map((f) => (
-                    <li key={f.id} role="presentation">
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={bodyFontId === f.id}
-                        className={`write-font-option${bodyFontId === f.id ? " is-active" : ""}`}
-                        style={{ fontFamily: WRITE_FONT_PREVIEW[f.id] }}
-                        onClick={() => {
-                          setBodyFontId(f.id);
-                          setFontMenuOpen(false);
-                        }}
-                      >
-                        {f.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
             <div className="write-size-picker">
               <button
                 type="button"
@@ -1490,7 +1411,6 @@ export default function NovelWrite() {
                 aria-haspopup="dialog"
                 aria-label={t("write_font_size")}
                 onClick={() => {
-                  setFontMenuOpen(false);
                   setLineHeightMenuOpen(false);
                   setLineWidthMenuOpen(false);
                   setSizeMenuOpen((v) => !v);
@@ -1559,7 +1479,6 @@ export default function NovelWrite() {
                 aria-haspopup="listbox"
                 aria-label={t("write_line_height")}
                 onClick={() => {
-                  setFontMenuOpen(false);
                   setSizeMenuOpen(false);
                   setLineWidthMenuOpen(false);
                   setLineHeightMenuOpen((v) => !v);
@@ -1602,7 +1521,6 @@ export default function NovelWrite() {
                 aria-haspopup="listbox"
                 aria-label={t("write_line_width")}
                 onClick={() => {
-                  setFontMenuOpen(false);
                   setSizeMenuOpen(false);
                   setLineHeightMenuOpen(false);
                   setLineWidthMenuOpen((v) => !v);
@@ -1714,7 +1632,7 @@ export default function NovelWrite() {
                   <div className="field write-body-field">
                     <textarea
                       ref={bodyTextareaRef}
-                      className={`textarea editor-body editor-body--${bodyFontId} editor-body--line-height-${lineHeightId}`}
+                      className={`textarea editor-body editor-body--line-height-${lineHeightId}`}
                       style={{ fontSize: `${bodyFontSizePx}px` }}
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
@@ -2198,8 +2116,8 @@ export default function NovelWrite() {
                     placeholder={t("write_naming_hint_placeholder")}
                   />
                 </div>
-                <button type="button" className="btn btn-primary" disabled={busy || namingBusy} onClick={onRunNaming}>
-                  {namingBusy ? t("write_generating") : t("write_naming_generate")}
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunNaming}>
+                  {busy ? t("write_generating") : t("write_naming_generate")}
                 </button>
                 {namingResult && namingResult.length > 0 ? (
                   <div className="write-naming-results stack-sm" style={{ marginTop: "1rem" }}>

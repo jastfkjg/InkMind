@@ -510,17 +510,17 @@ def run_direct_chapter_generation(
     word_count: int | None = None,
     save_to_db: bool = True,
     language: Language = "zh",
-) -> tuple[str, str] | tuple[str, str, Chapter]:
-    """直接调用 LLM 生成章节，不经过 Agent 循环。
+):
+    """直接调用 LLM 生成章节，不经过 Agent 循环（流式版本）。
 
     适用于简单任务场景，减少 LLM 交互轮数。
 
     Args:
         save_to_db: 是否保存到数据库（False 表示预览模式）
 
-    Returns:
-        如果 save_to_db=True: (title, content, Chapter)
-        如果 save_to_db=False: (title, content)
+    Yields:
+        str: 正文内容 chunks（实时流式输出）
+        Chapter: 最终章节对象（生成完毕后，如果 save_to_db=True）
     """
     from app.models import Chapter as ChapterModel
     from sqlalchemy import func, select
@@ -530,7 +530,12 @@ def run_direct_chapter_generation(
         fixed_title=fixed_title, word_count=word_count, language=language
     )
 
-    raw = llm.complete(system, user)
+    body_chunks: list[str] = []
+    for chunk in filter_think_chunks(llm.stream_complete(system, user)):
+        body_chunks.append(chunk)
+        yield chunk
+
+    raw = "".join(body_chunks).strip()
 
     need_title = fixed_title is None
     title_out, body_text = parse_chapter_generation_json(raw, need_title=need_title)
@@ -540,13 +545,21 @@ def run_direct_chapter_generation(
     elif target_chapter and (target_chapter.title or "").strip():
         title_out = target_chapter.title.strip()
     elif not title_out.strip():
-        title_out = _generate_chapter_title(
+        yield from ([] if save_to_db else [])
+        for chunk in filter_think_chunks(_generate_chapter_title_stream(
             db, llm, novel, target_chapter,
             chapter_summary=chapter_summary, body_text=body_text, language=language
-        )
+        )):
+            if isinstance(chunk, str):
+                continue
+            else:
+                title_out = chunk
+                break
 
     if not save_to_db:
-        return title_out, body_text
+        yield title_out
+        yield body_text
+        return
 
     if target_chapter is None:
         if new_sort_order is not None:
@@ -573,4 +586,48 @@ def run_direct_chapter_generation(
 
     db.commit()
     db.refresh(ch)
-    return title_out, body_text, ch
+    yield ch
+
+
+def _generate_chapter_title_stream(
+    db: Session,
+    llm: LLMProvider,
+    novel: Novel,
+    target_chapter: Chapter | None,
+    *,
+    chapter_summary: str,
+    body_text: str,
+    language: Language = "zh",
+):
+    """生成章节标题（流式版本，用于 Direct 模式）。
+
+    Yields:
+        str: 中间过程内容（可忽略）
+        str: 最终标题
+    """
+    if not body_text.strip():
+        yield (target_chapter.title or "").strip() if target_chapter else ""
+        return
+
+    existing_titles = list_existing_chapter_titles(
+        db,
+        novel.id,
+        exclude_chapter_id=target_chapter.id if target_chapter else None,
+    )
+    candidate = Chapter(
+        novel_id=novel.id,
+        title=(target_chapter.title or "") if target_chapter else "",
+        summary=chapter_summary.strip(),
+        content=body_text,
+        sort_order=target_chapter.sort_order if target_chapter else 0,
+    )
+    system, user = messages_suggest_chapter_title(novel, candidate, existing_titles=existing_titles, language=language)
+
+    title_chunks: list[str] = []
+    for chunk in filter_think_chunks(llm.stream_complete(system, user)):
+        title_chunks.append(chunk)
+        yield chunk
+
+    raw = "".join(title_chunks).strip()
+    final_title = ensure_unique_chapter_title(finalize_suggested_title(raw), existing_titles, language=language)
+    yield final_title
