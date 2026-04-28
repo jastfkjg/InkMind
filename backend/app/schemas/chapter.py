@@ -40,6 +40,10 @@ class ChapterUpdate(BaseModel):
     summary: str | None = None
     content: str | None = None
     sort_order: int | None = None
+    skip_version: bool = Field(
+        default=False,
+        description="为 true 时只保存不创建版本历史；默认 false，保存时创建版本",
+    )
 
 
 class ChapterOut(BaseModel):

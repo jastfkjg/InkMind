@@ -256,7 +256,7 @@ def _run_single_chapter_task(
                     if isinstance(result, Chapter):
                         chapter_out = result
             elif agent_mode == "direct":
-                result = run_direct_chapter_generation(
+                for item in run_direct_chapter_generation(
                     db=db,
                     novel=novel,
                     chapter_summary=summary,
@@ -265,9 +265,9 @@ def _run_single_chapter_task(
                     fixed_title=fixed_title,
                     word_count=word_count,
                     save_to_db=True,
-                )
-                if len(result) == 3:
-                    chapter_out = result[2]
+                ):
+                    if isinstance(item, Chapter):
+                        chapter_out = item
             else:
                 for result in run_flexible_chapter_generation(
                     db=db,
@@ -443,7 +443,7 @@ def _run_batch_chapters_task(
                             if isinstance(result, Chapter):
                                 chapter_out = result
                     elif agent_mode == "direct":
-                        result = run_direct_chapter_generation(
+                        for item in run_direct_chapter_generation(
                             db=db,
                             novel=novel,
                             chapter_summary=chapter_summary,
@@ -452,9 +452,9 @@ def _run_batch_chapters_task(
                             fixed_title=chapter_title,
                             word_count=word_count,
                             save_to_db=True,
-                        )
-                        if len(result) == 3:
-                            chapter_out = result[2]
+                        ):
+                            if isinstance(item, Chapter):
+                                chapter_out = item
                     else:
                         for result in run_flexible_chapter_generation(
                             db=db,

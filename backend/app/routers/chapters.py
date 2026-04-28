@@ -824,6 +824,7 @@ def update_chapter(
     if ch is None or ch.novel_id != novel_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
     data = body.model_dump(exclude_unset=True)
+    skip_version = data.pop("skip_version", False)
     
     has_changes = False
     for k, v in data.items():
@@ -831,7 +832,7 @@ def update_chapter(
             has_changes = True
             break
     
-    if has_changes:
+    if has_changes and not skip_version:
         save_version_before_change(db, ch, "manual")
     
     for k, v in data.items():

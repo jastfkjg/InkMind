@@ -366,6 +366,25 @@ export default function NovelWrite() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [focusMode]);
 
+  const hasUnsavedChanges = useMemo(() => {
+    if (activeId === null) return false;
+    const snap = chapters.find((c) => c.id === activeId);
+    if (!snap) return false;
+    return snap.title !== title || snap.summary !== summary || snap.content !== content;
+  }, [activeId, chapters, title, summary, content]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   useEffect(() => {
     try {
       localStorage.setItem(WRITE_BODY_FONT_SIZE_KEY, bodyFontSizeId);
@@ -784,7 +803,12 @@ export default function NovelWrite() {
       if (activeIdRef.current !== scheduledForId) return;
       void (async () => {
         try {
-          const ch = await updateChapter(id, scheduledForId, { title, summary, content });
+          const ch = await updateChapter(id, scheduledForId, {
+            title,
+            summary,
+            content,
+            skip_version: true,
+          } as Parameters<typeof updateChapter>[2]);
           setChapters((prev) => prev.map((c) => (c.id === ch.id ? ch : c)));
         } catch (e) {
           setErr(apiErrorMessage(e));

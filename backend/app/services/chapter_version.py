@@ -8,6 +8,9 @@ from app.models import Chapter, ChapterVersion, VersionChangeType
 from app.schemas.chapter import ChapterVersionOut
 
 
+MAX_VERSIONS_PER_CHAPTER = 20
+
+
 def get_next_version_number(db: Session, chapter_id: int) -> int:
     max_version = db.scalar(
         select(func.max(ChapterVersion.version_number)).where(
@@ -15,6 +18,26 @@ def get_next_version_number(db: Session, chapter_id: int) -> int:
         )
     )
     return (max_version or 0) + 1
+
+
+def _enforce_version_limit(db: Session, chapter_id: int) -> None:
+    """确保章节版本数量不超过限制，超过时删除最早的版本。"""
+    total = db.scalar(
+        select(func.count(ChapterVersion.id)).where(
+            ChapterVersion.chapter_id == chapter_id
+        )
+    )
+    if total and total > MAX_VERSIONS_PER_CHAPTER:
+        excess_count = total - MAX_VERSIONS_PER_CHAPTER
+        oldest_versions = (
+            db.query(ChapterVersion)
+            .filter(ChapterVersion.chapter_id == chapter_id)
+            .order_by(ChapterVersion.version_number.asc())
+            .limit(excess_count)
+            .all()
+        )
+        for v in oldest_versions:
+            db.delete(v)
 
 
 def create_chapter_version(
@@ -38,6 +61,7 @@ def create_chapter_version(
     )
     
     db.add(version)
+    _enforce_version_limit(db, chapter.id)
     db.commit()
     db.refresh(version)
     return version
