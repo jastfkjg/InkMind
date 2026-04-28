@@ -22,6 +22,15 @@ export type ChapterPreviewResult = {
   needs_revision: boolean;
 };
 
+export type ProgressEvent = {
+  type: "thinking" | "tool_call" | "tool_result" | "generating" | "finished" | "info" | "step";
+  message: string;
+  detail?: string;
+  tool?: string;
+  step?: number;
+  total?: number;
+};
+
 export type NdjsonAiResult = {
   chapter?: Chapter;
   chapters?: Chapter[];
@@ -77,7 +86,7 @@ export function clearToken() {
 export async function postNdjsonAi(
   path: string,
   body: unknown,
-  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+  options?: { onToken?: (chunk: string) => void; onProgress?: (progress: ProgressEvent) => void; signal?: AbortSignal }
 ): Promise<NdjsonAiResult> {
   const token = getToken();
   const url = `${baseURL}${path.startsWith("/") ? path : `/${path}`}`;
@@ -109,8 +118,12 @@ export async function postNdjsonAi(
   let buffer = "";
   const out: NdjsonAiResult = {};
   const onToken = options?.onToken;
+  const onProgress = options?.onProgress;
   const applyObj = (obj: Record<string, unknown>) => {
     if (typeof obj.t === "string") onToken?.(obj.t);
+    if ("progress" in obj && obj.progress != null && typeof obj.progress === "object") {
+      onProgress?.(obj.progress as ProgressEvent);
+    }
     if ("error" in obj && obj.error != null) throw new Error(String(obj.error));
     if ("chapter" in obj) out.chapter = obj.chapter as Chapter;
     if ("chapters" in obj && Array.isArray(obj.chapters)) out.chapters = obj.chapters as Chapter[];
@@ -265,6 +278,7 @@ export async function generateChapter(
     lockTitle?: boolean;
     wordCount?: number | null;
     onToken?: (chunk: string) => void;
+    onProgress?: (progress: ProgressEvent) => void;
   }
 ): Promise<NdjsonAiResult> {
   const r = await postNdjsonAi(
@@ -276,7 +290,7 @@ export async function generateChapter(
       lock_title: options?.lockTitle ?? false,
       word_count: (options?.wordCount && options.wordCount >= 500 && options.wordCount <= 4000) ? options.wordCount : null,
     },
-    { onToken: options?.onToken }
+    { onToken: options?.onToken, onProgress: options?.onProgress }
   );
   return r;
 }

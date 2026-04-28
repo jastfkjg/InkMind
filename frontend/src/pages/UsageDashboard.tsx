@@ -81,7 +81,27 @@ export default function UsageDashboard() {
       polish: "usage_action_polish",
       naming: "usage_action_naming",
       chat: "usage_action_chat",
+      "AI生成": "usage_action_generate",
+      "AI改写": "usage_action_rewrite",
+      "AI续写": "usage_action_append",
+      "AI评估": "usage_action_evaluate",
+      "AI扩写": "usage_action_expand",
+      "AI润色": "usage_action_polish",
+      "AI起名": "usage_action_naming",
+      "AI提问": "usage_action_chat",
+      "AI标题": "usage_action_title",
+      "AI概要灵感": "usage_action_summary_inspire",
+      "AI批量生成": "usage_action_batch_generate",
+      "自动摘要": "usage_action_auto_summary",
+      "后台章节生成": "usage_action_bg_generate",
+      "后台批量章节规划": "usage_action_bg_batch_plan",
     };
+    if (action.startsWith("后台批量章节生成")) {
+      return t("usage_action_bg_batch_generate");
+    }
+    if (action === "LLM调用") {
+      return t("usage_action_llm_call");
+    }
     return map[action] ? t(map[action]) : action || "-";
   };
 

@@ -22,6 +22,7 @@ import {
   rollbackChapterToVersion,
   updateChapter,
   type ChapterPreviewResult,
+  type ProgressEvent,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
@@ -286,6 +287,7 @@ export default function NovelWrite() {
   const [batchChapterCountInput, setBatchChapterCountInput] = useState("3");
   const [batchSummary, setBatchSummary] = useState("");
   const [batchStreaming, setBatchStreaming] = useState("");
+  const [currentProgress, setCurrentProgress] = useState<ProgressEvent | null>(null);
   /** 正文选区：用于 AI 扩写/润色 */
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [selectionPanel, setSelectionPanel] = useState<{
@@ -952,6 +954,7 @@ export default function NovelWrite() {
     setContent("");
     setPreviewResult(null);
     setIsPreviewMode(false);
+    setCurrentProgress(null);
     try {
       const result = await generateChapter(nid, s, {
         chapterId: activeId,
@@ -960,6 +963,9 @@ export default function NovelWrite() {
         wordCount: generateWordCount,
         onToken: (t) => {
           if (novelIdRef.current === nid) setContent((p) => p + t);
+        },
+        onProgress: (progress) => {
+          if (novelIdRef.current === nid) setCurrentProgress(progress);
         },
       });
       if (novelIdRef.current !== nid) return;
@@ -997,6 +1003,7 @@ export default function NovelWrite() {
       }
     } finally {
       setBusy(false);
+      setCurrentProgress(null);
     }
   }
 
@@ -1868,6 +1875,17 @@ export default function NovelWrite() {
                     >
                       {busy ? t("write_generating") : hasBody ? t("write_regenerate_overwrite") : generateMode === "background" ? t("write_submit_background") : t("write_generate")}
                     </button>
+
+                    {generateMode === "foreground" && busy && currentProgress ? (
+                      <pre className="write-generate-log" style={{ marginTop: "0.5rem" }}>
+                        {currentProgress.message}
+                        {currentProgress.detail && (
+                          <span style={{ color: "#666", fontSize: "0.875rem", display: "block", marginTop: "0.25rem" }}>
+                            {currentProgress.detail.length > 100 ? currentProgress.detail.slice(0, 100) + "..." : currentProgress.detail}
+                          </span>
+                        )}
+                      </pre>
+                    ) : null}
 
                     {previewResult ? (
                       <div className="stack-sm" style={{ marginTop: "1rem" }}>

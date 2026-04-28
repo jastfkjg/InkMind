@@ -372,6 +372,30 @@ PROMPTS: dict[str, dict[str, str]] = {
         "zh": "【正文】\n{content}",
         "en": "[Content]\n{content}",
     },
+    "agent_progress_thinking": {
+        "zh": "思考中...",
+        "en": "Thinking...",
+    },
+    "agent_progress_tool_call": {
+        "zh": "调用工具: {tool}",
+        "en": "Calling tool: {tool}",
+    },
+    "agent_progress_tool_result": {
+        "zh": "工具完成: {tool}",
+        "en": "Tool completed: {tool}",
+    },
+    "agent_progress_step": {
+        "zh": "步骤 {current}/{total}",
+        "en": "Step {current}/{total}",
+    },
+    "agent_progress_generating": {
+        "zh": "正在生成章节正文...",
+        "en": "Generating chapter content...",
+    },
+    "agent_progress_finished": {
+        "zh": "任务完成",
+        "en": "Task completed",
+    },
 }
 
 
