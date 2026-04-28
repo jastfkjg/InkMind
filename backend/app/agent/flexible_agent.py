@@ -20,6 +20,8 @@ import time
 from app.agent.base import BaseTool
 from app.agent.tools import FinishTool, GenerateChapterTool
 from app.llm.base import LLMProvider
+from app.prompts import get_prompt
+from app.language import Language
 
 log = logging.getLogger(__name__)
 
@@ -384,7 +386,6 @@ class FlexibleNovelAgent:
                 continue
 
             if action.thought:
-                yield f"[思考] {action.thought}\n"
                 history.append({
                     "type": "thought",
                     "content": action.thought

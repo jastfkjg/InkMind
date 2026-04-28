@@ -1,4 +1,5 @@
-from typing import Annotated
+import json
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,7 @@ from app.llm.metered_llm import llm_usage_session
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, normalize_provider_name, resolve_llm_for_user
 from app.models import Chapter, ChapterVersion
+from app.observability.otel_ai import ai_span
 from app.routers.novels import _get_owned_novel
 from app.schemas.chapter import (
     ChapterBatchGenerateIn,
@@ -32,7 +34,6 @@ from app.schemas.chapter import (
     ChapterVersionOut,
 )
 from app.services.chapter_eval import parse_evaluation_json, stream_evaluate_tokens
-from app.observability.otel_ai import ai_span
 from app.services.chapter_gen import (
     build_generation_prompt,
     parse_chapter_generation_json,
@@ -61,6 +62,45 @@ from app.services.chapter_version import (
 )
 
 router = APIRouter(prefix="/novels/{novel_id}/chapters", tags=["chapters"])
+
+_PROGRESS_PREFIX = "__PROGRESS__:"
+
+
+def _try_parse_progress(chunk: str) -> dict[str, Any] | None:
+    """尝试解析进度事件。
+    
+    格式: __PROGRESS__:{"type": "thinking", "message": "...", ...}
+    
+    返回:
+        - 解析后的进度字典，如果是进度事件
+        - None 如果不是进度事件
+    """
+    if not chunk.startswith(_PROGRESS_PREFIX):
+        return None
+    
+    json_str = chunk[len(_PROGRESS_PREFIX):].strip()
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError:
+        return None
+
+
+def _process_chunk_for_output(item: str, body_parts: list[str]) -> bytes | None:
+    """处理一个 chunk，返回应该输出的 NDJSON 行。
+    
+    如果是进度事件，返回 {"progress": ...} 格式。
+    如果是正文内容，返回 {"t": ...} 格式。
+    返回 None 如果不应该输出（如空字符串）。
+    """
+    if not item:
+        return None
+    
+    progress = _try_parse_progress(item)
+    if progress is not None:
+        return ndjson_line({"progress": progress})
+    
+    body_parts.append(item)
+    return ndjson_line({"t": item})
 
 
 def _llm_http_exc(e: LLMRequestError) -> HTTPException:
@@ -181,9 +221,9 @@ def generate_chapter(
                             title_out = ch.title
                             body_text = ch.content
                         else:
-                            if item:
-                                body_parts.append(item)
-                                yield ndjson_line({"t": item})
+                            output = _process_chunk_for_output(item, body_parts)
+                            if output:
+                                yield output
                     if not body_text and body_parts:
                         from app.services.chapter_gen import _sanitize_generated_body
                         body_text = _sanitize_generated_body("".join(body_parts))
@@ -204,9 +244,9 @@ def generate_chapter(
                             title_out = ch.title
                             body_text = ch.content
                         else:
-                            if item:
-                                body_parts.append(item)
-                                yield ndjson_line({"t": item})
+                            output = _process_chunk_for_output(item, body_parts)
+                            if output:
+                                yield output
                     if not body_text and body_parts:
                         from app.services.chapter_gen import _sanitize_generated_body
                         body_text = _sanitize_generated_body("".join(body_parts))

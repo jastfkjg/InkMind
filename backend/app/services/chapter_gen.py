@@ -32,6 +32,66 @@ _SUMMARY_LINE_MAX = 320
 _TASK_SUMMARY_MAX = 2800
 _PREV_CHAPTER_COUNT = 3
 
+_PROGRESS_PREFIX = "__PROGRESS__:"
+
+
+def _make_progress_event(event_type: str, message: str, **kwargs) -> str:
+    """创建进度事件字符串。
+    
+    格式: __PROGRESS__:{"type": "thinking", "message": "...", ...}
+    """
+    event = {"type": event_type, "message": message}
+    event.update(kwargs)
+    return f"{_PROGRESS_PREFIX}{json.dumps(event, ensure_ascii=False)}\n"
+
+
+def _is_status_chunk(chunk: str) -> bool:
+    """检查 chunk 是否是状态信息（以 [思考] 等开头）。"""
+    status_prefixes = [
+        "[思考]", "[调用工具]", "[工具结果]", "[完成]", 
+        "[开始生成正文]", "[系统]", "[错误]"
+    ]
+    return any(chunk.startswith(prefix) for prefix in status_prefixes)
+
+
+def _parse_status_chunk(chunk: str, language: Language) -> str | None:
+    """解析状态信息 chunk，转换为进度事件。
+    
+    返回 None 如果不是状态信息。
+    """
+    chunk = chunk.strip()
+    
+    if chunk.startswith("[思考]"):
+        detail = chunk[len("[思考]"):].strip()
+        message = get_prompt("agent_progress_thinking", language)
+        return _make_progress_event("thinking", message, detail=detail)
+    
+    elif chunk.startswith("[调用工具]"):
+        detail = chunk[len("[调用工具]"):].strip()
+        tool_name = detail.split()[0] if detail else "unknown"
+        message = get_prompt("agent_progress_tool_call", language, tool=tool_name)
+        return _make_progress_event("tool_call", message, tool=tool_name, detail=detail)
+    
+    elif chunk.startswith("[工具结果]"):
+        detail = chunk[len("[工具结果]"):].strip()
+        message = get_prompt("agent_progress_tool_result", language, tool="tool")
+        return _make_progress_event("tool_result", message, detail=detail)
+    
+    elif chunk.startswith("[开始生成正文]"):
+        message = get_prompt("agent_progress_generating", language)
+        return _make_progress_event("generating", message)
+    
+    elif chunk.startswith("[完成]"):
+        detail = chunk[len("[完成]"):].strip()
+        message = get_prompt("agent_progress_finished", language)
+        return _make_progress_event("finished", message, detail=detail)
+    
+    elif chunk.startswith("[系统]") or chunk.startswith("[错误]"):
+        detail = chunk
+        return _make_progress_event("info", detail, detail=detail)
+    
+    return None
+
 
 def _clip(s: str | None, n: int) -> str:
     t = (s or "").strip()
@@ -315,7 +375,11 @@ def run_flexible_chapter_generation(
         fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count, "language": language},
     ):
         all_chunks.append(chunk)
-        if not (chunk.startswith("[思考]") or chunk.startswith("[调用工具]") or chunk.startswith("[工具结果]") or chunk.startswith("[完成]") or chunk.startswith("[开始生成正文]") or chunk.startswith("[系统]") or chunk.startswith("[错误]")):
+        if _is_status_chunk(chunk):
+            progress_event = _parse_status_chunk(chunk, language)
+            if progress_event:
+                yield progress_event
+        else:
             yield chunk
 
     body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
