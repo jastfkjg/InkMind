@@ -112,7 +112,7 @@ export default function NovelPeopleForm() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#fffcf7",
+            background: "#faf9f5",
           }}
         >
           <div
@@ -149,17 +149,17 @@ export default function NovelPeopleForm() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#fffcf7",
+          background: "#faf9f5",
         }}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <UserOutlined style={{ color: "#7c2d12", fontSize: "1.25rem" }} />
+            <UserOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#1c1917",
+                color: "#141413",
               }}
             >
               {isEdit ? t("peopleform_edit_character") : t("peopleform_new_character")}
@@ -203,13 +203,13 @@ export default function NovelPeopleForm() {
             type="inner"
             title={
               <Space>
-                <InfoCircleOutlined style={{ color: "#7c2d12" }} />
+                <InfoCircleOutlined style={{ color: "#cc785c" }} />
                 <span>{t("peopleform_basic_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >
@@ -241,13 +241,13 @@ export default function NovelPeopleForm() {
             type="inner"
             title={
               <Space>
-                <UserOutlined style={{ color: "#7c2d12" }} />
+                <UserOutlined style={{ color: "#cc785c" }} />
                 <span>{t("peopleform_character_profile")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >
@@ -280,13 +280,13 @@ export default function NovelPeopleForm() {
             type="inner"
             title={
               <Space>
-                <InfoCircleOutlined style={{ color: "#7c2d12" }} />
+                <InfoCircleOutlined style={{ color: "#cc785c" }} />
                 <span>{t("peopleform_additional_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >

@@ -69,10 +69,10 @@ export default function Login() {
     <Layout
       style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #f6f2ea 0%, #ebe4d8 100%)",
+        background: "linear-gradient(135deg, #f5f0e8 0%, #e6dfd8 100%)",
         backgroundImage: `
-          radial-gradient(ellipse 120% 80% at 50% -20%, #fff8f0 0%, transparent 55%),
-          linear-gradient(180deg, #f0e9df 0%, #f6f2ea 35%)
+          radial-gradient(ellipse 120% 80% at 50% -20%, #faf9f5 0%, transparent 55%),
+          linear-gradient(180deg, #e6dfd8 0%, #f5f0e8 35%)
         `,
       }}
     >
@@ -113,7 +113,7 @@ export default function Login() {
                 <BookOutlined
                   style={{
                     fontSize: "2.5rem",
-                    color: "#7c2d12",
+                    color: "#cc785c",
                   }}
                 />
                 <Title
@@ -121,7 +121,7 @@ export default function Login() {
                   style={{
                     margin: 0,
                     fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                    color: "#1c1917",
+                    color: "#141413",
                     fontSize: "2.25rem",
                   }}
                 >
@@ -134,7 +134,7 @@ export default function Login() {
                   marginBottom: "1rem",
                   fontFamily: '"Source Sans 3", system-ui, sans-serif',
                   fontWeight: 600,
-                  color: "#292524",
+                  color: "#141413",
                   fontSize: "1.5rem",
                 }}
               >
@@ -143,7 +143,7 @@ export default function Login() {
               <Text
                 style={{
                   fontSize: "1rem",
-                  color: "#57534e",
+                  color: "#6c6a64",
                   lineHeight: 1.8,
                 }}
               >
@@ -159,7 +159,7 @@ export default function Login() {
                 borderRadius: 16,
                 boxShadow:
                   "0 4px 6px rgba(28, 25, 23, 0.06), 0 10px 15px rgba(28, 25, 23, 0.03)",
-                background: "#fffcf7",
+                background: "#faf9f5",
               }}
             >
               <div
@@ -173,7 +173,7 @@ export default function Login() {
                   style={{
                     margin: 0,
                     fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                    color: "#1c1917",
+                    color: "#141413",
                   }}
                 >
                   {t("login_title")}
