@@ -113,6 +113,42 @@ export default function BackgroundTasksPage() {
     return map[type] || "default";
   };
 
+  const translateProgressMessage = (msg: string | null): string => {
+    if (!msg) return "-";
+    if (isZh) return msg;
+
+    const patterns: Array<{ regex: RegExp; key: string; groups: string[] }> = [
+      { regex: /^准备生成章节\.\.\.$/, key: "tasks_progress_preparing", groups: [] },
+      { regex: /^正在规划批量章节\.\.\.$/, key: "tasks_progress_planning_batch", groups: [] },
+      { regex: /^章节规划完成，开始逐章生成\.\.\.$/, key: "tasks_progress_planning_complete", groups: [] },
+      { regex: /^用户或作品不存在$/, key: "tasks_error_user_novel_not_found", groups: [] },
+      { regex: /^章节生成失败，未返回章节对象$/, key: "tasks_error_no_chapter_returned", groups: [] },
+      { regex: /^章节生成失败$/, key: "tasks_error_generation_failed", groups: [] },
+      { regex: /^章节「(.+?)」生成完成$/, key: "tasks_progress_chapter_completed", groups: ["title"] },
+      { regex: /^任务已取消，已完成 (\d+) 章$/, key: "tasks_progress_cancelled", groups: ["count"] },
+      { regex: /^正在生成第 (\d+)\/(\d+) 章：(.+)$/, key: "tasks_progress_generating", groups: ["idx", "total", "title"] },
+      { regex: /^批量生成完成！成功生成 (\d+)\/(\d+) 章$/, key: "tasks_progress_batch_complete", groups: ["completed", "total"] },
+      { regex: /^系统错误: (.+)$/, key: "tasks_error_system_error", groups: ["error"] },
+    ];
+
+    for (const { regex, key, groups } of patterns) {
+      const match = msg.match(regex);
+      if (match) {
+        const params: Record<string, string> = {};
+        groups.forEach((group, idx) => {
+          params[group] = match[idx + 1] || "";
+        });
+        let translated = t(key);
+        for (const [k, v] of Object.entries(params)) {
+          translated = translated.replace(`{${k}}`, v);
+        }
+        return translated;
+      }
+    }
+
+    return msg;
+  };
+
   const loadTasks = useCallback(async () => {
     setErr("");
     try {
@@ -330,14 +366,14 @@ export default function BackgroundTasksPage() {
       render: (msg: string | null, record: TaskWithProgress) => {
         if (record.status === "failed" && record.error_message) {
           return (
-            <Tooltip title={record.error_message}>
+            <Tooltip title={translateProgressMessage(record.error_message)}>
               <Text type="danger" ellipsis style={{ maxWidth: 200 }}>
-                {record.error_message}
+                {translateProgressMessage(record.error_message)}
               </Text>
             </Tooltip>
           );
         }
-        return msg || "-";
+        return translateProgressMessage(msg);
       },
       width: 250,
     },
@@ -797,7 +833,7 @@ export default function BackgroundTasksPage() {
                 </Text>
                 <br />
                 <Text style={{ marginTop: "0.25rem" }}>
-                  {selectedTask.progress_message}
+                  {translateProgressMessage(selectedTask.progress_message)}
                 </Text>
               </div>
             )}
@@ -805,7 +841,7 @@ export default function BackgroundTasksPage() {
             {selectedTask.error_message && (
               <Alert
                 message={t("tasks_details_error")}
-                description={selectedTask.error_message}
+                description={translateProgressMessage(selectedTask.error_message)}
                 type="error"
                 showIcon
                 style={{ marginTop: "1.5rem" }}

@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from app.agent.base import BaseTool
+from app.agent.memory import NovelMemory
 from app.models import Character, Chapter, Novel
+from app.prompts import get_prompt
+from app.language import Language
 
 if TYPE_CHECKING:
     from app.llm.base import LLMProvider
@@ -137,57 +140,61 @@ class GenerateChapterTool(BaseTool):
         llm: "LLMProvider",
         *,
         word_count: int | None = None,
+        language: Language = "zh",
     ) -> None:
         self._db = db
         self._novel = novel
         self._llm = llm
         self._word_count = word_count
+        self._language = language
 
     def run(self, chapter_summary: str = "", fixed_title: str | None = None) -> str:
         """执行章节生成，返回 JSON 格式的完整内容。"""
-        from app.agent.memory import NovelMemory
-
-        memory = NovelMemory(self._db, self._novel)
-        context = memory.build_context(chapter_summary)
-
-        system, user = _build_generate_system_user(context, fixed_title, word_count=self._word_count)
-
-        return self._llm.complete(system, user)
-
-    def run_stream(self, chapter_summary: str = "", fixed_title: str | None = None) -> Iterator[str]:
-        """执行章节生成，流式返回正文内容（纯文本，非 JSON）。"""
-        from app.agent.memory import NovelMemory
-
         memory = NovelMemory(self._db, self._novel)
         context = memory.build_context(chapter_summary)
 
         word_count_req = ""
         if self._word_count and 500 <= self._word_count <= 4000:
-            word_count_req = f"\n4. 正文长度尽量控制在 {self._word_count} 字左右（允许上下浮动 10%）。"
-
-        system = f"""你是一位专业中文小说作者。请根据上下文，创作本章正文。
-
-要求：
-1. 使用自然流畅的现代汉语叙事，符合给定文风与类型。
-2. 只输出正文内容，不要任何解释、标签或结构标记。
-3. 情节需与前文衔接自然，人物言行符合其设定。
-4. 【重要】前文情节概要是已完成的内容，绝对不要重复或改写！本章必须续写全新的情节，推动故事向前发展。
-5. 【重要】不要复述前文情节，直接开始写本章的新内容。{word_count_req}"""
+            word_count_req = get_prompt("gen_word_count_req", self._language, count=self._word_count)
 
         if fixed_title:
-            title_line = f"（本章标题：{fixed_title}）"
+            system = get_prompt("gen_system_fixed_title", self._language, word_count_req=word_count_req)
+            title_line = get_prompt("gen_title_line_fixed", self._language, title=fixed_title.strip())
         else:
+            system = get_prompt("gen_system_dynamic_title", self._language, word_count_req=word_count_req)
             title_line = ""
 
-        user = f"""{context}
-{title_line}
+        user = (
+            context + "\n\n" +
+            get_prompt("gen_user_task", self._language, summary=chapter_summary) +
+            title_line + "\n\n" +
+            get_prompt("gen_user_warning", self._language)
+        )
 
-【特别提醒】
-- 前文情节概要是已完成的内容，不要重复、不要改写、不要复述
-- 本章必须写全新的内容，推动故事向前发展
-- 直接开始写本章正文，不要有任何回顾前文的内容
+        return self._llm.complete(system, user)
 
-请创作符合上述设定的正文。"""
+    def run_stream(self, chapter_summary: str = "", fixed_title: str | None = None) -> Iterator[str]:
+        """执行章节生成，流式返回正文内容（纯文本，非 JSON）。"""
+        memory = NovelMemory(self._db, self._novel)
+        context = memory.build_context(chapter_summary)
+
+        word_count_req = ""
+        if self._word_count and 500 <= self._word_count <= 4000:
+            word_count_req = get_prompt("gen_word_count_req", self._language, count=self._word_count)
+
+        if fixed_title:
+            system = get_prompt("gen_system_fixed_title", self._language, word_count_req=word_count_req)
+            title_line = get_prompt("gen_title_line_fixed", self._language, title=fixed_title.strip())
+        else:
+            system = get_prompt("gen_system_dynamic_title", self._language, word_count_req=word_count_req)
+            title_line = ""
+
+        user = (
+            context + "\n\n" +
+            get_prompt("gen_user_task", self._language, summary=chapter_summary) +
+            title_line + "\n\n" +
+            get_prompt("gen_user_warning", self._language)
+        )
 
         return self._llm.stream_complete(system, user)
 
