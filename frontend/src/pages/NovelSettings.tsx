@@ -92,7 +92,7 @@ export default function NovelSettings() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#fffcf7",
+            background: "#faf9f5",
           }}
         >
           <div
@@ -129,17 +129,17 @@ export default function NovelSettings() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#fffcf7",
+          background: "#faf9f5",
         }}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <SettingOutlined style={{ color: "#7c2d12", fontSize: "1.25rem" }} />
+            <SettingOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#1c1917",
+                color: "#141413",
               }}
             >
               {t("settings_title")}
@@ -186,13 +186,13 @@ export default function NovelSettings() {
             type="inner"
             title={
               <Space>
-                <BookOutlined style={{ color: "#7c2d12" }} />
+                <BookOutlined style={{ color: "#cc785c" }} />
                 <span>{t("settings_general")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >
@@ -244,13 +244,13 @@ export default function NovelSettings() {
             type="inner"
             title={
               <Space>
-                <EditOutlined style={{ color: "#7c2d12" }} />
+                <EditOutlined style={{ color: "#cc785c" }} />
                 <span>{t("writing_style_and_background")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >

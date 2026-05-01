@@ -187,18 +187,18 @@ export default function Dashboard() {
     },
   ];
 
-  const bgColor = isDark ? "#1a1a2e" : isSepia ? "#f4ecd8" : "#f6f2ea";
-  const bgLinear = isDark ? "linear-gradient(180deg, #16213e 0%, #1a1a2e 35%)" : 
-                      isSepia ? "linear-gradient(180deg, #e8dcc0 0%, #f4ecd8 35%)" : 
-                      "linear-gradient(180deg, #f0e9df 0%, #f6f2ea 35%)";
+  const bgColor = isDark ? "#181715" : isSepia ? "#f5eddd" : "#f5f0e8";
+  const bgLinear = isDark ? "linear-gradient(180deg, #1e1d1b 0%, #181715 35%)" : 
+                      isSepia ? "linear-gradient(180deg, #efe2c9 0%, #f5eddd 35%)" : 
+                      "linear-gradient(180deg, #e6dfd8 0%, #f5f0e8 35%)";
   const bgRadial = isDark ? "none" : 
-                     isSepia ? "radial-gradient(ellipse 120% 80% at 50% -20%, #faf6e9 0%, transparent 55%)" :
-                     "radial-gradient(ellipse 120% 80% at 50% -20%, #fff8f0 0%, transparent 55%)";
-  const headerBg = isDark ? "#16213e" : isSepia ? "#faf6e9" : "#fffcf7";
-  const headerBorder = isDark ? "#374151" : isSepia ? "#e0d0b0" : "#e7e0d5";
-  const textColor = isDark ? "#e8e8e8" : isSepia ? "#5c4b37" : "#1c1917";
-  const cardBg = isDark ? "#16213e" : isSepia ? "#faf6e9" : "#fffcf7";
-  const secondaryTextColor = isDark ? "#9ca3af" : isSepia ? "#8b7355" : "#57534e";
+                     isSepia ? "radial-gradient(ellipse 120% 80% at 50% -20%, #faf9f5 0%, transparent 55%)" :
+                     "radial-gradient(ellipse 120% 80% at 50% -20%, #faf9f5 0%, transparent 55%)";
+  const headerBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+  const headerBorder = isDark ? "#2a2926" : isSepia ? "#d9cbb0" : "#e6dfd8";
+  const textColor = isDark ? "#e7e5e1" : isSepia ? "#4a392b" : "#141413";
+  const cardBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+  const secondaryTextColor = isDark ? "#a3a19b" : isSepia ? "#8b7762" : "#6c6a64";
 
   return (
     <Layout
@@ -231,7 +231,7 @@ export default function Dashboard() {
           <BookOutlined
             style={{
               fontSize: "1.75rem",
-              color: isDark ? "#f97316" : "#7c2d12",
+              color: isDark ? "#cc785c" : "#cc785c",
             }}
           />
           <Title
@@ -307,7 +307,7 @@ export default function Dashboard() {
                 size={36}
                 icon={<UserOutlined />}
                 style={{
-                  background: isDark ? "#f97316" : "#7c2d12",
+                  background: "#cc785c",
                   transition: "background-color 0.3s ease",
                 }}
               >
@@ -433,7 +433,7 @@ export default function Dashboard() {
                               <Button
                                 type="text"
                                 icon={<EditOutlined />}
-                                style={{ color: isDark ? "#f97316" : "#7c2d12" }}
+                                style={{ color: "#cc785c" }}
                               >
                                 {ready ? t("dashboard_write") : t("dashboard_setup")}
                               </Button>
@@ -444,7 +444,7 @@ export default function Dashboard() {
                               type="text"
                               icon={<ExportOutlined />}
                               onClick={() => setExportNovel(novel)}
-                              style={{ color: isDark ? "#f97316" : "#7c2d12" }}
+                              style={{ color: "#cc785c" }}
                             >
                               {t("dashboard_export_novel")}
                             </Button>

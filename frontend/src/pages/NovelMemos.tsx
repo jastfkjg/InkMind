@@ -109,17 +109,17 @@ export default function NovelMemos() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#fffcf7",
+          background: "#faf9f5",
         }}
         title={
           <Space>
-            <FileTextOutlined style={{ color: "#7c2d12", fontSize: "1.25rem" }} />
+            <FileTextOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#1c1917",
+                color: "#141413",
               }}
             >
               {t("memos_title")}
@@ -170,7 +170,7 @@ export default function NovelMemos() {
                           <Button
                             type="text"
                             icon={<EditOutlined />}
-                            style={{ color: "#7c2d12" }}
+                            style={{ color: "#cc785c" }}
                           >
                             {t("memos_edit")}
                           </Button>
@@ -200,7 +200,7 @@ export default function NovelMemos() {
                               strong
                               style={{
                                 fontSize: "1.05rem",
-                                color: "#1c1917",
+                                color: "#141413",
                                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
                               }}
                             >
@@ -210,7 +210,7 @@ export default function NovelMemos() {
                             <Text
                               strong
                               style={{
-                                color: "#1c1917",
+                                color: "#141413",
                               }}
                             >
                               {bodyPreview}

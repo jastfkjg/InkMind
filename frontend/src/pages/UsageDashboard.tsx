@@ -208,19 +208,19 @@ export default function UsageDashboard() {
     },
   ];
 
-  const bgColor = isDark ? "#1a1a2e" : isSepia ? "#f4ecd8" : "#f6f2ea";
-  const bgLinear = isDark ? "linear-gradient(180deg, #16213e 0%, #1a1a2e 35%)" : 
-                      isSepia ? "linear-gradient(180deg, #e8dcc0 0%, #f4ecd8 35%)" : 
-                      "linear-gradient(180deg, #f0e9df 0%, #f6f2ea 35%)";
+  const bgColor = isDark ? "#181715" : isSepia ? "#f5eddd" : "#f5f0e8";
+  const bgLinear = isDark ? "linear-gradient(180deg, #1e1d1b 0%, #181715 35%)" : 
+                      isSepia ? "linear-gradient(180deg, #efe2c9 0%, #f5eddd 35%)" : 
+                      "linear-gradient(180deg, #e6dfd8 0%, #f5f0e8 35%)";
   const bgRadial = isDark ? "none" : 
-                     isSepia ? "radial-gradient(ellipse 120% 80% at 50% -20%, #faf6e9 0%, transparent 55%)" :
-                     "radial-gradient(ellipse 120% 80% at 50% -20%, #fff8f0 0%, transparent 55%)";
-  const headerBg = isDark ? "#16213e" : isSepia ? "#faf6e9" : "#fffcf7";
-  const headerBorder = isDark ? "#374151" : isSepia ? "#e0d0b0" : "#e7e0d5";
-  const textColor = isDark ? "#e8e8e8" : isSepia ? "#5c4b37" : "#1c1917";
-  const cardBg = isDark ? "#16213e" : isSepia ? "#faf6e9" : "#fffcf7";
-  const primaryColor = isDark ? "#f97316" : "#7c2d12";
-  const secondaryTextColor = isDark ? "#9ca3af" : isSepia ? "#8b7355" : "#57534e";
+                     isSepia ? "radial-gradient(ellipse 120% 80% at 50% -20%, #faf9f5 0%, transparent 55%)" :
+                     "radial-gradient(ellipse 120% 80% at 50% -20%, #faf9f5 0%, transparent 55%)";
+  const headerBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+  const headerBorder = isDark ? "#2a2926" : isSepia ? "#d9cbb0" : "#e6dfd8";
+  const textColor = isDark ? "#e7e5e1" : isSepia ? "#4a392b" : "#141413";
+  const cardBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+  const primaryColor = "#cc785c";
+  const secondaryTextColor = isDark ? "#a3a19b" : isSepia ? "#8b7762" : "#6c6a64";
 
   const getThemeIcon = () => {
     if (theme === "dark") return <MoonOutlined />;
@@ -411,9 +411,33 @@ export default function UsageDashboard() {
               >
                 {user?.display_name?.charAt(0) || user?.email?.charAt(0)}
               </Avatar>
-              <Text strong style={{ color: textColor, transition: "color 0.3s ease" }}>
-                {user?.display_name || user?.email}
-              </Text>
+              <div style={{ lineHeight: 1.2 }}>
+                <Text
+                  strong
+                  style={{
+                    display: "block",
+                    color: textColor,
+                    fontSize: "0.9rem",
+                    transition: "color 0.3s ease",
+                  }}
+                >
+                  {user?.display_name || user?.email}
+                </Text>
+                {user?.display_name && (
+                  <Text
+                    type="secondary"
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: textColor,
+                      opacity: 0.6,
+                      transition: "color 0.3s ease",
+                    }}
+                  >
+                    {user.email}
+                  </Text>
+                )}
+              </div>
             </div>
           </Dropdown>
         </Space>

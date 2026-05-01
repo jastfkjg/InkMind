@@ -93,7 +93,7 @@ export default function NovelMemoForm() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#fffcf7",
+            background: "#faf9f5",
           }}
         >
           <div
@@ -130,17 +130,17 @@ export default function NovelMemoForm() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#fffcf7",
+          background: "#faf9f5",
         }}
         title={
           <Space>
-            <FileTextOutlined style={{ color: "#7c2d12", fontSize: "1.25rem" }} />
+            <FileTextOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#1c1917",
+                color: "#141413",
               }}
             >
               {isEdit ? t("memoform_edit_memo") : t("memoform_new_memo")}
@@ -180,13 +180,13 @@ export default function NovelMemoForm() {
             type="inner"
             title={
               <Space>
-                <FileTextOutlined style={{ color: "#7c2d12" }} />
+                <FileTextOutlined style={{ color: "#cc785c" }} />
                 <span>{t("memoform_memo_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #fff8f0 0%, #fffcf7 100%)",
+              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
               borderRadius: 12,
             }}
           >
