@@ -2275,13 +2275,13 @@ export default function NovelWrite() {
                                       color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#1976d2" : "#666",
                                     }}
                                   >
-                                    {v.change_type === "manual" && t("write_change_type_manual")}
-                                    {v.change_type === "ai_generate" && t("write_change_type_ai_generate")}
-                                    {v.change_type === "ai_rewrite" && t("write_change_type_ai_rewrite")}
-                                    {v.change_type === "ai_append" && t("write_change_type_ai_append")}
-                                    {v.change_type === "selection_expand" && t("write_change_type_selection_expand")}
-                                    {v.change_type === "selection_polish" && t("write_change_type_selection_polish")}
-                                    {v.change_type === "rollback" && t("write_change_type_rollback")}
+                                    {v.change_type === "manual" && t("write_change_manual")}
+                                    {v.change_type === "ai_generate" && t("write_change_ai_gen")}
+                                    {v.change_type === "ai_rewrite" && t("write_change_ai_rewrite")}
+                                    {v.change_type === "ai_append" && t("write_change_ai_append")}
+                                    {v.change_type === "selection_expand" && t("write_change_ai_expand")}
+                                    {v.change_type === "selection_polish" && t("write_change_ai_polish")}
+                                    {v.change_type === "rollback" && t("write_change_rollback")}
                                   </span>
                                 </div>
                                 {v.title && (
@@ -2308,7 +2308,7 @@ export default function NovelWrite() {
                                     disabled={versionDiffLoading || versionActionLoading}
                                     onClick={() => compareSelectedVersionWithCurrent(v.id)}
                                   >
-                                    {versionDiffLoading ? t("write_version_compare_loading") : t("write_version_compare_current")}
+                                    {versionDiffLoading ? t("write_comparing") : t("write_compare_with_current")}
                                   </button>
                                   <button
                                     type="button"
@@ -2317,7 +2317,7 @@ export default function NovelWrite() {
                                     disabled={versionActionLoading}
                                     onClick={() => handleRollback(v.id, true)}
                                   >
-                                    {t("write_version_restore_save")}
+                                    {t("write_rollback_save_current")}
                                   </button>
                                   <button
                                     type="button"
@@ -2326,7 +2326,7 @@ export default function NovelWrite() {
                                     disabled={versionActionLoading}
                                     onClick={() => handleRollback(v.id, false)}
                                   >
-                                    {t("write_version_restore_direct")}
+                                    {t("write_rollback_direct")}
                                   </button>
                                 </div>
                               </div>
