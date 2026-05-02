@@ -15,25 +15,31 @@ import {
   FileTextOutlined,
   LogoutOutlined,
   SafetyOutlined,
-  HomeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SettingOutlined,
   BarChartOutlined,
   HistoryOutlined,
+  ArrowLeftOutlined,
+  SunOutlined,
+  MoonOutlined,
+  EyeOutlined,
+  GlobalOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
+import { useNavigation } from "@/context/NavigationContext";
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
-  const { isDark } = useTheme();
-  const { t } = useI18n();
+  const { theme, setTheme, isDark, isSepia } = useTheme();
+  const { t, setLanguage, isZh } = useI18n();
   const nav = useNavigate();
+  const { goBackSmart } = useNavigation();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -66,11 +72,50 @@ export default function AdminLayout() {
   };
 
   const bgColor = isDark ? "#181715" : "#f5f0e8";
-  const headerBg = isDark ? "#1e1d1b" : "#faf9f5";
-  const headerBorder = isDark ? "#2a2926" : "#e6dfd8";
-  const textColor = isDark ? "#e7e5e1" : "#141413";
-  const secondaryTextColor = isDark ? "#a3a19b" : "#6c6a64";
-  const menuBg = isDark ? "#1e1d1b" : "#faf9f5";
+  const headerBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+  const headerBorder = isDark ? "#2a2926" : isSepia ? "#d9cbb0" : "#e6dfd8";
+  const textColor = isDark ? "#e7e5e1" : isSepia ? "#4a392b" : "#141413";
+  const secondaryTextColor = isDark ? "#a3a19b" : isSepia ? "#8b7762" : "#6c6a64";
+  const menuBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
+
+  const languageMenuItems = [
+    {
+      key: "zh",
+      icon: <GlobalOutlined />,
+      label: isZh ? "✓ 中文" : "中文",
+      onClick: () => setLanguage("zh"),
+    },
+    {
+      key: "en",
+      icon: <GlobalOutlined />,
+      label: !isZh ? "✓ English" : "English",
+      onClick: () => setLanguage("en"),
+    },
+  ];
+
+  const themeMenuItems = [
+    {
+      key: "light",
+      icon: <SunOutlined />,
+      label: t("theme_light"),
+      onClick: () => setTheme("light"),
+      disabled: theme === "light",
+    },
+    {
+      key: "sepia",
+      icon: <EyeOutlined />,
+      label: t("theme_sepia"),
+      onClick: () => setTheme("sepia"),
+      disabled: theme === "sepia",
+    },
+    {
+      key: "dark",
+      icon: <MoonOutlined />,
+      label: t("theme_dark"),
+      onClick: () => setTheme("dark"),
+      disabled: theme === "dark",
+    },
+  ];
 
   const userMenuItems = [
     {
@@ -98,12 +143,6 @@ export default function AdminLayout() {
       onClick: () => nav("/tasks"),
     },
     {
-      key: "dashboard",
-      icon: <HomeOutlined />,
-      label: t("nav_dashboard"),
-      onClick: () => nav("/"),
-    },
-    {
       key: "divider",
       type: "divider" as const,
     },
@@ -118,6 +157,12 @@ export default function AdminLayout() {
       },
     },
   ];
+
+  const getThemeIcon = () => {
+    if (theme === "dark") return <MoonOutlined />;
+    if (theme === "sepia") return <EyeOutlined />;
+    return <SunOutlined />;
+  };
 
   return (
     <Layout
@@ -205,6 +250,41 @@ export default function AdminLayout() {
             </div>
           </Space>
           <Space>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => goBackSmart()}
+              size="large"
+              style={{ height: 40 }}
+            >
+              {t("nav_back")}
+            </Button>
+
+            <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+              <Button
+                type="text"
+                icon={<GlobalOutlined />}
+                size="large"
+                style={{
+                  color: textColor,
+                  transition: "color 0.3s ease",
+                }}
+              >
+                {isZh ? "中文" : "EN"}
+              </Button>
+            </Dropdown>
+
+            <Dropdown menu={{ items: themeMenuItems }} placement="bottomRight">
+              <Button
+                type="text"
+                icon={getThemeIcon()}
+                size="large"
+                style={{
+                  color: textColor,
+                  transition: "color 0.3s ease",
+                }}
+              />
+            </Dropdown>
+
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
               <div
                 style={{

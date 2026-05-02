@@ -76,6 +76,7 @@ export default function EditorSettings({
     const i = WRITE_BODY_FONT_SIZES.findIndex((x) => x.id === bodyFontSizeId);
     return i >= 0 ? i : 2;
   })();
+  const currentBodyFontSize = WRITE_BODY_FONT_SIZES[bodyFontSizeIndex] ?? WRITE_BODY_FONT_SIZES[2];
 
   return (
     <div className="write-sidenav-tools" ref={sidebarToolsRef}>
@@ -96,10 +97,18 @@ export default function EditorSettings({
           <span className="write-size-icon" aria-hidden>
             <span className="write-size-icon-lg">A</span>
             <span className="write-size-icon-sm">a</span>
+            <span className="write-size-icon-rule" />
           </span>
         </button>
         {sizeMenuOpen ? (
           <div className="write-size-popover" role="dialog" aria-label={t("write_adjust_font_size")}>
+            <div className="write-size-popover-head">
+              <span>{t("write_font_size")}</span>
+              <strong>{currentBodyFontSize.label} · {currentBodyFontSize.px}px</strong>
+            </div>
+            <div className="write-size-preview" style={{ fontSize: `${currentBodyFontSize.px}px` }}>
+              Aa
+            </div>
             <div className="write-size-slider-row">
               <span className="write-size-slider-a write-size-slider-a--min" aria-hidden>
                 A
