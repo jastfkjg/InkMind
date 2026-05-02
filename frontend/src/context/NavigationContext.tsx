@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-const MENU_PAGE_PATHS = ["/settings", "/usage", "/tasks"];
+const MENU_PAGE_PATHS = ["/settings", "/usage", "/tasks", "/admin"];
 
 function isMenuPage(pathname: string): boolean {
   return MENU_PAGE_PATHS.some((path) => pathname.startsWith(path));
