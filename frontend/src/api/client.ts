@@ -654,3 +654,183 @@ export async function cancelBackgroundTask(taskId: number): Promise<BackgroundTa
 export async function deleteBackgroundTask(taskId: number): Promise<void> {
   await api.delete(`/background-tasks/${taskId}`);
 }
+
+export async function fetchMyQuota() {
+  const { data } = await api.get<{
+    token_quota: number | null;
+    token_quota_used: number;
+    token_quota_remaining: number | null;
+    token_quota_reset_at: string | null;
+    is_unlimited: boolean;
+  }>("/admin/me/quota");
+  return data;
+}
+
+export async function fetchAdminUsers(options?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}) {
+  const params = new URLSearchParams();
+  if (options?.page) params.append("page", String(options.page));
+  if (options?.pageSize) params.append("page_size", String(options.pageSize));
+  if (options?.search) params.append("search", options.search);
+  
+  const query = params.toString();
+  const { data } = await api.get<{
+    total: number;
+    items: Array<{
+      id: number;
+      email: string;
+      display_name: string | null;
+      is_admin: boolean;
+      llm_call_count: number;
+      created_at: string;
+      token_quota: number | null;
+      token_quota_used: number;
+      token_quota_reset_at: string | null;
+    }>;
+  }>(`/admin/users${query ? `?${query}` : ""}`);
+  return data;
+}
+
+export async function fetchAdminUser(userId: number) {
+  const { data } = await api.get<{
+    id: number;
+    email: string;
+    display_name: string | null;
+    is_admin: boolean;
+    llm_call_count: number;
+    created_at: string;
+    token_quota: number | null;
+    token_quota_used: number;
+    token_quota_reset_at: string | null;
+  }>(`/admin/users/${userId}`);
+  return data;
+}
+
+export async function updateUserQuota(
+  userId: number,
+  payload: {
+    token_quota: number | null;
+    reason?: string;
+  }
+) {
+  const { data } = await api.patch<{
+    id: number;
+    email: string;
+    display_name: string | null;
+    is_admin: boolean;
+    llm_call_count: number;
+    created_at: string;
+    token_quota: number | null;
+    token_quota_used: number;
+    token_quota_reset_at: string | null;
+  }>(`/admin/users/${userId}/quota`, payload);
+  return data;
+}
+
+export async function resetUserQuotaUsage(userId: number) {
+  const { data } = await api.post<{
+    id: number;
+    email: string;
+    display_name: string | null;
+    is_admin: boolean;
+    llm_call_count: number;
+    created_at: string;
+    token_quota: number | null;
+    token_quota_used: number;
+    token_quota_reset_at: string | null;
+  }>(`/admin/users/${userId}/reset-quota-usage`);
+  return data;
+}
+
+export async function fetchUserNovels(userId: number, options?: { page?: number; pageSize?: number }) {
+  const params = new URLSearchParams();
+  if (options?.page) params.append("page", String(options.page));
+  if (options?.pageSize) params.append("page_size", String(options.pageSize));
+  
+  const query = params.toString();
+  const { data } = await api.get<{
+    total: number;
+    items: Array<{
+      id: number;
+      title: string;
+      genre: string;
+      created_at: string;
+      updated_at: string;
+      chapter_count: number;
+    }>;
+  }>(`/admin/users/${userId}/novels${query ? `?${query}` : ""}`);
+  return data;
+}
+
+export async function fetchUserUsage(userId: number, days: number = 30) {
+  const { data } = await api.get<{
+    total_calls: number;
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_tokens: number;
+  }>(`/admin/users/${userId}/usage?days=${days}`);
+  return data;
+}
+
+export async function fetchQuotaChanges(options?: {
+  userId?: number;
+  page?: number;
+  pageSize?: number;
+}) {
+  const params = new URLSearchParams();
+  if (options?.userId) params.append("user_id", String(options.userId));
+  if (options?.page) params.append("page", String(options.page));
+  if (options?.pageSize) params.append("page_size", String(options.pageSize));
+  
+  const query = params.toString();
+  const { data } = await api.get<{
+    total: number;
+    items: Array<{
+      id: number;
+      user_id: number;
+      admin_id: number | null;
+      old_quota: number | null;
+      new_quota: number | null;
+      reason: string | null;
+      created_at: string;
+    }>;
+  }>(`/admin/quota-changes${query ? `?${query}` : ""}`);
+  return data;
+}
+
+export async function fetchAdminLogs(options?: {
+  action?: string;
+  adminId?: number;
+  targetUserId?: number;
+  page?: number;
+  pageSize?: number;
+}) {
+  const params = new URLSearchParams();
+  if (options?.action) params.append("action", options.action);
+  if (options?.adminId) params.append("admin_id", String(options.adminId));
+  if (options?.targetUserId) params.append("target_user_id", String(options.targetUserId));
+  if (options?.page) params.append("page", String(options.page));
+  if (options?.pageSize) params.append("page_size", String(options.pageSize));
+  
+  const query = params.toString();
+  const { data } = await api.get<{
+    total: number;
+    items: Array<{
+      id: number;
+      admin_id: number;
+      admin_email: string | null;
+      target_user_id: number | null;
+      target_user_email: string | null;
+      action: string;
+      resource_type: string | null;
+      resource_id: number | null;
+      details: string | null;
+      ip_address: string | null;
+      created_at: string;
+    }>;
+  }>(`/admin/logs${query ? `?${query}` : ""}`);
+  return data;
+}

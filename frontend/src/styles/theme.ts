@@ -96,7 +96,6 @@ export const inkMindLightTheme: ThemeConfig = {
     lineHeightHeading4: 1.2,
     lineHeightHeading5: 1.3,
     fontWeightStrong: 500,
-    fontWeight: 400,
     fontFamily: DESIGN_TYPOGRAPHY.fontFamilyUi,
     fontFamilyCode: DESIGN_TYPOGRAPHY.fontFamilyCode,
     controlHeight: 40,
@@ -115,7 +114,6 @@ export const inkMindLightTheme: ThemeConfig = {
     paddingMD: 16,
     paddingLG: 24,
     paddingXL: 32,
-    paddingXXL: 48,
   },
   components: {
     Button: {
@@ -124,7 +122,6 @@ export const inkMindLightTheme: ThemeConfig = {
       controlHeightLG: 48,
       controlHeightSM: 32,
       primaryColor: DESIGN_COLORS.onPrimary,
-      primaryHoverColor: DESIGN_COLORS.onPrimary,
       defaultBg: DESIGN_COLORS.canvas,
       defaultColor: DESIGN_COLORS.ink,
       defaultBorderColor: DESIGN_COLORS.hairline,
@@ -214,10 +211,6 @@ export const inkMindLightTheme: ThemeConfig = {
       borderRadius: DESIGN_ROUNDED.md,
       controlHeight: 40,
     },
-    TimePicker: {
-      borderRadius: DESIGN_ROUNDED.md,
-      controlHeight: 40,
-    },
     Checkbox: {
       borderRadius: DESIGN_ROUNDED.sm,
       colorPrimary: DESIGN_COLORS.primary,
@@ -268,7 +261,6 @@ export const inkMindLightTheme: ThemeConfig = {
       colorPrimary: DESIGN_COLORS.primary,
       itemBg: DESIGN_COLORS.canvas,
       itemActiveBg: DESIGN_COLORS.primary,
-      itemColor: DESIGN_COLORS.ink,
       itemActiveColor: DESIGN_COLORS.onPrimary,
     },
     Steps: {

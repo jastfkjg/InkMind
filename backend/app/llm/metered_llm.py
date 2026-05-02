@@ -2,6 +2,8 @@
 
 支持累积模式：一次业务操作中多次 LLM 调用的 token 用量会被累积，
 最后只创建一条记录。
+
+同时支持 token quota 检查：当用户配额不足时，拒绝 LLM 调用。
 """
 
 from __future__ import annotations
@@ -18,6 +20,137 @@ from app.llm.token_counter import count_tokens
 from app.models import LLMUsageEvent, User
 
 log = logging.getLogger(__name__)
+
+
+def get_effective_token_quota_used(db: Session, user: User) -> int:
+    """Return the user's effective token usage for quota display/checks.
+
+    Older accounts may have usage events recorded while ``token_quota_used`` was
+    still 0, especially when they were previously unlimited. Treat the usage
+    event total as the source of truth unless the stored counter is higher.
+    After an admin reset, only usage events after the reset point count.
+    """
+    usage_query = db.query(func.coalesce(func.sum(LLMUsageEvent.total_tokens), 0)).filter(
+        LLMUsageEvent.user_id == user.id
+    )
+    if user.token_quota_reset_at is not None:
+        usage_query = usage_query.filter(LLMUsageEvent.created_at >= user.token_quota_reset_at)
+
+    event_used = int(usage_query.scalar() or 0)
+    stored_used = int(user.token_quota_used or 0)
+    return max(stored_used, event_used)
+
+
+class TokenQuotaExceededError(Exception):
+    """Token 配额超出错误。"""
+
+    def __init__(
+        self,
+        message: str = "Token 配额已用完",
+        quota: int | None = None,
+        used: int | None = None,
+        required: int | None = None,
+    ) -> None:
+        self.message = message
+        self.quota = quota
+        self.used = used
+        self.required = required
+        super().__init__(message)
+
+
+def get_user_quota_status(db: Session, user_id: int) -> dict:
+    """获取用户配额状态。
+    
+    返回：
+    - is_unlimited: 是否无限制
+    - quota: 总配额（tokens）
+    - used: 已使用（tokens）
+    - remaining: 剩余（tokens）
+    - reset_at: 重置时间
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        return {
+            "is_unlimited": True,
+            "quota": None,
+            "used": 0,
+            "remaining": None,
+            "reset_at": None,
+        }
+    
+    used = get_effective_token_quota_used(db, user)
+    remaining = None
+    if user.token_quota is not None:
+        remaining = max(0, user.token_quota - used)
+    
+    return {
+        "is_unlimited": user.token_quota is None,
+        "quota": user.token_quota,
+        "used": used,
+        "remaining": remaining,
+        "reset_at": user.token_quota_reset_at,
+    }
+
+
+def check_token_quota(
+    db: Session,
+    user_id: int,
+    estimated_tokens: int = 1000,
+) -> None:
+    """检查用户 token 配额是否足够。
+    
+    Args:
+        db: 数据库会话
+        user_id: 用户 ID
+        estimated_tokens: 预计需要的 token 数量
+    
+    Raises:
+        TokenQuotaExceededError: 当配额不足时
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        return
+    
+    if user.token_quota is None:
+        return
+    
+    used = get_effective_token_quota_used(db, user)
+    remaining = user.token_quota - used
+    
+    if remaining <= 0:
+        raise TokenQuotaExceededError(
+            message=f"Token 配额已用完。配额: {user.token_quota}, 已使用: {used}",
+            quota=user.token_quota,
+            used=used,
+            required=estimated_tokens,
+        )
+    
+    if remaining < estimated_tokens:
+        log.warning(
+            "User %s token quota low: remaining=%s, estimated=%s",
+            user_id,
+            remaining,
+            estimated_tokens,
+        )
+
+
+def consume_token_quota(
+    db: Session,
+    user_id: int,
+    tokens: int,
+) -> None:
+    """消耗用户 token 配额。
+    
+    这个函数应该在 LLM 调用完成后调用，用于实际扣除已使用的 token。
+    """
+    user = db.get(User, user_id)
+    if user is None:
+        return
+    
+    if user.token_quota is None:
+        return
+    
+    user.token_quota_used = get_effective_token_quota_used(db, user) + tokens
 
 
 class LLMUsageAccumulator:
@@ -69,13 +202,17 @@ class LLMUsageAccumulator:
         
         u.llm_call_count = int(u.llm_call_count or 0) + 1
         
+        total = self._input_tokens + self._output_tokens
+        if u.token_quota is not None:
+            u.token_quota_used = get_effective_token_quota_used(self._db, u) + total
+        
         evt = LLMUsageEvent(
             user_id=self._user_id,
             provider=self._provider,
             action=self._action,
             input_tokens=self._input_tokens,
             output_tokens=self._output_tokens,
-            total_tokens=self._input_tokens + self._output_tokens,
+            total_tokens=total,
         )
         self._db.add(evt)
         self._db.commit()
@@ -85,7 +222,7 @@ class LLMUsageAccumulator:
             self._user_id,
             self._action,
             self._call_count,
-            self._input_tokens + self._output_tokens,
+            total,
         )
 
 
@@ -113,14 +250,20 @@ def _record_usage(
     u = db.get(User, user_id)
     if u is None:
         return
+    
     u.llm_call_count = int(u.llm_call_count or 0) + 1
+    
+    total = in_tokens + out_tokens
+    if u.token_quota is not None:
+        u.token_quota_used = get_effective_token_quota_used(db, u) + total
+    
     evt = LLMUsageEvent(
         user_id=user_id,
         provider=provider,
         action=action,
         input_tokens=in_tokens,
         output_tokens=out_tokens,
-        total_tokens=in_tokens + out_tokens,
+        total_tokens=total,
     )
     db.add(evt)
     db.commit()

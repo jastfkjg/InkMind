@@ -16,6 +16,10 @@ import Register from "@/pages/Register";
 import UsageDashboard from "@/pages/UsageDashboard";
 import AiSettings from "@/pages/AiSettings";
 import BackgroundTasks from "@/pages/BackgroundTasks";
+import AdminLayout from "@/pages/admin/AdminLayout";
+import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminUserDetail from "@/pages/admin/AdminUserDetail";
+import AdminLogs from "@/pages/admin/AdminLogs";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -30,6 +34,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
   if (!user) {
     return <Navigate to="/login" state={{ from: loc }} replace />;
+  }
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { t } = useI18n();
+  const loc = useLocation();
+  if (loading) {
+    return (
+      <div className="app-shell">
+        <p className="muted">{t("app_loading")}</p>
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" state={{ from: loc }} replace />;
+  }
+  if (!user.is_admin) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
@@ -92,6 +116,19 @@ export default function App() {
           <Route path="new" element={<NovelMemoForm />} />
           <Route path=":memoId/edit" element={<NovelMemoForm />} />
         </Route>
+      </Route>
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
+        <Route index element={<Navigate to="users" replace />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="users/:userId" element={<AdminUserDetail />} />
+        <Route path="logs" element={<AdminLogs />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -182,6 +182,16 @@ export default function AiSettings() {
   ];
 
   const userMenuItems = [
+    ...(user?.is_admin
+      ? [
+          {
+            key: "admin",
+            icon: <SafetyOutlined />,
+            label: t("nav_admin"),
+            onClick: () => nav("/admin/users"),
+          },
+        ]
+      : []),
     {
       key: "settings",
       icon: <SettingOutlined />,
