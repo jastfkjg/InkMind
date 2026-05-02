@@ -46,7 +46,8 @@
   --shadow-soft: rgba(20, 20, 19, 0.03);
   
   --radius: 12px;
-  --radius-lg: 16px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-md: 8px;
   --radius-sm: 6px;
   --radius-xs: 4px;
@@ -3333,6 +3334,572 @@ select {
 
   .ops-filter-row__spacer {
     display: none;
+  }
+}
+
+/* Writing workspace, aligned to DESIGN.md materials and spacing. */
+.write-shell {
+  --write-canvas: #faf9f5;
+  --write-surface-soft: #f5f0e8;
+  --write-surface: #efe9de;
+  --write-surface-strong: #e8e0d2;
+  --write-ink: #141413;
+  --write-body: #3d3d3a;
+  --write-muted: #6c6a64;
+  --write-hairline: #e6dfd8;
+  --write-hairline-soft: #ebe6df;
+  --write-accent: #cc785c;
+  --write-accent-active: #a9583e;
+  --write-accent-teal: #5db8a6;
+  --write-warning: #d4a017;
+  --write-shadow: 0 16px 40px rgba(28, 25, 23, 0.08);
+  --write-shadow-soft: 0 8px 20px rgba(28, 25, 23, 0.06);
+  margin-right: 0;
+  padding: 20px 68px 32px 0;
+  min-height: calc(100vh - 7.25rem);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--write-surface) 70%, transparent) 0%, transparent 24rem),
+    var(--write-canvas);
+}
+
+.write-theme--light {
+  --theme-bg: #faf9f5;
+  --theme-card: #faf9f5;
+  --theme-ink: #141413;
+  --theme-muted: #6c6a64;
+  --theme-border: #e6dfd8;
+  --theme-bg-deep: #f5f0e8;
+}
+
+.write-theme--sepia {
+  --theme-bg: #f5eddd;
+  --theme-card: #faf9f5;
+  --theme-ink: #4a392b;
+  --theme-muted: #8b7762;
+  --theme-border: #d9cbb0;
+  --theme-bg-deep: #efe2c9;
+}
+
+.write-theme--dark {
+  --theme-bg: #181715;
+  --theme-card: #1e1d1b;
+  --theme-ink: #e7e5e1;
+  --theme-muted: #a3a19b;
+  --theme-border: #2a2926;
+  --theme-bg-deep: #252320;
+  --write-canvas: #181715;
+  --write-surface-soft: #1f1e1b;
+  --write-surface: #252320;
+  --write-surface-strong: #373530;
+  --write-ink: #e7e5e1;
+  --write-body: #e7e5e1;
+  --write-muted: #a3a19b;
+  --write-hairline: #2a2926;
+  --write-hairline-soft: #252320;
+  --write-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+  --write-shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.write-theme--sepia {
+  --write-canvas: #f5eddd;
+  --write-surface-soft: #efe2c9;
+  --write-surface: #faf9f5;
+  --write-surface-strong: #d9cbb0;
+  --write-ink: #4a392b;
+  --write-body: #4a392b;
+  --write-muted: #8b7762;
+  --write-hairline: #d9cbb0;
+  --write-hairline-soft: #e7d9bf;
+}
+
+.write-workspace {
+  gap: 18px;
+  min-height: min(78vh, 900px);
+}
+
+.write-sidenav-toggle {
+  flex-basis: 44px;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.write-sidenav-tools {
+  gap: 8px;
+}
+
+.write-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border-color: var(--write-hairline);
+  background: color-mix(in oklab, var(--write-canvas) 88%, var(--write-surface));
+  color: var(--write-ink);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.write-icon-btn:hover {
+  background: var(--write-surface);
+  border-color: color-mix(in oklab, var(--write-accent) 34%, var(--write-hairline));
+  color: var(--write-accent-active);
+}
+
+.write-icon-btn:focus-visible,
+.write-rail-btn:focus-visible,
+.chapter-item:focus-visible,
+.chapter-del:focus-visible,
+.write-summary-inspire-btn:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--write-accent) 62%, transparent);
+  outline-offset: 2px;
+}
+
+.write-size-popover,
+.write-font-menu,
+.write-line-height-menu,
+.write-line-width-menu,
+.write-theme-menu {
+  border-radius: 12px;
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  box-shadow: var(--write-shadow-soft);
+}
+
+.write-left-sidebar.is-open {
+  flex-basis: 292px;
+  width: 292px;
+}
+
+.write-left-inner.card {
+  min-height: min(74vh, 720px);
+  padding: 16px !important;
+  border-radius: 16px;
+  border-color: var(--write-hairline);
+  background: color-mix(in oklab, var(--write-surface) 88%, var(--write-canvas));
+  box-shadow: none;
+}
+
+.write-left-head {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--write-hairline-soft);
+}
+
+.write-left-head strong {
+  color: var(--write-ink);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.write-left-head .btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  color: var(--write-accent-active);
+}
+
+.chapter-list {
+  max-height: min(72vh, 620px);
+  padding-right: 2px;
+}
+
+.chapter-row {
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chapter-item {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--write-body);
+  line-height: 1.35;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.chapter-row:hover .chapter-item {
+  background: color-mix(in oklab, var(--write-canvas) 70%, var(--write-surface));
+}
+
+.chapter-item.active {
+  border-color: color-mix(in oklab, var(--write-accent) 36%, var(--write-hairline));
+  background: var(--write-canvas);
+  color: var(--write-ink);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--write-accent) 20%, transparent) inset;
+}
+
+.chapter-del {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+}
+
+.write-main {
+  min-width: 0;
+}
+
+.write-editor-card.card {
+  min-height: min(78vh, 900px);
+  padding: 0;
+  border-radius: 16px;
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  box-shadow: var(--write-shadow);
+  overflow: hidden;
+}
+
+.write-editor-card.card:hover {
+  box-shadow: var(--write-shadow);
+}
+
+.write-editor-header {
+  margin: 0;
+  padding: 26px 32px 18px;
+  border-bottom-color: var(--write-hairline-soft);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--write-surface-soft) 54%, transparent), transparent),
+    var(--write-canvas);
+}
+
+.editor-title--improved {
+  color: var(--write-ink);
+  font-size: clamp(1.75rem, 3.2vw, 2.45rem);
+  font-weight: 400;
+  line-height: 1.18;
+  letter-spacing: 0;
+  text-align: left;
+  padding: 0;
+}
+
+.editor-title--improved::placeholder {
+  color: color-mix(in oklab, var(--write-muted) 58%, transparent);
+}
+
+.write-body-wrapper {
+  padding: 30px 32px 18px;
+}
+
+.write-body-wrapper--full .write-body-field {
+  max-width: min(86ch, 100%);
+}
+
+.write-body-field {
+  max-width: min(68ch, 100%);
+}
+
+.write-body-field .textarea.editor-body {
+  min-height: min(66vh, 760px);
+}
+
+.editor-body {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--write-body);
+  box-shadow: none;
+  padding: 0;
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  line-height: 1.9;
+}
+
+.editor-body:focus {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.editor-body::placeholder {
+  color: color-mix(in oklab, var(--write-muted) 58%, transparent);
+}
+
+.write-editor-footer {
+  margin: 0;
+  padding: 14px 32px;
+  border-top-color: var(--write-hairline-soft);
+  background: color-mix(in oklab, var(--write-surface-soft) 56%, var(--write-canvas));
+}
+
+.write-word-stats {
+  gap: 14px;
+  color: var(--write-muted);
+}
+
+.write-word-stat-item {
+  padding: 4px 0;
+}
+
+.write-word-stat-label {
+  color: var(--write-muted);
+  font-size: 0.76rem;
+}
+
+.write-word-stat-value {
+  color: var(--write-ink);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.write-ai-rail {
+  right: 14px;
+  top: max(5.25rem, 92px);
+  width: 58px;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 9999px;
+  border: 1px solid var(--write-hairline);
+  background: color-mix(in oklab, var(--write-canvas) 88%, var(--write-surface));
+  box-shadow: var(--write-shadow-soft);
+}
+
+.write-rail-btn {
+  min-height: 48px;
+  border-radius: 9999px;
+  color: var(--write-muted);
+}
+
+.write-rail-ai {
+  color: var(--write-accent);
+  font-size: 0.6rem;
+  letter-spacing: 0;
+}
+
+.write-rail-name {
+  color: var(--write-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.write-rail-btn:hover:not(:disabled) {
+  background: var(--write-surface);
+  color: var(--write-ink);
+}
+
+.write-rail-btn.active {
+  background: var(--write-accent);
+  border-color: var(--write-accent);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(204, 120, 92, 0.22);
+}
+
+.write-rail-btn.active .write-rail-ai,
+.write-rail-btn.active .write-rail-name {
+  color: #fff;
+}
+
+.write-ai-drawer {
+  right: 84px;
+  top: max(5.25rem, 92px);
+  bottom: 24px;
+  width: min(460px, calc(100vw - 112px));
+  border-radius: 16px;
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  box-shadow: var(--write-shadow);
+}
+
+.write-ai-drawer-head {
+  padding: 16px 18px 14px;
+  border-bottom-color: var(--write-hairline-soft);
+  background: var(--write-surface);
+}
+
+.write-ai-drawer-head span {
+  color: var(--write-ink);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.write-ai-drawer-head span::before {
+  width: 4px;
+  height: 1.15rem;
+  background: var(--write-accent);
+}
+
+.write-ai-drawer-body {
+  padding: 18px;
+}
+
+.write-ai-section {
+  gap: 14px;
+}
+
+.write-ai-section .hint {
+  border-left-color: var(--write-accent-teal);
+  background: color-mix(in oklab, var(--write-accent-teal) 10%, transparent);
+  color: var(--write-body);
+  border-radius: 0 8px 8px 0;
+}
+
+.write-ai-section .input,
+.write-ai-section .textarea,
+.write-ai-section select,
+.write-ai-chat-input .textarea {
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  color: var(--write-ink);
+}
+
+.write-generate-tabs {
+  width: 100%;
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--write-surface-soft);
+  border-color: var(--write-hairline);
+}
+
+.write-generate-tab {
+  flex: 1;
+  border-radius: 9999px;
+  padding: 9px 12px;
+}
+
+.write-generate-tab.is-active,
+.write-ai-section .btn-primary {
+  background: var(--write-accent);
+  color: #fff;
+  box-shadow: none;
+}
+
+.write-ai-section .btn-primary:hover:not(:disabled) {
+  background: var(--write-accent-active);
+  box-shadow: none;
+}
+
+.write-summary-inspire-btn {
+  border-radius: 9999px;
+  background: var(--write-canvas);
+  color: var(--write-accent);
+}
+
+.write-ai-bubble {
+  border-radius: 12px;
+  background: var(--write-surface-soft);
+  border-color: var(--write-hairline-soft);
+  box-shadow: none;
+}
+
+.write-ai-bubble--user {
+  background: color-mix(in oklab, var(--write-accent) 14%, var(--write-canvas));
+  border-color: color-mix(in oklab, var(--write-accent) 34%, var(--write-hairline));
+  color: var(--write-accent-active);
+}
+
+.write-ai-naming-out,
+.write-eval-score {
+  border-radius: 12px;
+  background: var(--write-surface-soft);
+  border-color: var(--write-hairline);
+}
+
+.write-generate-lock {
+  border-radius: 8px;
+  background: var(--write-surface-soft);
+}
+
+.write-generate-log {
+  border-radius: 12px;
+  background: #181715;
+  border-color: #252320;
+  color: #faf9f5;
+}
+
+.write-selection-float {
+  border-color: var(--write-hairline);
+  border-radius: 9999px;
+  background: var(--write-canvas);
+  box-shadow: var(--write-shadow-soft);
+}
+
+.write-selection-float__item {
+  border-radius: 9999px;
+}
+
+.write-selection-card {
+  border-radius: 16px;
+  border-color: var(--write-hairline);
+  background: var(--write-canvas);
+  box-shadow: var(--write-shadow);
+}
+
+.write-selection-card__replace {
+  background: var(--write-accent) !important;
+  border-color: var(--write-accent) !important;
+}
+
+.write-focus-mode {
+  padding-right: 0;
+}
+
+.write-focus-mode .write-editor-card.card {
+  max-width: min(980px, calc(100vw - 48px));
+  margin: 0 auto;
+}
+
+.write-focus-mode .write-body-wrapper {
+  padding-left: 44px;
+  padding-right: 44px;
+}
+
+@media (max-width: 900px) {
+  .write-shell {
+    padding: 14px 0 88px;
+  }
+
+  .write-workspace {
+    gap: 10px;
+  }
+
+  .write-left-sidebar {
+    position: fixed;
+    left: 12px;
+    top: 84px;
+    bottom: 18px;
+    z-index: 46;
+  }
+
+  .write-left-sidebar.is-open {
+    flex-basis: min(320px, calc(100vw - 24px));
+    width: min(320px, calc(100vw - 24px));
+  }
+
+  .write-left-inner.card {
+    min-height: 100%;
+    height: 100%;
+  }
+
+  .write-editor-header,
+  .write-body-wrapper,
+  .write-editor-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .write-ai-rail {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    width: auto;
+    max-height: none;
+    flex-direction: row;
+    overflow-x: auto;
+    border-radius: 9999px;
+  }
+
+  .write-rail-btn {
+    min-width: 54px;
+  }
+
+  .write-ai-drawer {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 84px;
+    width: auto;
+    max-height: min(70vh, 620px);
   }
 }
 

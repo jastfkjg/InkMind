@@ -23,6 +23,7 @@ type AuthState = {
     enable_auto_audit?: boolean | null;
     preview_before_save?: boolean | null;
     auto_audit_min_score?: number | null;
+    ai_language?: string | null;
   }) => Promise<void>;
   refreshUser: () => Promise<void>;
 };

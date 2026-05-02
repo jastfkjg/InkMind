@@ -123,7 +123,6 @@ export function QuotaWarning() {
 
 export function QuotaStatusMini() {
   const { user } = useAuth();
-  const { isDark } = useTheme();
   const { t, isZh } = useI18n();
   const [quota, setQuota] = useState<TokenQuotaStatus | null>(null);
 

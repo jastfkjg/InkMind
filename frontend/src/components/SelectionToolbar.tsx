@@ -1,5 +1,5 @@
 import { useI18n } from "@/i18n";
-import type { SelectionMode, SelectionPanel, SelectionMenuPos } from "@/types/write";
+import type { SelectionPanel, SelectionMenuPos } from "@/types/write";
 
 export interface SelectionToolbarProps {
   showSelectionBar: boolean;

@@ -210,7 +210,7 @@ export default function NovelWrite() {
   const id = Number(novelId);
   const nav = useNavigate();
   const { user } = useAuth();
-  const { t, isZh } = useI18n();
+  const { t } = useI18n();
 
   const RAIL_ITEMS = useMemo(
     () => RAIL_ITEM_KEYS.map(({ key, labelKey }) => ({ key, line2: t(labelKey) })),

@@ -77,12 +77,6 @@ export default function EditorSettings({
     return i >= 0 ? i : 2;
   })();
 
-  const closeAllMenus = () => {
-    setSizeMenuOpen(false);
-    setLineHeightMenuOpen(false);
-    setLineWidthMenuOpen(false);
-  };
-
   return (
     <div className="write-sidenav-tools" ref={sidebarToolsRef}>
       <div className="write-size-picker">
