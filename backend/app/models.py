@@ -47,6 +47,11 @@ class User(Base):
     auto_audit_min_score: Mapped[int] = mapped_column(Integer, default=60)
     ai_language: Mapped[str | None] = mapped_column(String(8), nullable=True, default=None)
 
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    token_quota: Mapped[int | None] = mapped_column(Integer, nullable=True, default=1000000)
+    token_quota_used: Mapped[int] = mapped_column(Integer, default=0)
+    token_quota_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
     llm_usage_events: Mapped[list["LLMUsageEvent"]] = relationship(
         "LLMUsageEvent", back_populates="user", cascade="all, delete-orphan"
@@ -222,3 +227,35 @@ class TaskItem(Base):
     
     background_task: Mapped["BackgroundTask"] = relationship("BackgroundTask", back_populates="task_items")
     chapter: Mapped["Chapter | None"] = relationship("Chapter")
+
+
+class TokenQuotaChange(Base):
+    __tablename__ = "token_quota_changes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    old_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    new_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class AdminLog(Base):
+    __tablename__ = "admin_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    admin_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    target_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    
+    action: Mapped[str] = mapped_column(String(64))
+    resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)

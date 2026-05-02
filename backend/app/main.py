@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from app.config import settings
 from app.database import Base, engine
 from app.observability.otel_setup import setup_otel
-from app.routers import auth, background_tasks, chapters, characters, memos, meta, novels, usage
+from app.routers import admin, auth, background_tasks, chapters, characters, memos, meta, novels, usage
 
 
 def _migrate_sqlite() -> None:
@@ -38,6 +38,16 @@ def _migrate_sqlite() -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN preview_before_save BOOLEAN NOT NULL DEFAULT 1"))
             if "auto_audit_min_score" not in cols_users:
                 conn.execute(text("ALTER TABLE users ADD COLUMN auto_audit_min_score INTEGER NOT NULL DEFAULT 60"))
+            if "ai_language" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN ai_language VARCHAR(8)"))
+            if "is_admin" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+            if "token_quota" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN token_quota INTEGER"))
+            if "token_quota_used" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN token_quota_used INTEGER NOT NULL DEFAULT 0"))
+            if "token_quota_reset_at" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN token_quota_reset_at DATETIME"))
             if "novels" in tables:
                 ncols = {c["name"] for c in insp.get_columns("novels")}
                 if "outline" in ncols and "background" not in ncols:
@@ -80,6 +90,7 @@ app.include_router(memos.router)
 app.include_router(meta.router)
 app.include_router(usage.router)
 app.include_router(background_tasks.router)
+app.include_router(admin.router)
 
 setup_otel(app)
 

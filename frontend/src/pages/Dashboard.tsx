@@ -33,6 +33,7 @@ import {
   SettingOutlined,
   HistoryOutlined,
   GlobalOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -41,6 +42,7 @@ import {
   fetchNovels,
 } from "@/api/client";
 import ExportNovelModal from "@/components/ExportNovelModal";
+import { QuotaWarning } from "@/components/QuotaWarning";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
@@ -153,6 +155,16 @@ export default function Dashboard() {
   ];
 
   const userMenuItems = [
+    ...(user?.is_admin
+      ? [
+          {
+            key: "admin",
+            icon: <SafetyOutlined />,
+            label: t("nav_admin"),
+            onClick: () => nav("/admin/users"),
+          },
+        ]
+      : []),
     {
       key: "settings",
       icon: <SettingOutlined />,
@@ -361,6 +373,8 @@ export default function Dashboard() {
             style={{ marginBottom: "1.5rem" }}
           />
         )}
+
+        <QuotaWarning />
 
         <Spin spinning={loading}>
           {novels.length === 0 ? (

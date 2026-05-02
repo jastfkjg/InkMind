@@ -38,6 +38,7 @@ import {
   SettingOutlined,
   HistoryOutlined,
   GlobalOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
@@ -226,6 +227,16 @@ export default function BackgroundTasksPage() {
   ];
 
   const userMenuItems = [
+    ...(user?.is_admin
+      ? [
+          {
+            key: "admin",
+            icon: <SafetyOutlined />,
+            label: t("nav_admin"),
+            onClick: () => nav("/admin/users"),
+          },
+        ]
+      : []),
     {
       key: "settings",
       icon: <SettingOutlined />,

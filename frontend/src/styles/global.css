@@ -3158,6 +3158,184 @@ select {
   font-weight: 600;
 }
 
+.ops-page {
+  --ops-canvas: #faf9f5;
+  --ops-surface: #efe9de;
+  --ops-muted-surface: #f5f0e8;
+  --ops-border: #e6dfd8;
+  --ops-ink: #141413;
+  --ops-body: #3d3d3a;
+  --ops-muted: #6c6a64;
+  --ops-accent: #cc785c;
+  --ops-shadow: 0 10px 28px rgba(28, 25, 23, 0.08);
+}
+
+.ops-page--dark {
+  --ops-canvas: #181715;
+  --ops-surface: #1e1d1b;
+  --ops-muted-surface: #181715;
+  --ops-border: #2a2926;
+  --ops-ink: #e7e5e1;
+  --ops-body: #e7e5e1;
+  --ops-muted: #a3a19b;
+  --ops-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+}
+
+.ops-page--sepia {
+  --ops-canvas: #f5eddd;
+  --ops-surface: #faf9f5;
+  --ops-muted-surface: #f5eddd;
+  --ops-border: #d9cbb0;
+  --ops-ink: #4a392b;
+  --ops-body: #4a392b;
+  --ops-muted: #8b7762;
+}
+
+.ops-metric-card.ant-card,
+.ops-panel.ant-card {
+  border: 1px solid var(--ops-border);
+  border-radius: 12px;
+  background: var(--ops-surface);
+  box-shadow: var(--ops-shadow);
+}
+
+.ops-metric-grid .ant-col {
+  display: flex;
+}
+
+.ops-metric-card.ant-card {
+  width: 100%;
+  height: 100%;
+}
+
+.ops-metric-card .ant-card-body {
+  min-height: 164px;
+  height: 100%;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.ops-metric-label {
+  color: var(--ops-muted);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ops-metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: color-mix(in oklab, currentColor 12%, transparent);
+  font-size: 1.2rem;
+}
+
+.ops-metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ops-accent);
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 4vw, 2.625rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.ops-metric-suffix {
+  color: var(--ops-muted);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.ops-quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--ops-muted);
+  font-size: 0.82rem;
+}
+
+.ops-panel .ant-card-head {
+  min-height: 58px;
+  border-bottom-color: var(--ops-border);
+}
+
+.ops-panel .ant-table-wrapper .ant-table {
+  background: transparent;
+}
+
+.ops-panel .ant-table-thead > tr > th {
+  color: var(--ops-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  background: color-mix(in oklab, var(--ops-muted-surface) 70%, transparent);
+}
+
+.ops-panel .ant-table-tbody > tr > td {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+.ops-admin-shell {
+  min-height: 100vh;
+}
+
+.ops-admin-content {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.ops-admin-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ops-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.ops-filter-row__spacer {
+  flex: 1;
+}
+
+@media (max-width: 760px) {
+  .ops-admin-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ops-filter-row__spacer {
+    display: none;
+  }
+}
+
 .version-item {
   transition: all 0.15s ease;
 }

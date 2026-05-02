@@ -25,6 +25,7 @@ import {
   EyeOutlined,
   HistoryOutlined,
   GlobalOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons";
 import { apiErrorMessage, fetchNovel } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
@@ -108,6 +109,16 @@ export default function NovelLayout() {
   ];
 
   const userMenuItems = [
+    ...(user?.is_admin
+      ? [
+          {
+            key: "admin",
+            icon: <SafetyOutlined />,
+            label: t("nav_admin"),
+            onClick: () => nav("/admin/users"),
+          },
+        ]
+      : []),
     {
       key: "settings",
       icon: <SettingOutlined />,

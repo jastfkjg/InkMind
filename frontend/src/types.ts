@@ -13,6 +13,11 @@ export type User = {
   preview_before_save?: boolean;
   auto_audit_min_score?: number;
   ai_language?: string | null;
+
+  is_admin?: boolean;
+  token_quota?: number | null;
+  token_quota_used?: number;
+  token_quota_reset_at?: string | null;
 };
 
 export type Novel = {
@@ -171,4 +176,84 @@ export type CreateBatchTaskRequest = {
   total_summary: string;
   chapter_count: number;
   word_count?: number | null;
+};
+
+export type TokenQuotaStatus = {
+  token_quota: number | null;
+  token_quota_used: number;
+  token_quota_remaining: number | null;
+  token_quota_reset_at: string | null;
+  is_unlimited: boolean;
+};
+
+export type AdminUser = {
+  id: number;
+  email: string;
+  display_name: string | null;
+  is_admin: boolean;
+  llm_call_count: number;
+  created_at: string;
+  token_quota: number | null;
+  token_quota_used: number;
+  token_quota_reset_at: string | null;
+};
+
+export type AdminUserList = {
+  total: number;
+  items: AdminUser[];
+};
+
+export type TokenQuotaChange = {
+  id: number;
+  user_id: number;
+  admin_id: number | null;
+  old_quota: number | null;
+  new_quota: number | null;
+  reason: string | null;
+  created_at: string;
+};
+
+export type TokenQuotaChangeList = {
+  total: number;
+  items: TokenQuotaChange[];
+};
+
+export type AdminLog = {
+  id: number;
+  admin_id: number;
+  admin_email: string | null;
+  target_user_id: number | null;
+  target_user_email: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: number | null;
+  details: string | null;
+  ip_address: string | null;
+  created_at: string;
+};
+
+export type AdminLogList = {
+  total: number;
+  items: AdminLog[];
+};
+
+export type UserNovel = {
+  id: number;
+  title: string;
+  genre: string;
+  created_at: string;
+  updated_at: string;
+  chapter_count: number;
+};
+
+export type UserNovelList = {
+  total: number;
+  items: UserNovel[];
+};
+
+export type UserUsageDetail = {
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
 };

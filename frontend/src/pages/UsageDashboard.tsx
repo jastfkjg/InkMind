@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Layout,
@@ -9,12 +9,12 @@ import {
   Typography,
   Spin,
   Alert,
-  Statistic,
   Row,
   Col,
   Tag,
   Dropdown,
   Avatar,
+  Progress,
 } from "antd";
 import {
   ArrowLeftOutlined,
@@ -31,14 +31,15 @@ import {
   SettingOutlined,
   HistoryOutlined,
   GlobalOutlined,
+  SafetyOutlined,
 } from "@ant-design/icons";
 
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useNavigation } from "@/context/NavigationContext";
 import { useI18n } from "@/i18n";
-import { apiErrorMessage, fetchLlmUsage } from "@/api/client";
-import type { LlmUsageSummary } from "@/types";
+import { apiErrorMessage, fetchLlmUsage, fetchMyQuota } from "@/api/client";
+import type { LlmUsageSummary, TokenQuotaStatus } from "@/types";
 
 const { Header, Content } = Layout;
 const { Title, Text } = Typography;
@@ -55,6 +56,7 @@ export default function UsageDashboard() {
   const nav = useNavigate();
   const { goBackSmart } = useNavigation();
   const [data, setData] = useState<LlmUsageSummary | null>(null);
+  const [quota, setQuota] = useState<TokenQuotaStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
@@ -124,8 +126,14 @@ export default function UsageDashboard() {
     setErr("");
     setLoading(true);
     try {
-      const r = await fetchLlmUsage(200);
-      setData(r);
+      const [usageData, quotaData] = await Promise.all([
+        fetchLlmUsage(200),
+        fetchMyQuota().catch(() => null),
+      ]);
+      setData(usageData);
+      if (quotaData) {
+        setQuota(quotaData);
+      }
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
@@ -177,6 +185,16 @@ export default function UsageDashboard() {
   ];
 
   const userMenuItems = [
+    ...(user?.is_admin
+      ? [
+          {
+            key: "admin",
+            icon: <SafetyOutlined />,
+            label: t("nav_admin"),
+            onClick: () => nav("/admin/users"),
+          },
+        ]
+      : []),
     {
       key: "settings",
       icon: <SettingOutlined />,
@@ -218,15 +236,56 @@ export default function UsageDashboard() {
   const headerBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
   const headerBorder = isDark ? "#2a2926" : isSepia ? "#d9cbb0" : "#e6dfd8";
   const textColor = isDark ? "#e7e5e1" : isSepia ? "#4a392b" : "#141413";
-  const cardBg = isDark ? "#1e1d1b" : isSepia ? "#faf9f5" : "#faf9f5";
   const primaryColor = "#cc785c";
   const secondaryTextColor = isDark ? "#a3a19b" : isSepia ? "#8b7762" : "#6c6a64";
+
+  const hasQuota = quota && quota.token_quota !== null;
+  const quotaUsed = hasQuota ? quota!.token_quota_used : 0;
+  const quotaRemaining = hasQuota
+    ? quota!.token_quota_remaining ?? Math.max(0, quota!.token_quota! - quotaUsed)
+    : 0;
+  const quotaPercent = hasQuota && quota!.token_quota! > 0 ? (quotaUsed / quota!.token_quota!) * 100 : 0;
+  const quotaIsLow = hasQuota && quotaRemaining < quota!.token_quota! * 0.2;
+  const quotaIsExceeded = hasQuota && quotaRemaining <= 0;
+  const quotaStatusColor = quotaIsExceeded ? "#c64545" : quotaIsLow ? "#d4a017" : primaryColor;
 
   const getThemeIcon = () => {
     if (theme === "dark") return <MoonOutlined />;
     if (theme === "sepia") return <EyeOutlined />;
     return <SunOutlined />;
   };
+
+  function renderMetricCard({
+    title,
+    value,
+    icon,
+    color,
+    suffix,
+    footer,
+  }: {
+    title: string;
+    value: string;
+    icon: ReactNode;
+    color: string;
+    suffix?: ReactNode;
+    footer?: ReactNode;
+  }) {
+    return (
+      <Card className="ops-metric-card">
+        <div className="ops-metric-head">
+          <span className="ops-metric-label">{title}</span>
+          <span className="ops-metric-icon" style={{ color }}>
+            {icon}
+          </span>
+        </div>
+        <div className="ops-metric-value" style={{ color }}>
+          <span>{value}</span>
+          {suffix && <span className="ops-metric-suffix">{suffix}</span>}
+        </div>
+        {footer}
+      </Card>
+    );
+  }
 
   const columns = [
     {
@@ -297,6 +356,9 @@ export default function UsageDashboard() {
 
   return (
     <Layout
+      className={`ops-page ${isDark ? "ops-page--dark" : ""} ${
+        isSepia ? "ops-page--sepia" : ""
+      }`}
       style={{
         minHeight: "100vh",
         background: bgColor,
@@ -445,8 +507,8 @@ export default function UsageDashboard() {
 
       <Content
         style={{
-          padding: "2rem",
-          maxWidth: 1200,
+          padding: "28px",
+          maxWidth: 1280,
           margin: "0 auto",
           width: "100%",
         }}
@@ -462,87 +524,66 @@ export default function UsageDashboard() {
         )}
 
         {data && (
-          <Row gutter={[24, 24]} style={{ marginBottom: "1.5rem" }}>
-            <Col xs={24} sm={8}>
-              <Card
-                style={{
-                  borderRadius: 16,
-                  border: "none",
-                  boxShadow: isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                  background: cardBg,
-                  transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-                }}
-              >
-                <Statistic
-                  title={
-                    <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      {t("usage_total_calls")}
-                    </Text>
-                  }
-                  value={data.total_calls}
-                  formatter={fmtNum}
-                  valueStyle={{ color: primaryColor, fontFamily: "ui-monospace, monospace" }}
-                  prefix={<RocketOutlined style={{ color: primaryColor }} />}
-                />
-              </Card>
+          <Row gutter={[20, 20]} className="ops-metric-grid" style={{ marginBottom: 20 }}>
+            <Col xs={24} sm={12} lg={6}>
+              {renderMetricCard({
+                title: t("usage_total_calls"),
+                value: fmtNum(data.total_calls),
+                icon: <RocketOutlined />,
+                color: primaryColor,
+              })}
             </Col>
-            <Col xs={24} sm={8}>
-              <Card
-                style={{
-                  borderRadius: 16,
-                  border: "none",
-                  boxShadow: isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                  background: cardBg,
-                  transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-                }}
-              >
-                <Statistic
-                  title={
-                    <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      {t("usage_total_input")}
-                    </Text>
-                  }
-                  value={data.total_input_tokens}
-                  formatter={fmtK}
-                  valueStyle={{ color: isDark ? "#60a5fa" : "#1677ff", fontFamily: "ui-monospace, monospace" }}
-                  prefix={<InboxOutlined style={{ color: isDark ? "#60a5fa" : "#4096ff" }} />}
-                />
-              </Card>
+            <Col xs={24} sm={12} lg={6}>
+              {renderMetricCard({
+                title: t("usage_total_input"),
+                value: fmtK(data.total_input_tokens),
+                icon: <InboxOutlined />,
+                color: "#5db8a6",
+              })}
             </Col>
-            <Col xs={24} sm={8}>
-              <Card
-                style={{
-                  borderRadius: 16,
-                  border: "none",
-                  boxShadow: isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                  background: cardBg,
-                  transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-                }}
-              >
-                <Statistic
-                  title={
-                    <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                      {t("usage_total_output")}
-                    </Text>
-                  }
-                  value={data.total_output_tokens}
-                  formatter={fmtK}
-                  valueStyle={{ color: isDark ? "#4ade80" : "#52c41a", fontFamily: "ui-monospace, monospace" }}
-                  prefix={<SendOutlined style={{ color: isDark ? "#4ade80" : "#73d13d" }} />}
-                />
-              </Card>
+            <Col xs={24} sm={12} lg={6}>
+              {renderMetricCard({
+                title: t("usage_total_output"),
+                value: fmtK(data.total_output_tokens),
+                icon: <SendOutlined />,
+                color: "#5db872",
+              })}
             </Col>
+            {hasQuota && (
+              <Col xs={24} sm={12} lg={6}>
+                {renderMetricCard({
+                  title: t("quota_remaining"),
+                  value: fmtK(quotaRemaining),
+                  icon: <BarChartOutlined />,
+                  color: quotaStatusColor,
+                  suffix: `/ ${fmtK(quota!.token_quota!)}`,
+                  footer: (
+                    <>
+                      <div style={{ marginTop: 18 }}>
+                        <Progress
+                          percent={Math.min(quotaPercent, 100)}
+                          size="small"
+                          showInfo={false}
+                          status={quotaIsExceeded ? "exception" : "normal"}
+                          strokeColor={quotaStatusColor}
+                        />
+                      </div>
+                      <div className="ops-quota-row">
+                        <span>{t("quota_used")}: {fmtK(quotaUsed)}</span>
+                        <strong style={{ color: textColor }}>
+                          {Math.min(quotaPercent, 100).toFixed(1)}%
+                        </strong>
+                      </div>
+                    </>
+                  ),
+                })}
+              </Col>
+            )}
           </Row>
         )}
 
         <Card
-          style={{
-            borderRadius: 16,
-            border: "none",
-            boxShadow: isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: cardBg,
-            transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-          }}
+          className="ops-panel"
           title={
             <Space>
               <Title
@@ -557,7 +598,7 @@ export default function UsageDashboard() {
                 {t("usage_records")}
               </Title>
               {data && (
-                <Tag color="blue" style={{ margin: 0 }}>
+                <Tag color="default" style={{ margin: 0 }}>
                   {t("usage_records_count").replace("{count}", String(data.items.length))}
                 </Tag>
               )}

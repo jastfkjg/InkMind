@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -26,6 +28,12 @@ class UserOut(BaseModel):
     preview_before_save: bool = True
     auto_audit_min_score: int = 60
     ai_language: str | None = None
+
+    is_admin: bool = False
+
+    token_quota: int | None = None
+    token_quota_used: int = 0
+    token_quota_reset_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
