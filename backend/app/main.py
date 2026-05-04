@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from app.config import settings
 from app.database import Base, engine
 from app.observability.otel_setup import setup_otel
-from app.routers import admin, auth, background_tasks, chapters, characters, memos, meta, novels, usage
+from app.routers import admin, auth, background_tasks, chapters, characters, memos, meta, novels, usage, workflow
 
 
 def _migrate_sqlite() -> None:
@@ -91,6 +91,7 @@ app.include_router(meta.router)
 app.include_router(usage.router)
 app.include_router(background_tasks.router)
 app.include_router(admin.router)
+app.include_router(workflow.router)
 
 setup_otel(app)
 
