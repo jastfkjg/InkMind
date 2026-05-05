@@ -19,6 +19,30 @@ import {
 import { Modal } from "antd";
 import type { Chapter } from "@/types";
 
+function AiIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="16" cy="17" r="12" stroke="currentColor" strokeWidth="2" />
+      <circle cx="16" cy="2" r="2" fill="currentColor" />
+      <line x1="16" y1="4" x2="16" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="11" cy="15" r="1.5" fill="currentColor" />
+      <circle cx="21" cy="15" r="1.5" fill="currentColor" />
+      <path
+        d="M11 21C11 23 13 25 16 25C19 25 21 23 21 21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 const POSITION_KEY = "inkmind_ai_assistant_position";
 const DEFAULT_POSITION = { x: -16, y: 72 };
 
@@ -775,7 +799,7 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
         >
-          <span className="ai-assistant-float-btn__icon">🤖</span>
+          <AiIcon size={44} />
         </button>
       )}
       
@@ -794,7 +818,7 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
             style={{ cursor: "grab" }}
           >
             <div className="ai-assistant-header__title">
-              <span className="ai-assistant-header__icon">🤖</span>
+              <AiIcon size={24} />
               <span>{t("smart_writer_title")}</span>
             </div>
             {writerState.targetChapterCount > 0 && (
