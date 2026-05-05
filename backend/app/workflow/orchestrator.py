@@ -392,7 +392,16 @@ class NovelOrchestrator(Orchestrator):
 
         subagent = self.create_subagent(current_phase)
 
-        yield from subagent.execute_stream(context, user_modifications)
+        result = subagent.execute(context, user_modifications)
+
+        state.save_phase_result(result)
+
+        if result.success:
+            state.status = WorkflowStatus.WAITING_USER_CONFIRM
+            yield f"[阶段完成] {current_phase.value}\n"
+        else:
+            state.status = WorkflowStatus.FAILED
+            yield f"[错误] {result.error_message or '执行失败'}\n"
 
     def confirm_phase(
         self,

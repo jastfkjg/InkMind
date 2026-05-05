@@ -15,7 +15,6 @@ import {
   fetchLlmProviders,
   generateChapter,
   generateChapterBatch,
-  novelAiChat,
   novelAiChapterSummaryInspire,
   novelAiNaming,
   reviseChapter,
@@ -30,7 +29,7 @@ import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 
-type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate" | "versions";
+type AiTool = "generate" | "rewrite" | "append" | "naming" | "evaluate" | "versions";
 
 type GenerateTab = "single" | "batch";
 
@@ -39,7 +38,6 @@ const RAIL_ITEM_KEYS: { key: AiTool; labelKey: string }[] = [
   { key: "rewrite", labelKey: "write_tool_rewrite" },
   { key: "append", labelKey: "write_tool_append" },
   { key: "naming", labelKey: "write_tool_naming" },
-  { key: "ask", labelKey: "write_tool_ask" },
   { key: "evaluate", labelKey: "write_tool_evaluate" },
   { key: "versions", labelKey: "write_tool_versions" },
 ];
@@ -266,8 +264,6 @@ export default function NovelWrite() {
   const [namingHint, setNamingHint] = useState("");
   const [namingResult, setNamingResult] = useState<string[]>([]);
   const [namingSelectedIndex, setNamingSelectedIndex] = useState<number | null>(null);
-  const [askHistory, setAskHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [askInput, setAskInput] = useState("");
   const [evaluateBusy, setEvaluateBusy] = useState(false);
   const [evaluateResult, setEvaluateResult] = useState<{
     issues: { aspect: string; detail: string }[];
@@ -312,7 +308,6 @@ export default function NovelWrite() {
   const [versionDiff, setVersionDiff] = useState<ChapterVersionDiff | null>(null);
   const [versionDiffLoading, setVersionDiffLoading] = useState(false);
   const [versionActionLoading, setVersionActionLoading] = useState(false);
-  const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
   activeIdRef.current = activeId;
   const novelIdRef = useRef(id);
@@ -492,8 +487,6 @@ export default function NovelWrite() {
   }, [id]);
 
   useEffect(() => {
-    setAskHistory([]);
-    setAskInput("");
     setEvaluateResult(null);
     setGenerateTab("single");
     setSingleGenerateTitle("");
@@ -542,10 +535,6 @@ export default function NovelWrite() {
     setSummary(ch.summary);
     setContent(normalizeBodyParagraphIndent(ch.content));
   }, [activeId, chapters]);
-
-  useEffect(() => {
-    drawerEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [askHistory, rightTool]);
 
   useEffect(() => {
     if (!busy || rightTool !== "generate") return;
@@ -1326,49 +1315,6 @@ export default function NovelWrite() {
     }
   }
 
-  async function onAskSend() {
-    const q = askInput.trim();
-    if (!q) return;
-    setBusy(true);
-    setErr("");
-    setAskInput("");
-    const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
-    setAskHistory((h) => [...h, { role: "user", content: q }, { role: "assistant", content: "" }]);
-    let acc = "";
-    try {
-      await novelAiChat(
-        id,
-        {
-          message: q,
-          history: prior,
-        },
-        (t) => {
-          acc += t;
-          setAskHistory((h) => {
-            const copy = [...h];
-            const last = copy[copy.length - 1];
-            if (last?.role === "assistant") {
-              copy[copy.length - 1] = { role: "assistant", content: acc };
-            }
-            return copy;
-          });
-        }
-      );
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-      setAskHistory((h) => {
-        if (h.length < 2) return h;
-        const copy = [...h];
-        copy.pop();
-        copy.pop();
-        return copy;
-      });
-      setAskInput(q);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onRunEvaluate() {
     const aid = activeId;
     if (aid === null) return;
@@ -1403,7 +1349,7 @@ export default function NovelWrite() {
   }
 
   const drawerOpen =
-    rightTool && hasLlm && (activeId !== null || rightTool === "ask" || rightTool === "naming");
+    rightTool && hasLlm && (activeId !== null || rightTool === "naming");
 
   return (
     <div className={`write-shell${focusMode ? " write-focus-mode" : ""}`}>
@@ -1756,7 +1702,6 @@ export default function NovelWrite() {
               {rightTool === "rewrite" && t("write_ai_rewrite")}
               {rightTool === "append" && t("write_ai_append")}
               {rightTool === "naming" && t("write_ai_naming")}
-              {rightTool === "ask" && t("write_ai_ask")}
               {rightTool === "evaluate" && t("write_ai_evaluate")}
               {rightTool === "versions" && t("write_version_versions")}
             </span>
@@ -2405,46 +2350,6 @@ export default function NovelWrite() {
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            ) : null}
-
-            {rightTool === "ask" ? (
-              <div className="write-ai-chat">
-                <div className="write-ai-messages">
-                  {askHistory.length === 0 ? (
-                    <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-                      {t("write_ask_hint")}
-                    </p>
-                  ) : (
-                    askHistory.map((m, i) => (
-                      <div
-                        key={i}
-                        className={`write-ai-bubble${m.role === "user" ? " write-ai-bubble--user" : ""}`}
-                      >
-                        {m.content}
-                      </div>
-                    ))
-                  )}
-                  <div ref={drawerEndRef} />
-                </div>
-                <div className="write-ai-chat-input">
-                  <textarea
-                    className="textarea textarea-compact"
-                    rows={2}
-                    value={askInput}
-                    onChange={(e) => setAskInput(e.target.value)}
-                    placeholder={t("write_ask_placeholder")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        onAskSend();
-                      }
-                    }}
-                  />
-                  <button type="button" className="btn btn-primary" disabled={busy || !askInput.trim()} onClick={onAskSend}>
-                    {t("write_ask_send")}
-                  </button>
                 </div>
               </div>
             ) : null}
