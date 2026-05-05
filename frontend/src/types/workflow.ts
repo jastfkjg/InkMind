@@ -97,18 +97,6 @@ export interface ConfirmPhaseResponse {
   progress: WorkflowProgress;
 }
 
-export interface ApplyModificationsRequest {
-  phase_type: WorkflowPhaseType;
-  modifications: Record<string, unknown>;
-}
-
-export interface ApplyModificationsResponse {
-  workflow_id: string;
-  success: boolean;
-  message: string;
-  progress: WorkflowProgress;
-}
-
 export interface SaveChapterResponse {
   success: boolean;
   chapter?: {
@@ -118,14 +106,6 @@ export interface SaveChapterResponse {
     word_count: number;
   };
   message: string;
-}
-
-export interface WorkflowStateResponse {
-  workflow_id: string;
-  novel_id: number;
-  current_phase: WorkflowPhaseType;
-  status: WorkflowStatus;
-  progress?: WorkflowProgress;
 }
 
 export const PHASE_NAMES: Record<WorkflowPhaseType, { key: string; icon: string }> = {
@@ -176,18 +156,6 @@ export function isPhaseCompleted(
   const phaseIdx = getPhaseIndex(phase, phases);
   const currentIdx = getPhaseIndex(currentPhase, phases);
   return phaseIdx < currentIdx;
-}
-
-export function isPhasePending(
-  phase: WorkflowPhaseType,
-  currentPhase: WorkflowPhaseType,
-  completedPhases: WorkflowPhaseType[],
-  phases: WorkflowPhaseType[] = PHASE_ORDER
-): boolean {
-  return (
-    !isPhaseActive(phase, currentPhase, phases) &&
-    !isPhaseCompleted(phase, currentPhase, completedPhases, phases)
-  );
 }
 
 export function canExecutePhase(

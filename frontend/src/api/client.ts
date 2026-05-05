@@ -8,10 +8,7 @@ import type {
   ExecutePhaseResponse,
   ConfirmPhaseRequest,
   ConfirmPhaseResponse,
-  ApplyModificationsRequest,
-  ApplyModificationsResponse,
   SaveChapterResponse,
-  WorkflowStateResponse,
 } from "@/types/workflow";
 
 const baseURL =
@@ -910,34 +907,12 @@ export async function confirmPhase(
   return data;
 }
 
-export async function applyModifications(
-  novelId: number,
-  workflowId: string,
-  payload: ApplyModificationsRequest
-): Promise<ApplyModificationsResponse> {
-  const { data } = await api.post<ApplyModificationsResponse>(
-    `/novels/${novelId}/workflow/${workflowId}/apply-modifications`,
-    payload
-  );
-  return data;
-}
-
 export async function saveWorkflowChapter(
   novelId: number,
   workflowId: string
 ): Promise<SaveChapterResponse> {
   const { data } = await api.post<SaveChapterResponse>(
     `/novels/${novelId}/workflow/${workflowId}/save-chapter`
-  );
-  return data;
-}
-
-export async function fetchWorkflowState(
-  novelId: number,
-  workflowId: string
-): Promise<WorkflowStateResponse> {
-  const { data } = await api.get<WorkflowStateResponse>(
-    `/novels/${novelId}/workflow/${workflowId}/state`
   );
   return data;
 }
