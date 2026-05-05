@@ -90,9 +90,18 @@ function AiIcon({ size = 24 }: { size?: number }) {
 const POSITION_KEY = "inkmind_ai_assistant_position";
 const DEFAULT_POSITION = { x: -16, y: 72 };
 
+const PANEL_SIZE_KEY = "inkmind_ai_assistant_panel_size";
+const DEFAULT_PANEL_SIZE = { width: 480, height: 700 };
+const MIN_PANEL_SIZE = { width: 320, height: 400 };
+
 interface DragPosition {
   x: number;
   y: number;
+}
+
+interface PanelSize {
+  width: number;
+  height: number;
 }
 
 function getStoredPosition(): DragPosition {
@@ -110,6 +119,30 @@ function getStoredPosition(): DragPosition {
 function setStoredPosition(pos: DragPosition): void {
   try {
     localStorage.setItem(POSITION_KEY, JSON.stringify(pos));
+  } catch {
+    /* ignore */
+  }
+}
+
+function getStoredPanelSize(): PanelSize {
+  try {
+    const stored = localStorage.getItem(PANEL_SIZE_KEY);
+    if (stored) {
+      const size = JSON.parse(stored);
+      return {
+        width: Math.max(size.width, MIN_PANEL_SIZE.width),
+        height: Math.max(size.height, MIN_PANEL_SIZE.height),
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return DEFAULT_PANEL_SIZE;
+}
+
+function setStoredPanelSize(size: PanelSize): void {
+  try {
+    localStorage.setItem(PANEL_SIZE_KEY, JSON.stringify(size));
   } catch {
     /* ignore */
   }
@@ -247,6 +280,10 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number; posX: number; posY: number } | null>(null);
   
+  const [panelSize, setPanelSize] = useState<PanelSize>(getStoredPanelSize);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeStartRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const initializedRef = useRef(false);
@@ -293,6 +330,48 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
     }
   }, [isDragging, position]);
   
+  const handleResizeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    
+    resizeStartRef.current = {
+      x: clientX,
+      y: clientY,
+      width: panelSize.width,
+      height: panelSize.height,
+    };
+    setIsResizing(true);
+  }, [panelSize]);
+  
+  const handleResizeMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!isResizing || !resizeStartRef.current) return;
+    
+    const clientX = "touches" in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+    const clientY = "touches" in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+    
+    const deltaX = clientX - resizeStartRef.current.x;
+    const deltaY = clientY - resizeStartRef.current.y;
+    
+    let newWidth = resizeStartRef.current.width - deltaX;
+    let newHeight = resizeStartRef.current.height + deltaY;
+    
+    newWidth = Math.max(MIN_PANEL_SIZE.width, Math.min(window.innerWidth - 50, newWidth));
+    newHeight = Math.max(MIN_PANEL_SIZE.height, Math.min(window.innerHeight - 100, newHeight));
+    
+    setPanelSize({ width: newWidth, height: newHeight });
+  }, [isResizing]);
+  
+  const handleResizeEnd = useCallback(() => {
+    if (isResizing) {
+      setIsResizing(false);
+      setStoredPanelSize(panelSize);
+      resizeStartRef.current = null;
+    }
+  }, [isResizing, panelSize]);
+  
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleDragMove);
@@ -308,6 +387,22 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
       window.removeEventListener("touchend", handleDragEnd);
     };
   }, [isDragging, handleDragMove, handleDragEnd]);
+  
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", handleResizeMove);
+      window.addEventListener("mouseup", handleResizeEnd);
+      window.addEventListener("touchmove", handleResizeMove, { passive: false });
+      window.addEventListener("touchend", handleResizeEnd);
+    }
+    
+    return () => {
+      window.removeEventListener("mousemove", handleResizeMove);
+      window.removeEventListener("mouseup", handleResizeEnd);
+      window.removeEventListener("touchmove", handleResizeMove);
+      window.removeEventListener("touchend", handleResizeEnd);
+    };
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
   
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -853,6 +948,9 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
           style={{
             right: `${Math.abs(position.x)}px`,
             top: `${position.y}px`,
+            width: `${panelSize.width}px`,
+            height: `${panelSize.height}px`,
+            maxHeight: 'calc(100vh - 88px)',
           }}
         >
           <div 
@@ -990,6 +1088,12 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
               {t("write_ask_send")}
             </button>
           </div>
+          <div
+            className="ai-assistant-panel__resize-handle"
+            onMouseDown={handleResizeStart}
+            onTouchStart={handleResizeStart}
+            style={{ cursor: isResizing ? 'se-resize' : 'sw-resize' }}
+          />
         </div>
       )}
     </>
