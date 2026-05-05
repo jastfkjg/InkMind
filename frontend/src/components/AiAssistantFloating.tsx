@@ -28,15 +28,59 @@ function AiIcon({ size = 24 }: { size?: number }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <circle cx="16" cy="17" r="12" stroke="currentColor" strokeWidth="2" />
-      <circle cx="16" cy="2" r="2" fill="currentColor" />
-      <line x1="16" y1="4" x2="16" y2="8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="11" cy="15" r="1.5" fill="currentColor" />
-      <circle cx="21" cy="15" r="1.5" fill="currentColor" />
+      {/* background */}
+      <circle cx="16" cy="16" r="14" fill="#F5FAFF" />
+      <circle cx="16" cy="16" r="14" stroke="#3E4754" strokeWidth="2" />
+
+      {/* pen nib body */}
       <path
-        d="M11 21C11 23 13 25 16 25C19 25 21 23 21 21"
-        stroke="currentColor"
-        strokeWidth="2"
+        d="M16 6.3L10.5 16.2C9.8 17.5 9.65 18.6 10 20.1L11 24.3C11.25 25.4 12.1 26.1 13.2 26.3L16 26.7L18.8 26.3C19.9 26.1 20.75 25.4 21 24.3L22 20.1C22.35 18.6 22.2 17.5 21.5 16.2L16 6.3Z"
+        fill="#8FB4E8"
+      />
+
+      {/* pen outline */}
+      <path
+        d="M16 6.3L10.5 16.2C9.8 17.5 9.65 18.6 10 20.1L11 24.3C11.25 25.4 12.1 26.1 13.2 26.3L16 26.7L18.8 26.3C19.9 26.1 20.75 25.4 21 24.3L22 20.1C22.35 18.6 22.2 17.5 21.5 16.2L16 6.3Z"
+        stroke="#5878A5"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+
+      {/* center slit */}
+      <path
+        d="M16 6.4V16.2"
+        stroke="#5878A5"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+
+      {/* center node */}
+      <circle
+        cx="16"
+        cy="16.5"
+        r="1.2"
+        fill="#F5FAFF"
+        stroke="#5878A5"
+        strokeWidth="1.2"
+      />
+
+      {/* 🔥 极简花纹（只保留一点AI感） */}
+      <path
+        d="M16 17.8V20"
+        stroke="#EAF4FF"
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      <circle cx="14" cy="19" r="0.7" fill="#EAF4FF" />
+      <circle cx="18" cy="19" r="0.7" fill="#EAF4FF" />
+
+      {/* face */}
+      <circle cx="13.9" cy="21.8" r="0.6" fill="#4B4B4B" />
+      <circle cx="18.1" cy="21.8" r="0.6" fill="#4B4B4B" />
+      <path
+        d="M14.8 23C15.3 23.5 16.7 23.5 17.2 23"
+        stroke="#4B4B4B"
+        strokeWidth="0.8"
         strokeLinecap="round"
       />
     </svg>
@@ -799,7 +843,7 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
         >
-          <AiIcon size={44} />
+          <AiIcon size={60} />
         </button>
       )}
       
