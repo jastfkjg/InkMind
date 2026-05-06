@@ -1,5 +1,15 @@
 import axios, { AxiosError } from "axios";
 import type { BackgroundTask, Chapter, ChapterVersion, ChapterVersionDiff, Character, CreateBatchTaskRequest, CreateSingleTaskRequest, LlmUsageSummary, Memo, Novel, TaskProgress, User } from "@/types";
+import type {
+  WorkflowProgress,
+  CreateWorkflowRequest,
+  CreateWorkflowResponse,
+  ExecutePhaseRequest,
+  ExecutePhaseResponse,
+  ConfirmPhaseRequest,
+  ConfirmPhaseResponse,
+  SaveChapterResponse,
+} from "@/types/workflow";
 
 const baseURL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
@@ -832,5 +842,79 @@ export async function fetchAdminLogs(options?: {
       created_at: string;
     }>;
   }>(`/admin/logs${query ? `?${query}` : ""}`);
+  return data;
+}
+
+export async function createWorkflow(
+  novelId: number,
+  payload: CreateWorkflowRequest
+): Promise<CreateWorkflowResponse> {
+  const { data } = await api.post<CreateWorkflowResponse>(
+    `/novels/${novelId}/workflow/create`,
+    payload
+  );
+  return data;
+}
+
+export async function fetchWorkflowProgress(
+  novelId: number,
+  workflowId: string
+): Promise<WorkflowProgress> {
+  const { data } = await api.get<WorkflowProgress>(
+    `/novels/${novelId}/workflow/${workflowId}/progress`
+  );
+  return data;
+}
+
+export async function executePhase(
+  novelId: number,
+  workflowId: string,
+  payload?: ExecutePhaseRequest
+): Promise<ExecutePhaseResponse> {
+  const { data } = await api.post<ExecutePhaseResponse>(
+    `/novels/${novelId}/workflow/${workflowId}/execute`,
+    payload || {}
+  );
+  return data;
+}
+
+export async function executePhaseStream(
+  novelId: number,
+  workflowId: string,
+  payload?: ExecutePhaseRequest,
+  options?: { onToken?: (chunk: string) => void; onProgress?: (progress: ProgressEvent) => void }
+): Promise<{ done: boolean; progress?: WorkflowProgress }> {
+  const r = await postNdjsonAi(
+    `/novels/${novelId}/workflow/${workflowId}/execute-stream`,
+    payload || {},
+    { onToken: options?.onToken, onProgress: options?.onProgress }
+  );
+  return {
+    done: !!r,
+    progress: undefined,
+  };
+}
+
+export async function confirmPhase(
+  novelId: number,
+  workflowId: string,
+  payload?: ConfirmPhaseRequest
+): Promise<ConfirmPhaseResponse> {
+  const { data } = await api.post<ConfirmPhaseResponse>(
+    `/novels/${novelId}/workflow/${workflowId}/confirm`,
+    payload || {}
+  );
+  return data;
+}
+
+export async function saveWorkflowChapter(
+  novelId: number,
+  workflowId: string,
+  payload?: ConfirmPhaseRequest
+): Promise<SaveChapterResponse> {
+  const { data } = await api.post<SaveChapterResponse>(
+    `/novels/${novelId}/workflow/${workflowId}/save-chapter`,
+    payload || {}
+  );
   return data;
 }

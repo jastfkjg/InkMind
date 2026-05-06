@@ -15,7 +15,6 @@ import {
   fetchLlmProviders,
   generateChapter,
   generateChapterBatch,
-  novelAiChat,
   novelAiChapterSummaryInspire,
   novelAiNaming,
   reviseChapter,
@@ -25,12 +24,13 @@ import {
   type ProgressEvent,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
 import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 
-type AiTool = "generate" | "rewrite" | "append" | "naming" | "ask" | "evaluate" | "versions";
+type AiTool = "generate" | "rewrite" | "append" | "naming" | "evaluate" | "versions";
 
 type GenerateTab = "single" | "batch";
 
@@ -39,7 +39,6 @@ const RAIL_ITEM_KEYS: { key: AiTool; labelKey: string }[] = [
   { key: "rewrite", labelKey: "write_tool_rewrite" },
   { key: "append", labelKey: "write_tool_append" },
   { key: "naming", labelKey: "write_tool_naming" },
-  { key: "ask", labelKey: "write_tool_ask" },
   { key: "evaluate", labelKey: "write_tool_evaluate" },
   { key: "versions", labelKey: "write_tool_versions" },
 ];
@@ -210,6 +209,7 @@ export default function NovelWrite() {
   const id = Number(novelId);
   const nav = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { t } = useI18n();
 
   const RAIL_ITEMS = useMemo(
@@ -266,8 +266,6 @@ export default function NovelWrite() {
   const [namingHint, setNamingHint] = useState("");
   const [namingResult, setNamingResult] = useState<string[]>([]);
   const [namingSelectedIndex, setNamingSelectedIndex] = useState<number | null>(null);
-  const [askHistory, setAskHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [askInput, setAskInput] = useState("");
   const [evaluateBusy, setEvaluateBusy] = useState(false);
   const [evaluateResult, setEvaluateResult] = useState<{
     issues: { aspect: string; detail: string }[];
@@ -312,7 +310,6 @@ export default function NovelWrite() {
   const [versionDiff, setVersionDiff] = useState<ChapterVersionDiff | null>(null);
   const [versionDiffLoading, setVersionDiffLoading] = useState(false);
   const [versionActionLoading, setVersionActionLoading] = useState(false);
-  const drawerEndRef = useRef<HTMLDivElement | null>(null);
   const activeIdRef = useRef<number | null>(null);
   activeIdRef.current = activeId;
   const novelIdRef = useRef(id);
@@ -492,8 +489,29 @@ export default function NovelWrite() {
   }, [id]);
 
   useEffect(() => {
-    setAskHistory([]);
-    setAskInput("");
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.id) {
+        try {
+          await flushSave();
+        } catch { /* ignore */ }
+        const full = await loadChapters();
+        const target = full.find((c) => c.id === detail.id);
+        if (target) {
+          setActiveId(target.id);
+          lastLoadedChapterIdRef.current = null;
+          setTitle(target.title);
+          setSummary(target.summary || "");
+          setContent(normalizeBodyParagraphIndent(target.content || ""));
+          setChapters(full);
+        }
+      }
+    };
+    window.addEventListener("inkmind:chapter-saved", handler);
+    return () => window.removeEventListener("inkmind:chapter-saved", handler);
+  }, [loadChapters, flushSave]);
+
+  useEffect(() => {
     setEvaluateResult(null);
     setGenerateTab("single");
     setSingleGenerateTitle("");
@@ -542,10 +560,6 @@ export default function NovelWrite() {
     setSummary(ch.summary);
     setContent(normalizeBodyParagraphIndent(ch.content));
   }, [activeId, chapters]);
-
-  useEffect(() => {
-    drawerEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [askHistory, rightTool]);
 
   useEffect(() => {
     if (!busy || rightTool !== "generate") return;
@@ -1326,49 +1340,6 @@ export default function NovelWrite() {
     }
   }
 
-  async function onAskSend() {
-    const q = askInput.trim();
-    if (!q) return;
-    setBusy(true);
-    setErr("");
-    setAskInput("");
-    const prior = askHistory.map((m) => ({ role: m.role, content: m.content }));
-    setAskHistory((h) => [...h, { role: "user", content: q }, { role: "assistant", content: "" }]);
-    let acc = "";
-    try {
-      await novelAiChat(
-        id,
-        {
-          message: q,
-          history: prior,
-        },
-        (t) => {
-          acc += t;
-          setAskHistory((h) => {
-            const copy = [...h];
-            const last = copy[copy.length - 1];
-            if (last?.role === "assistant") {
-              copy[copy.length - 1] = { role: "assistant", content: acc };
-            }
-            return copy;
-          });
-        }
-      );
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-      setAskHistory((h) => {
-        if (h.length < 2) return h;
-        const copy = [...h];
-        copy.pop();
-        copy.pop();
-        return copy;
-      });
-      setAskInput(q);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onRunEvaluate() {
     const aid = activeId;
     if (aid === null) return;
@@ -1403,10 +1374,10 @@ export default function NovelWrite() {
   }
 
   const drawerOpen =
-    rightTool && hasLlm && (activeId !== null || rightTool === "ask" || rightTool === "naming");
+    rightTool && hasLlm && (activeId !== null || rightTool === "naming");
 
   return (
-    <div className={`write-shell${focusMode ? " write-focus-mode" : ""}`}>
+    <div className={`write-shell write-theme--${theme}${focusMode ? " write-focus-mode" : ""}`}>
       {err ? <p className="form-error write-err-banner">{err}</p> : null}
 
       {narrow && sidebarOpen && !focusMode ? (
@@ -1756,7 +1727,6 @@ export default function NovelWrite() {
               {rightTool === "rewrite" && t("write_ai_rewrite")}
               {rightTool === "append" && t("write_ai_append")}
               {rightTool === "naming" && t("write_ai_naming")}
-              {rightTool === "ask" && t("write_ai_ask")}
               {rightTool === "evaluate" && t("write_ai_evaluate")}
               {rightTool === "versions" && t("write_version_versions")}
             </span>
@@ -1916,7 +1886,7 @@ export default function NovelWrite() {
                       <pre className="write-generate-log" style={{ marginTop: "0.5rem" }}>
                         {currentProgress.message}
                         {currentProgress.detail && (
-                          <span style={{ color: "#666", fontSize: "0.875rem", display: "block", marginTop: "0.25rem" }}>
+                          <span style={{ color: "var(--muted)", fontSize: "0.875rem", display: "block", marginTop: "0.25rem" }}>
                             {currentProgress.detail.length > 100 ? currentProgress.detail.slice(0, 100) + "..." : currentProgress.detail}
                           </span>
                         )}
@@ -2283,8 +2253,8 @@ export default function NovelWrite() {
                                       fontSize: "0.7rem",
                                       padding: "0.125rem 0.375rem",
                                       borderRadius: "4px",
-                                      backgroundColor: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#e3f2fd" : "#f5f5f5",
-                                      color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#1976d2" : "#666",
+                                      backgroundColor: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "var(--info-bg)" : "var(--bg-hover)",
+                                      color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "var(--info)" : "var(--muted)",
                                     }}
                                   >
                                     {v.change_type === "manual" && t("write_change_manual")}
@@ -2297,21 +2267,21 @@ export default function NovelWrite() {
                                   </span>
                                 </div>
                                 {v.title && (
-                                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--muted)" }}>
                                     {t("write_version_title").replace("{title}", v.title.length > 30 ? v.title.slice(0, 30) + "…" : v.title)}
                                   </p>
                                 )}
-                                <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "#888" }}>
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "var(--muted)" }}>
                                   {new Date(v.created_at).toLocaleString()}
                                 </p>
-                                <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "#aaa" }}>
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "var(--muted)" }}>
                                   {t("write_version_word_count").replace("{count}", String(v.content.replace(/\s/g, "").length))}
                                 </p>
                               </div>
                             </div>
                             
                             {selectedVersion?.id === v.id && (
-                              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
+                              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border)" }}>
                                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
                                   <button
                                     type="button"
@@ -2350,12 +2320,12 @@ export default function NovelWrite() {
                   )}
                   
                   {versionDiff && (
-                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
                       <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_diff_title")}</h4>
                       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", fontSize: "0.8rem" }}>
-                        <span style={{ color: "#4caf50" }}>{t("write_version_diff_added").replace("{count}", String(versionDiff.added_count))}</span>
-                        <span style={{ color: "#f44336" }}>{t("write_version_diff_removed").replace("{count}", String(versionDiff.removed_count))}</span>
-                        <span style={{ color: "#ff9800" }}>{t("write_version_diff_changed").replace("{count}", String(versionDiff.changed_count))}</span>
+                        <span style={{ color: "var(--success)" }}>{t("write_version_diff_added").replace("{count}", String(versionDiff.added_count))}</span>
+                        <span style={{ color: "var(--error)" }}>{t("write_version_diff_removed").replace("{count}", String(versionDiff.removed_count))}</span>
+                        <span style={{ color: "var(--warning)" }}>{t("write_version_diff_changed").replace("{count}", String(versionDiff.changed_count))}</span>
                       </div>
                       <div
                         className="version-diff-container"
@@ -2363,7 +2333,7 @@ export default function NovelWrite() {
                           maxHeight: "300px",
                           overflowY: "auto",
                           padding: "0.75rem",
-                          backgroundColor: "#fafafa",
+                          backgroundColor: "var(--card)",
                           borderRadius: "4px",
                           fontFamily: "monospace",
                           fontSize: "0.8rem",
@@ -2375,12 +2345,12 @@ export default function NovelWrite() {
                   )}
                   
                   {selectedVersion && !versionDiff && (
-                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
                       <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_preview_title")}</h4>
                       {selectedVersion.summary && (
                         <div style={{ marginBottom: "0.5rem" }}>
                           <strong style={{ fontSize: "0.85rem" }}>{t("write_version_summary")}</strong>
-                          <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                          <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--muted)" }}>
                             {selectedVersion.summary}
                           </p>
                         </div>
@@ -2391,7 +2361,7 @@ export default function NovelWrite() {
                           style={{
                             margin: "0.25rem 0",
                             padding: "0.75rem",
-                            backgroundColor: "#fafafa",
+                            backgroundColor: "var(--card)",
                             borderRadius: "4px",
                             fontSize: "0.8rem",
                             whiteSpace: "pre-wrap",
@@ -2405,46 +2375,6 @@ export default function NovelWrite() {
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
-            ) : null}
-
-            {rightTool === "ask" ? (
-              <div className="write-ai-chat">
-                <div className="write-ai-messages">
-                  {askHistory.length === 0 ? (
-                    <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-                      {t("write_ask_hint")}
-                    </p>
-                  ) : (
-                    askHistory.map((m, i) => (
-                      <div
-                        key={i}
-                        className={`write-ai-bubble${m.role === "user" ? " write-ai-bubble--user" : ""}`}
-                      >
-                        {m.content}
-                      </div>
-                    ))
-                  )}
-                  <div ref={drawerEndRef} />
-                </div>
-                <div className="write-ai-chat-input">
-                  <textarea
-                    className="textarea textarea-compact"
-                    rows={2}
-                    value={askInput}
-                    onChange={(e) => setAskInput(e.target.value)}
-                    placeholder={t("write_ask_placeholder")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        onAskSend();
-                      }
-                    }}
-                  />
-                  <button type="button" className="btn btn-primary" disabled={busy || !askInput.trim()} onClick={onAskSend}>
-                    {t("write_ask_send")}
-                  </button>
                 </div>
               </div>
             ) : null}

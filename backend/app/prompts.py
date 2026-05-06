@@ -396,6 +396,38 @@ PROMPTS: dict[str, dict[str, str]] = {
         "zh": "任务完成",
         "en": "Task completed",
     },
+    "workflow_setup_system": {
+        "zh": "你是资深小说策划编辑。请根据用户提供的作品基本信息，完善作品设定。\n【重要】禁止在输出中包含任何思考过程、推理步骤或 think 标签。\n请输出一个 JSON 对象，包含以下字段：\n- background: string，世界观背景设定（详细描述）\n- core_settings: string，核心设定（如力量体系、社会规则等）\n- writing_style: string，写作风格建议\n- suggestions: array，建议用户补充的内容\n\n输出必须是合法的 JSON 对象，不要添加任何其他文字。",
+        "en": "You are an experienced novel editor. Please完善 the novel settings based on the user's basic information.\n[IMPORTANT] Do NOT include any thinking process, reasoning steps, or think tags in your output.\nPlease output a JSON object with these fields:\n- background: string, worldbuilding background (detailed description)\n- core_settings: string, core settings (like power system, social rules)\n- writing_style: string, writing style suggestions\n- suggestions: array, content suggestions for the user\n\nOutput must be a valid JSON object, no additional text.",
+    },
+    "workflow_setup_user": {
+        "zh": "【现有作品设定】\n{existing_setup}\n\n【用户修改方向】\n{user_modifications}\n\n请根据以上信息，完善作品设定。输出 JSON 对象。",
+        "en": "[Existing Novel Settings]\n{existing_setup}\n\n[User Modification Direction]\n{user_modifications}\n\nPlease完善 the novel settings based on the above information. Output a JSON object.",
+    },
+    "workflow_outline_system": {
+        "zh": "你是资深长篇小说策划编辑。请根据作品设定，规划全书大纲。\n【重要】禁止在输出中包含任何思考过程、推理步骤或 think 标签。\n请输出一个 JSON 对象，包含以下字段：\n- chapters: array，章节规划数组，每个元素包含 title（章节标题）和 summary（章节概要）\n- major_plotlines: array，主要情节线列表\n- climax_chapter: int，高潮章节序号（可选）\n- suggestions: array，优化建议\n\n章节规划要注意整体节奏：前几章铺垫，中间推动冲突，结尾形成阶段性结果。\n输出必须是合法的 JSON 对象。",
+        "en": "You are an experienced long-form novel editor. Please plan the full outline based on the novel settings.\n[IMPORTANT] Do NOT include any thinking process, reasoning steps, or think tags in your output.\nPlease output a JSON object with these fields:\n- chapters: array, chapter plan array, each element has title (chapter title) and summary (chapter summary)\n- major_plotlines: array, list of major plotlines\n- climax_chapter: int, climax chapter number (optional)\n- suggestions: array, optimization suggestions\n\nChapter planning should注意 overall pacing: setup in early chapters, conflict in middle, stage results at end.\nOutput must be a valid JSON object.",
+    },
+    "workflow_outline_user": {
+        "zh": "【作品设定】\n{novel_context}\n\n【用户修改】\n{user_modifications}\n\n请规划全书大纲。输出 JSON 对象。",
+        "en": "[Novel Settings]\n{novel_context}\n\n[User Modifications]\n{user_modifications}\n\nPlease plan the full outline. Output a JSON object.",
+    },
+    "workflow_character_system": {
+        "zh": "你是资深小说人物设计师。请根据作品设定和大纲，设计主要角色。\n【重要】禁止在输出中包含任何思考过程、推理步骤或 think 标签。\n请输出一个 JSON 对象，包含以下字段：\n- characters: array，人物数组，每个元素包含：\n  - name: string，人物名称\n  - role: string，角色类型（主角/配角/反派等）\n  - personality: string，性格特点\n  - background: string，人物背景\n  - goals: string，人物目标\n  - relationships: array，人物关系列表\n- suggestions: array，补充建议\n\n输出必须是合法的 JSON 对象。",
+        "en": "You are an experienced novel character designer. Please design main characters based on novel settings and outline.\n[IMPORTANT] Do NOT include any thinking process, reasoning steps, or think tags in your output.\nPlease output a JSON object with these fields:\n- characters: array, character array, each element has:\n  - name: string, character name\n  - role: string, character type (protagonist/supporting/antagonist etc.)\n  - personality: string, personality traits\n  - background: string, character background\n  - goals: string, character goals\n  - relationships: array, character relationship list\n- suggestions: array, additional suggestions\n\nOutput must be a valid JSON object.",
+    },
+    "workflow_character_user": {
+        "zh": "【作品设定】\n{novel_context}\n\n【大纲信息】\n{outline_context}\n\n【现有人物】\n{existing_characters}\n\n【用户修改】\n{user_modifications}\n\n请设计人物。输出 JSON 对象。",
+        "en": "[Novel Settings]\n{novel_context}\n\n[Outline Info]\n{outline_context}\n\n[Existing Characters]\n{existing_characters}\n\n[User Modifications]\n{user_modifications}\n\nPlease design characters. Output a JSON object.",
+    },
+    "workflow_summary_system": {
+        "zh": "你是资深小说策划编辑。请根据作品设定、前文概要和人物设定，生成章节摘要。\n【重要】禁止在输出中包含任何思考过程、推理步骤或 think 标签。\n请输出一个 JSON 对象，包含以下字段：\n- chapter_summary: string，本章概要（2-4句，概括本章主要推进）\n- title: string，本章标题建议（可选，不超过15字）\n- character_arcs: string，本章人物发展（可选）\n- suggestions: array，优化建议\n\n【关键要求】绝对不要重复或改写前文已经写过的情节！你的任务是构思新的、后续的情节，推动故事向前发展。\n输出必须是合法的 JSON 对象。",
+        "en": "You are an experienced novel editor. Please generate a chapter summary based on novel settings, previous summaries, and character profiles.\n[IMPORTANT] Do NOT include any thinking process, reasoning steps, or think tags in your output.\nPlease output a JSON object with these fields:\n- chapter_summary: string, chapter summary (2-4 sentences, summarizing main progression)\n- title: string, suggested chapter title (optional, max 15 chars)\n- character_arcs: string, character development in this chapter (optional)\n- suggestions: array, optimization suggestions\n\n[KEY REQUIREMENT] NEVER repeat or rewrite plots already written in previous chapters! Your task is to conceive NEW, subsequent plots to advance the story.\nOutput must be a valid JSON object.",
+    },
+    "workflow_summary_user": {
+        "zh": "【作品设定】\n{novel_context}\n\n【前文概要】\n{prev_chapters}\n\n【相关人物】\n{character_profiles}\n\n【目标章节】{target_chapter}\n\n【用户修改】\n{user_modifications}\n\n请生成章节摘要。输出 JSON 对象。记住：写新情节，不要重复前文。",
+        "en": "[Novel Settings]\n{novel_context}\n\n[Previous Summaries]\n{prev_chapters}\n\n[Relevant Characters]\n{character_profiles}\n\n[Target Chapter] {target_chapter}\n\n[User Modifications]\n{user_modifications}\n\nPlease generate chapter summary. Output a JSON object. Remember: write NEW plots, do NOT repeat previous content.",
+    },
 }
 
 

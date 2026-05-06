@@ -26,10 +26,8 @@ import {
 import NovelAiNamingAskDock from "@/components/NovelAiNamingAskDock";
 import { apiErrorMessage, createCharacter, fetchCharacters, updateCharacter } from "@/api/client";
 import { useI18n } from "@/i18n";
-
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-
 export default function NovelPeopleForm() {
   const { t } = useI18n();
   const { novelId, characterId } = useParams();
@@ -38,11 +36,9 @@ export default function NovelPeopleForm() {
   const isEdit = Number.isFinite(cid);
   const nav = useNavigate();
   const [form] = Form.useForm();
-
   const [loading, setLoading] = useState(isEdit);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
@@ -66,7 +62,6 @@ export default function NovelPeopleForm() {
       }
     })();
   }, [id, cid, isEdit, form, t]);
-
   const onFinish = async (values: {
     name: string;
     profile?: string;
@@ -97,7 +92,6 @@ export default function NovelPeopleForm() {
       setSaving(false);
     }
   };
-
   if (loading) {
     return (
       <div
@@ -112,7 +106,6 @@ export default function NovelPeopleForm() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#faf9f5",
           }}
         >
           <div
@@ -135,7 +128,6 @@ export default function NovelPeopleForm() {
       </div>
     );
   }
-
   return (
     <div
       style={{
@@ -149,17 +141,15 @@ export default function NovelPeopleForm() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#faf9f5",
         }}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <UserOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
+            <UserOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#141413",
               }}
             >
               {isEdit ? t("peopleform_edit_character") : t("peopleform_new_character")}
@@ -187,7 +177,6 @@ export default function NovelPeopleForm() {
             style={{ marginBottom: "1.5rem" }}
           />
         )}
-
         <Form
           form={form}
           name="characterForm"
@@ -203,13 +192,13 @@ export default function NovelPeopleForm() {
             type="inner"
             title={
               <Space>
-                <InfoCircleOutlined style={{ color: "#cc785c" }} />
+                <InfoCircleOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("peopleform_basic_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -220,10 +209,10 @@ export default function NovelPeopleForm() {
                   <span>{t("peopleform_character_name")}</span>
                   <AntdTooltip title={t("peopleform_name_tooltip")}>
                     <QuestionCircleOutlined
-                      style={{ color: "#78716c", cursor: "help" }}
+                      style={{ color: "var(--muted)", cursor: "help" }}
                     />
                   </AntdTooltip>
-                  <span style={{ color: "#ff4d4f" }}>*</span>
+                  <span style={{ color: "var(--error)" }}>*</span>
                 </Space>
               }
               rules={[{ required: true, message: t("peopleform_name_required") }]}
@@ -231,23 +220,22 @@ export default function NovelPeopleForm() {
               <Input
                 placeholder={t("peopleform_name_placeholder")}
                 size="large"
-                prefix={<UserOutlined style={{ color: "#78716c" }} />}
+                prefix={<UserOutlined style={{ color: "var(--muted)" }} />}
                 style={{ height: 44 }}
               />
             </Form.Item>
           </Card>
-
           <Card
             type="inner"
             title={
               <Space>
-                <UserOutlined style={{ color: "#cc785c" }} />
+                <UserOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("peopleform_character_profile")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -258,7 +246,7 @@ export default function NovelPeopleForm() {
                   <span>{t("peopleform_personality")}</span>
                   <AntdTooltip title={t("peopleform_personality_tooltip")}>
                     <QuestionCircleOutlined
-                      style={{ color: "#78716c", cursor: "help" }}
+                      style={{ color: "var(--muted)", cursor: "help" }}
                     />
                   </AntdTooltip>
                   <Tag color="default">{t("peopleform_optional")}</Tag>
@@ -275,18 +263,17 @@ export default function NovelPeopleForm() {
               />
             </Form.Item>
           </Card>
-
           <Card
             type="inner"
             title={
               <Space>
-                <InfoCircleOutlined style={{ color: "#cc785c" }} />
+                <InfoCircleOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("peopleform_additional_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -297,7 +284,7 @@ export default function NovelPeopleForm() {
                   <span>{t("peopleform_other_notes")}</span>
                   <AntdTooltip title={t("peopleform_notes_tooltip")}>
                     <QuestionCircleOutlined
-                      style={{ color: "#78716c", cursor: "help" }}
+                      style={{ color: "var(--muted)", cursor: "help" }}
                     />
                   </AntdTooltip>
                   <Tag color="default">{t("peopleform_optional")}</Tag>
@@ -314,7 +301,6 @@ export default function NovelPeopleForm() {
               />
             </Form.Item>
           </Card>
-
           <Alert
             message={t("peopleform_tip_title")}
             description={t("peopleform_tip_content")}
@@ -322,7 +308,6 @@ export default function NovelPeopleForm() {
             showIcon
             style={{ marginBottom: "1.5rem" }}
           />
-
           <Form.Item style={{ marginBottom: 0 }}>
             <Row gutter={16}>
               <Col xs={24} sm={12}>
@@ -361,7 +346,6 @@ export default function NovelPeopleForm() {
           </Form.Item>
         </Form>
       </Card>
-
       <div style={{ marginTop: "1rem" }}>
         <NovelAiNamingAskDock novelId={id} />
       </div>

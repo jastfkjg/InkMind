@@ -167,6 +167,14 @@ export const inkMindLightTheme: ThemeConfig = {
     },
     Alert: {
       borderRadiusLG: DESIGN_ROUNDED.md,
+      colorInfoBg: "rgba(93, 184, 166, 0.12)",
+      colorInfoText: "#7dc9ba",
+      colorSuccessBg: "rgba(93, 184, 114, 0.12)",
+      colorSuccessText: "#7cc98d",
+      colorWarningBg: "rgba(232, 165, 90, 0.12)",
+      colorWarningText: "#f0b87a",
+      colorErrorBg: "rgba(198, 69, 69, 0.12)",
+      colorErrorText: "#d65a5a",
     },
     Tag: {
       borderRadiusSM: DESIGN_ROUNDED.sm,
@@ -337,6 +345,14 @@ export const inkMindSepiaTheme: ThemeConfig = {
     },
     Alert: {
       borderRadiusLG: DESIGN_ROUNDED.md,
+      colorInfoBg: "rgba(93, 184, 166, 0.12)",
+      colorInfoText: "#7dc9ba",
+      colorSuccessBg: "rgba(93, 184, 114, 0.12)",
+      colorSuccessText: "#7cc98d",
+      colorWarningBg: "rgba(232, 165, 90, 0.12)",
+      colorWarningText: "#f0b87a",
+      colorErrorBg: "rgba(198, 69, 69, 0.15)",
+      colorErrorText: "#d65a5a",
     },
     Tag: {
       borderRadiusSM: DESIGN_ROUNDED.sm,
@@ -475,8 +491,8 @@ export const inkMindDarkTheme: ThemeConfig = {
     },
     Tooltip: {
       borderRadiusLG: DESIGN_ROUNDED.sm,
-      colorBgSpotlight: "#faf9f5",
-      colorTextLightSolid: "#141413",
+      colorBgSpotlight: "#373530",
+      colorTextLightSolid: "#faf9f5",
     },
     Popover: {
       borderRadiusLG: DESIGN_ROUNDED.lg,
