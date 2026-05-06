@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
 import { useI18n } from "@/i18n";
 import {
   type WorkflowProgress,
@@ -706,7 +707,7 @@ export default function SmartWriterPanel({
       <div className="smart-writer-messages">
         {messages.map((msg) => (
           <div key={msg.id} className={`smart-writer-bubble ${getMessageStyle(msg.role)}`}>
-            <div className="smart-writer-bubble__content">{msg.content}</div>
+            <div className="smart-writer-bubble__content"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
             
             {msg.isEditable && msg.editableContent && !msg.isStreaming && (
               <div className="smart-writer-bubble__editable">

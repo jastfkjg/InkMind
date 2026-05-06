@@ -1,5 +1,5 @@
 from app.llm.base import LLMProvider
-from app.models import Chapter, Novel
+from app.models import Chapter, Character, Novel
 from app.schemas.ai import NovelNamingIn
 from app.language import Language
 from app.prompts import get_prompt
@@ -57,6 +57,8 @@ def novel_writing_chat_messages(
     history: list[dict[str, str]],
     *,
     language: Language = "zh",
+    chapters: list[Chapter] | None = None,
+    characters: list[Character] | None = None,
 ) -> tuple[str, str]:
     bg = (novel.background or "").strip()[:_BG_CHAT]
     ws = (novel.writing_style or "").strip()[:_WS_CHAT]
@@ -74,6 +76,22 @@ def novel_writing_chat_messages(
         background=bg_display,
         writing_style=ws_display
     )
+    
+    if chapters:
+        chapter_lines = []
+        for ch in chapters[:_MAX_PREVIOUS_CHAPTERS]:
+            summary_text = (ch.summary or "").strip()[:_SUMMARY_PER_CHAPTER]
+            chapter_lines.append(f"  {ch.sort_order + 1}. {ch.title}" + (f"（概要：{summary_text}）" if summary_text else ""))
+        if chapter_lines:
+            system += "\n\n【已有章节】\n" + "\n".join(chapter_lines)
+    
+    if characters:
+        char_lines = []
+        for c in characters[:20]:
+            desc = (c.profile or "").strip()[:200]
+            char_lines.append(f"  · {c.name}" + (f"：{desc}" if desc else ""))
+        if char_lines:
+            system += "\n\n【主要人物】\n" + "\n".join(char_lines)
     
     lines: list[str] = []
     for turn in history[-12:]:

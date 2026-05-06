@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
 import { useI18n } from "@/i18n";
 import {
   type WorkflowProgress,
@@ -14,6 +15,7 @@ import {
   confirmPhase,
   saveWorkflowChapter,
   fetchWorkflowProgress,
+  novelAiChat,
 } from "@/api/client";
 import type { Chapter } from "@/types";
 
@@ -225,15 +227,18 @@ function parseInstruction(message: string): { type: string; params: Record<strin
   const chapterMatch = lowerMsg.match(/(\d+)\s*(章|chapter)/);
   const chapterCount = chapterMatch ? parseInt(chapterMatch[1]) : 1;
   
-  if (lowerMsg.includes("写") || lowerMsg.includes("继续") || lowerMsg.includes("生成") || 
-      lowerMsg.includes("write") || lowerMsg.includes("continue") || lowerMsg.includes("generate")) {
+  const isQuestion = /^(如何|怎么|为什么|为何|怎样|什么|哪些|能否|可以|是否|帮|请|建议|推荐|分析|评价|点评|如何写好|怎样写|怎么写)/i.test(message.trim()) ||
+    message.trim().endsWith("？") || message.trim().endsWith("?");
+  
+  if (!isQuestion && (lowerMsg.includes("写") || lowerMsg.includes("继续") || lowerMsg.includes("生成") || 
+      lowerMsg.includes("write") || lowerMsg.includes("continue") || lowerMsg.includes("generate"))) {
     if (chapterCount > 1) {
       return { type: "generate_multiple", params: { count: chapterCount } };
     }
     return { type: "generate_one", params: {} };
   }
   
-  if (lowerMsg.includes("修改") || lowerMsg.includes("改") || lowerMsg.includes("modify") || lowerMsg.includes("change")) {
+  if (!isQuestion && (lowerMsg.includes("修改") || lowerMsg.includes("改") || lowerMsg.includes("modify") || lowerMsg.includes("change"))) {
     return { type: "modify", params: { instruction: message } };
   }
   
@@ -681,15 +686,24 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
         
         setSavedChapterTitles((prev) => [...prev, newTitle]);
         
-        setWriterState((prev) => ({
-          ...prev,
-          completedChapterCount: newCompletedCount,
-          currentChapter: null,
-          isWaiting: false,
-        }));
-        
         if (newCompletedCount < writerState.targetChapterCount) {
-          addAssistantMessage(t("smart_writer_continue_next_chapter"));
+          setWriterState((prev) => ({
+            ...prev,
+            completedChapterCount: newCompletedCount,
+            currentChapter: null,
+            isWaiting: true,
+            progress: {
+              ...prev.progress!,
+              current_phase: "chapter_saved" as WorkflowPhaseType,
+              status: "waiting_user_confirm",
+            },
+          }));
+          addAssistantMessage(
+            formatMessage(t("smart_writer_continue_next_chapter") || "继续写下一章吗？", {
+              done: newCompletedCount,
+              total: writerState.targetChapterCount,
+            })
+          );
         } else {
           const allTitles = [...savedChapterTitles, newTitle];
           const summaryLines = allTitles.map((ttl, i) => `第${i + 1}章：${ttl}`).join("\n");
@@ -724,7 +738,11 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
     
     const modifications = Object.keys(editFields).length > 0 ? editFields : undefined;
     
-    if (writerState.progress?.current_phase === "chapter_content" || 
+    if (writerState.progress?.current_phase === "chapter_saved") {
+      addSystemMessage(t("smart_writer_confirmed_next"));
+      setEditFields({});
+      await executeCurrentPhase(writerState.workflowId);
+    } else if (writerState.progress?.current_phase === "chapter_content" || 
         writerState.progress?.current_phase === "polish") {
       addSystemMessage(t("smart_writer_confirm_save"));
       await handleSaveChapter();
@@ -863,7 +881,41 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
       
       case "question":
       default: {
-        addAssistantMessage(t("smart_writer_help_text"));
+        if (!novelId) {
+          addAssistantMessage(t("smart_writer_help_text"));
+          break;
+        }
+        setIsBusy(true);
+        setIsStreaming(true);
+        const chatMsgId = addAssistantMessage("", { isStreaming: true });
+        let chatAcc = "";
+        try {
+          const chatHistory = messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content }));
+          await novelAiChat(
+            novelId,
+            { message: text, history: chatHistory },
+            (chunk) => {
+              chatAcc += chunk;
+              updateMessage(chatMsgId, { content: chatAcc });
+            }
+          );
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          if (!chatAcc) {
+            updateMessage(chatMsgId, {
+              role: "error",
+              content: `${t("common_error")}: ${err.message}`,
+              isStreaming: false,
+            });
+          }
+        } finally {
+          updateMessage(chatMsgId, { isStreaming: false });
+          setIsBusy(false);
+          setIsStreaming(false);
+        }
         break;
       }
     }
@@ -874,6 +926,8 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
     addSystemMessage, 
     addAssistantMessage, 
     addErrorMessage,
+    updateMessage,
+    messages,
     writerState,
     editFields,
     createWriterWorkflow,
@@ -980,7 +1034,41 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
       
       case "question":
       default: {
-        addAssistantMessage(t("smart_writer_help_text"));
+        if (!novelId) {
+          addAssistantMessage(t("smart_writer_help_text"));
+          break;
+        }
+        setIsBusy(true);
+        setIsStreaming(true);
+        const chatMsgId = addAssistantMessage("", { isStreaming: true });
+        let chatAcc = "";
+        try {
+          const chatHistory = messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content }));
+          await novelAiChat(
+            novelId,
+            { message: text, history: chatHistory },
+            (chunk) => {
+              chatAcc += chunk;
+              updateMessage(chatMsgId, { content: chatAcc });
+            }
+          );
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          if (!chatAcc) {
+            updateMessage(chatMsgId, {
+              role: "error",
+              content: `${t("common_error")}: ${err.message}`,
+              isStreaming: false,
+            });
+          }
+        } finally {
+          updateMessage(chatMsgId, { isStreaming: false });
+          setIsBusy(false);
+          setIsStreaming(false);
+        }
         break;
       }
     }
@@ -992,6 +1080,8 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
     addSystemMessage,
     addAssistantMessage,
     addErrorMessage,
+    updateMessage,
+    messages,
     writerState,
     editFields,
     createWriterWorkflow,
@@ -1121,7 +1211,7 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
           <div className="ai-assistant-messages">
             {messages.map((msg) => (
               <div key={msg.id} className={`ai-assistant-bubble ${getMessageStyle(msg.role)}`}>
-                <div className="ai-assistant-bubble__content">{msg.content}</div>
+                <div className="ai-assistant-bubble__content"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
                 
                 {msg.isEditable && msg.editableContent && !msg.isStreaming && (
                   <div className="ai-assistant-bubble__editable">
@@ -1165,25 +1255,29 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
                   onClick={handleProceedToNextPhase}
                   disabled={isBusy}
                 >
-                  {writerState.progress?.current_phase === "chapter_summary" 
+                  {writerState.progress?.current_phase === "chapter_saved"
+                    ? t("smart_writer_option_continue_next")
+                    : writerState.progress?.current_phase === "chapter_summary" 
                     ? t("smart_writer_option_proceed")
                     : writerState.progress?.current_phase === "chapter_content"
                     ? t("smart_writer_option_save_chapter")
                     : t("smart_writer_action_confirm")}
                 </button>
                 
-                <button
-                  type="button"
-                  className="ai-assistant-action-btn ai-assistant-action-btn--secondary"
-                  onClick={handleReexecutePhase}
-                  disabled={isBusy}
-                >
-                  {writerState.progress?.current_phase === "chapter_summary" 
-                    ? t("smart_writer_option_regenerate_summary")
-                    : writerState.progress?.current_phase === "chapter_content"
-                    ? t("smart_writer_option_regenerate_content")
-                    : t("smart_writer_action_regenerate")}
-                </button>
+                {writerState.progress?.current_phase !== "chapter_saved" && (
+                  <button
+                    type="button"
+                    className="ai-assistant-action-btn ai-assistant-action-btn--secondary"
+                    onClick={handleReexecutePhase}
+                    disabled={isBusy}
+                  >
+                    {writerState.progress?.current_phase === "chapter_summary" 
+                      ? t("smart_writer_option_regenerate_summary")
+                      : writerState.progress?.current_phase === "chapter_content"
+                      ? t("smart_writer_option_regenerate_content")
+                      : t("smart_writer_action_regenerate")}
+                  </button>
+                )}
                 
                 <button
                   type="button"

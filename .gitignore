@@ -34,6 +34,8 @@ frontend/dist/
 
 # Local SQLite (regenerate with app startup)
 *.db
+*.db-shm
+*.db-wal
 
 # OS and editors
 .DS_Store
