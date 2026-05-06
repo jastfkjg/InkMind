@@ -468,7 +468,7 @@ class ChapterContentSubagent(Subagent):
 
             llm_response = self._llm.complete(system, user)
 
-            content_result = self._parse_content_response(llm_response, fixed_title is not None)
+            content_result = self._parse_content_response(llm_response, fixed_title)
 
             result.generated_content = content_result
             result.success = True
@@ -535,21 +535,33 @@ class ChapterContentSubagent(Subagent):
             yield f"\n[错误] 生成失败: {e}"
 
     def _parse_content_response(
-        self, response: str, has_fixed_title: bool
+        self, response: str, fixed_title: str | None
     ) -> dict[str, Any]:
         result: dict[str, Any] = {"raw_response": response}
 
+        cleaned_response = self._extract_json_from_response(response)
+
         try:
-            json_match = response.find("{")
-            if json_match >= 0:
-                json_str = response[json_match:]
-                parsed = json.loads(json_str)
-                if isinstance(parsed, dict):
-                    return parsed
+            parsed = json.loads(cleaned_response)
+            if isinstance(parsed, dict):
+                if fixed_title:
+                    result["title"] = fixed_title
+                    result["body"] = parsed.get("body", parsed.get("content", ""))
+                else:
+                    result["title"] = parsed.get("title", "")
+                    result["body"] = parsed.get("body", parsed.get("content", ""))
+
+                if not result["title"] and not fixed_title:
+                    result["title"] = "无标题"
+                if not result["body"]:
+                    result["body"] = cleaned_response
+
+                return result
         except json.JSONDecodeError:
             pass
 
-        if has_fixed_title:
+        if fixed_title:
+            result["title"] = fixed_title
             result["body"] = response
         else:
             lines = response.strip().split("\n")
@@ -557,9 +569,48 @@ class ChapterContentSubagent(Subagent):
                 result["title"] = lines[0].strip()
                 result["body"] = "\n".join(lines[1:]).strip()
             else:
+                result["title"] = "无标题"
                 result["body"] = response
 
+        if not result["body"].strip():
+            result["body"] = response
+
         return result
+
+    def _extract_json_from_response(self, response: str) -> str:
+        """从LLM响应中提取JSON字符串。
+
+        处理以下情况：
+        1. Markdown代码块（```json ... ``` 或 ``` ... ```）
+        2. 包含在文本中的JSON
+        3. 不完整的JSON（尝试补全）
+        """
+        if "```" in response:
+            start = response.find("```")
+            end = response.rfind("```")
+            if start != end:
+                block = response[start + 3:end]
+                if block.startswith("json"):
+                    block = block[4:].strip()
+                elif block.startswith("JSON"):
+                    block = block[4:].strip()
+                return block.strip()
+
+        json_start = response.find("{")
+        json_end = response.rfind("}")
+
+        if json_start >= 0 and json_end > json_start:
+            json_str = response[json_start:json_end + 1]
+            open_braces = json_str.count("{")
+            close_braces = json_str.count("}")
+
+            while close_braces < open_braces:
+                json_str += "}"
+                close_braces += 1
+
+            return json_str
+
+        return response
 
     def _generate_content_suggestions(self, content_result: dict[str, Any]) -> list[str]:
         suggestions = []

@@ -909,10 +909,12 @@ export async function confirmPhase(
 
 export async function saveWorkflowChapter(
   novelId: number,
-  workflowId: string
+  workflowId: string,
+  payload?: ConfirmPhaseRequest
 ): Promise<SaveChapterResponse> {
   const { data } = await api.post<SaveChapterResponse>(
-    `/novels/${novelId}/workflow/${workflowId}/save-chapter`
+    `/novels/${novelId}/workflow/${workflowId}/save-chapter`,
+    payload || {}
   );
   return data;
 }

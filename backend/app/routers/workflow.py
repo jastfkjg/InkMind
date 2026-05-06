@@ -477,6 +477,7 @@ def apply_modifications(
 def save_chapter_to_db(
     novel_id: int,
     workflow_id: str,
+    body: ConfirmPhaseRequest,
     user: CurrentUser,
     db: Annotated[Session, Depends(get_db)],
     language: Language,
@@ -488,6 +489,7 @@ def save_chapter_to_db(
     Args:
         novel_id: 小说 ID
         workflow_id: 工作流 ID
+        body: 包含用户修改（如果有）
 
     Returns:
         保存的章节信息
@@ -500,6 +502,9 @@ def save_chapter_to_db(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="工作流不属于该小说",
         )
+
+    if body.user_modifications:
+        state.save_user_modification(WorkflowPhaseType.CHAPTER_CONTENT, body.user_modifications)
 
     summary_content = state.get_effective_content(WorkflowPhaseType.CHAPTER_SUMMARY)
     content_content = state.get_effective_content(WorkflowPhaseType.CHAPTER_CONTENT)
@@ -522,7 +527,7 @@ def save_chapter_to_db(
     chapter = Chapter(
         novel_id=novel.id,
         title=title,
-        body=content_content.get("body"),
+        content=content_content.get("body"),
         summary=summary_content.get("chapter_summary"),
         sort_order=max_sort_order,
     )
@@ -537,7 +542,7 @@ def save_chapter_to_db(
             "id": chapter.id,
             "title": chapter.title,
             "summary": chapter.summary,
-            "word_count": len(chapter.body) if chapter.body else 0,
+            "word_count": len(chapter.content) if chapter.content else 0,
         },
         "message": "章节已保存到数据库",
     }

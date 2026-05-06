@@ -44,6 +44,8 @@ class WorkflowProgress:
     pending_phases: list[str]
     current_result: dict[str, Any] | None
     user_modifications: dict[str, Any]
+    target_chapter: int | None = None
+    target_chapter_count: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -89,6 +91,11 @@ class WorkflowEngine:
         Returns:
             WorkflowState: 工作流状态
         """
+        if target_chapter is None:
+            from app.models import Chapter
+            existing_chapters = self._db.query(Chapter).filter(Chapter.novel_id == self._novel.id).count()
+            target_chapter = existing_chapters + 1
+        
         state = self._orchestrator.create_workflow_state(
             target_chapter=target_chapter,
             target_chapter_count=target_chapter_count,
@@ -307,6 +314,8 @@ class WorkflowEngine:
             pending_phases=pending_phases,
             current_result=current_result,
             user_modifications=user_modifications,
+            target_chapter=state.target_chapter,
+            target_chapter_count=state.target_chapter_count,
         )
 
     def save_state(self, state: WorkflowState | None = None) -> dict[str, Any]:

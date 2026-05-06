@@ -39,6 +39,8 @@ export interface WorkflowProgress {
   pending_phases: WorkflowPhaseType[];
   current_result?: PhaseDisplayResult;
   user_modifications: Record<string, Record<string, unknown>>;
+  target_chapter?: number;
+  target_chapter_count?: number;
 }
 
 export interface PhaseDisplayResult {
