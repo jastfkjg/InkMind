@@ -489,6 +489,29 @@ export default function NovelWrite() {
   }, [id]);
 
   useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.id) {
+        try {
+          await flushSave();
+        } catch { /* ignore */ }
+        const full = await loadChapters();
+        const target = full.find((c) => c.id === detail.id);
+        if (target) {
+          setActiveId(target.id);
+          lastLoadedChapterIdRef.current = null;
+          setTitle(target.title);
+          setSummary(target.summary || "");
+          setContent(normalizeBodyParagraphIndent(target.content || ""));
+          setChapters(full);
+        }
+      }
+    };
+    window.addEventListener("inkmind:chapter-saved", handler);
+    return () => window.removeEventListener("inkmind:chapter-saved", handler);
+  }, [loadChapters, flushSave]);
+
+  useEffect(() => {
     setEvaluateResult(null);
     setGenerateTab("single");
     setSingleGenerateTitle("");

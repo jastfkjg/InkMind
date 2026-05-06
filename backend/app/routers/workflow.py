@@ -16,6 +16,7 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -522,7 +523,8 @@ def save_chapter_to_db(
         )
         title = f"第{existing_count + 1}章"
 
-    max_sort_order = db.query(Chapter).filter(Chapter.novel_id == novel.id).count()
+    max_sort_order_result = db.query(func.max(Chapter.sort_order)).filter(Chapter.novel_id == novel.id).scalar()
+    max_sort_order = (max_sort_order_result if max_sort_order_result is not None else -1) + 1
 
     chapter = Chapter(
         novel_id=novel.id,
@@ -542,6 +544,7 @@ def save_chapter_to_db(
             "id": chapter.id,
             "title": chapter.title,
             "summary": chapter.summary,
+            "content": chapter.content,
             "word_count": len(chapter.content) if chapter.content else 0,
         },
         "message": "章节已保存到数据库",

@@ -15,7 +15,6 @@ import {
   saveWorkflowChapter,
   fetchWorkflowProgress,
 } from "@/api/client";
-import { Modal } from "antd";
 import type { Chapter } from "@/types";
 
 function AiIcon({ size = 24 }: { size?: number }) {
@@ -90,7 +89,7 @@ const POSITION_KEY = "inkmind_ai_assistant_position";
 const DEFAULT_POSITION = { x: -16, y: 72 };
 
 const PANEL_SIZE_KEY = "inkmind_ai_assistant_panel_size";
-const DEFAULT_PANEL_SIZE = { width: 480, height: 700 };
+const DEFAULT_PANEL_SIZE = { width: 560, height: 820 };
 const MIN_PANEL_SIZE = { width: 320, height: 400 };
 
 interface DragPosition {
@@ -273,6 +272,8 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
   });
   
   const [editFields, setEditFields] = useState<Record<string, string>>({});
+  
+  const [savedChapterTitles, setSavedChapterTitles] = useState<string[]>([]);
   
   const [otherOptionInput, setOtherOptionInput] = useState("");
   
@@ -664,53 +665,59 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
   const handleSaveChapter = useCallback(async () => {
     if (!writerState.workflowId || !novelId) return;
     
-    Modal.confirm({
-      title: t("workflow_save_confirm_title"),
-      content: t("workflow_save_confirm_message"),
-      okText: t("common_save"),
-      cancelText: t("common_cancel"),
-      onOk: async () => {
-        setIsBusy(true);
-        try {
-          const modifications = Object.keys(editFields).length > 0 ? editFields : undefined;
-          const result = await saveWorkflowChapter(novelId, writerState.workflowId!, {
-            user_modifications: modifications,
+    setIsBusy(true);
+    try {
+      const modifications = Object.keys(editFields).length > 0 ? editFields : undefined;
+      const result = await saveWorkflowChapter(novelId, writerState.workflowId!, {
+        user_modifications: modifications,
+      });
+      if (result.success && result.chapter) {
+        addSystemMessage(t("workflow_save_success"));
+        onChapterSaved?.(result.chapter);
+        window.dispatchEvent(new CustomEvent("inkmind:chapter-saved", { detail: result.chapter }));
+        
+        const newTitle = result.chapter.title;
+        const newCompletedCount = writerState.completedChapterCount + 1;
+        
+        setSavedChapterTitles((prev) => [...prev, newTitle]);
+        
+        setWriterState((prev) => ({
+          ...prev,
+          completedChapterCount: newCompletedCount,
+          currentChapter: null,
+          isWaiting: false,
+        }));
+        
+        if (newCompletedCount < writerState.targetChapterCount) {
+          addAssistantMessage(t("smart_writer_continue_next_chapter"));
+        } else {
+          const allTitles = [...savedChapterTitles, newTitle];
+          const summaryLines = allTitles.map((ttl, i) => `第${i + 1}章：${ttl}`).join("\n");
+          addAssistantMessage(
+            `✅ ${formatMessage(t("smart_writer_all_complete_summary") || "全部完成！共生成 {count} 章", { count: allTitles.length })}\n\n${summaryLines}`
+          );
+          setStoredSession(novelId, null);
+          setWriterState({
+            workflowId: null,
+            progress: null,
+            targetChapterCount: 0,
+            completedChapterCount: 0,
+            currentChapter: null,
+            isWaiting: false,
           });
-          if (result.success && result.chapter) {
-            addSystemMessage(t("workflow_save_success"));
-            onChapterSaved?.(result.chapter);
-            
-            setWriterState((prev) => ({
-              ...prev,
-              completedChapterCount: prev.completedChapterCount + 1,
-              currentChapter: null,
-            }));
-            
-            if (writerState.completedChapterCount + 1 < writerState.targetChapterCount) {
-              addAssistantMessage(t("smart_writer_continue_next_chapter"));
-            } else {
-              addSystemMessage(t("smart_writer_all_complete"));
-              setStoredSession(novelId, null);
-              setWriterState({
-                workflowId: null,
-                progress: null,
-                targetChapterCount: 0,
-                completedChapterCount: 0,
-                currentChapter: null,
-                isWaiting: false,
-              });
-              setEditFields({});
-            }
-          }
-        } catch (error) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          addErrorMessage(`${t("common_error")}: ${err.message}`);
-        } finally {
-          setIsBusy(false);
+          setEditFields({});
+          setSavedChapterTitles([]);
         }
-      },
-    });
-  }, [writerState.workflowId, writerState.completedChapterCount, writerState.targetChapterCount, novelId, editFields, addSystemMessage, addAssistantMessage, addErrorMessage, onChapterSaved, t]);
+      } else {
+        addErrorMessage(t("workflow_save_failed") || "保存失败");
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      addErrorMessage(`${t("common_error")}: ${err.message}`);
+    } finally {
+      setIsBusy(false);
+    }
+  }, [writerState.workflowId, writerState.completedChapterCount, writerState.targetChapterCount, novelId, editFields, addSystemMessage, addAssistantMessage, addErrorMessage, onChapterSaved, savedChapterTitles, t]);
   
   const handleProceedToNextPhase = useCallback(async () => {
     if (!writerState.workflowId || !novelId) return;
@@ -1152,89 +1159,65 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
           {writerState.isWaiting && (
             <div className="ai-assistant-actions">
               <div className="ai-assistant-action-buttons">
-                {/* Option 1: Proceed / Save */}
-                <div className="ai-assistant-option">
-                  <span className="ai-assistant-option__text">
-                    {writerState.progress?.current_phase === "chapter_summary" 
-                      ? t("smart_writer_option_proceed")
-                      : writerState.progress?.current_phase === "chapter_content"
-                      ? t("smart_writer_option_save_chapter")
-                      : t("smart_writer_action_confirm")}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm ai-assistant-option__btn"
-                    onClick={handleProceedToNextPhase}
-                    disabled={isBusy}
-                  >
-                    {t("smart_writer_action_confirm")}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="ai-assistant-action-btn ai-assistant-action-btn--primary"
+                  onClick={handleProceedToNextPhase}
+                  disabled={isBusy}
+                >
+                  {writerState.progress?.current_phase === "chapter_summary" 
+                    ? t("smart_writer_option_proceed")
+                    : writerState.progress?.current_phase === "chapter_content"
+                    ? t("smart_writer_option_save_chapter")
+                    : t("smart_writer_action_confirm")}
+                </button>
                 
-                {/* Option 2: Regenerate */}
-                <div className="ai-assistant-option">
-                  <span className="ai-assistant-option__text">
-                    {writerState.progress?.current_phase === "chapter_summary" 
-                      ? t("smart_writer_option_regenerate_summary")
-                      : writerState.progress?.current_phase === "chapter_content"
-                      ? t("smart_writer_option_regenerate_content")
-                      : t("smart_writer_action_regenerate")}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm ai-assistant-option__btn"
-                    onClick={handleReexecutePhase}
-                    disabled={isBusy}
-                  >
-                    {t("smart_writer_action_regenerate")}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="ai-assistant-action-btn ai-assistant-action-btn--secondary"
+                  onClick={handleReexecutePhase}
+                  disabled={isBusy}
+                >
+                  {writerState.progress?.current_phase === "chapter_summary" 
+                    ? t("smart_writer_option_regenerate_summary")
+                    : writerState.progress?.current_phase === "chapter_content"
+                    ? t("smart_writer_option_regenerate_content")
+                    : t("smart_writer_action_regenerate")}
+                </button>
                 
-                {/* Option 3: Other - always show input */}
-                <div className="ai-assistant-option">
-                  <span className="ai-assistant-option__text">
-                    {t("smart_writer_option_other")}
-                  </span>
-                  <div className="ai-assistant-other-option">
-                    <input
-                      type="text"
-                      className="ai-assistant-other-option__input"
-                      value={otherOptionInput}
-                      onChange={(e) => setOtherOptionInput(e.target.value)}
-                      placeholder={t("smart_writer_other_placeholder")}
-                      disabled={isBusy}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void handleOtherOptionSubmit();
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm ai-assistant-other-option__btn"
-                      onClick={handleOtherOptionSubmit}
-                      disabled={isBusy || !otherOptionInput.trim()}
-                    >
-                      {t("smart_writer_action_submit")}
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Option 4: Exit */}
-                <div className="ai-assistant-option">
-                  <span className="ai-assistant-option__text">
-                    {t("smart_writer_option_exit")}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm ai-assistant-option__btn"
-                    onClick={handleCancelSession}
-                    disabled={isBusy}
-                  >
-                    {t("smart_writer_action_exit")}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="ai-assistant-action-btn ai-assistant-action-btn--ghost"
+                  onClick={handleCancelSession}
+                  disabled={isBusy}
+                >
+                  {t("smart_writer_action_exit")}
+                </button>
+              </div>
+              
+              <div className="ai-assistant-other-option">
+                <input
+                  type="text"
+                  className="ai-assistant-other-option__input"
+                  value={otherOptionInput}
+                  onChange={(e) => setOtherOptionInput(e.target.value)}
+                  placeholder={t("smart_writer_other_placeholder")}
+                  disabled={isBusy}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleOtherOptionSubmit();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ai-assistant-action-btn ai-assistant-action-btn--secondary ai-assistant-other-option__btn"
+                  onClick={handleOtherOptionSubmit}
+                  disabled={isBusy || !otherOptionInput.trim()}
+                >
+                  {t("smart_writer_action_submit")}
+                </button>
               </div>
             </div>
           )}
@@ -1244,10 +1227,15 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
               ref={inputRef}
               className="ai-assistant-input__textarea"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                const el = e.target;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 120) + "px";
+              }}
               placeholder={t("smart_writer_placeholder")}
               disabled={isBusy}
-              rows={2}
+              rows={1}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -1257,11 +1245,15 @@ export default function AiAssistantFloating({ novelId, onChapterSaved }: AiAssis
             />
             <button
               type="button"
-              className="ai-assistant-input__send btn btn-primary"
+              className={`ai-assistant-input__send${inputValue.trim() && !isBusy && !isStreaming ? " ai-assistant-input__send--active" : ""}`}
               onClick={handleSendMessage}
               disabled={isBusy || isStreaming || !inputValue.trim()}
+              aria-label={t("write_ask_send")}
             >
-              {t("write_ask_send")}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M12 19V5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M5 12L12 5L19 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </button>
           </div>
           <div

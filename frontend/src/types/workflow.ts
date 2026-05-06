@@ -105,6 +105,7 @@ export interface SaveChapterResponse {
     id: number;
     title: string;
     summary?: string;
+    content?: string;
     word_count: number;
   };
   message: string;

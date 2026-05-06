@@ -292,10 +292,9 @@ class NovelOrchestrator(Orchestrator):
             result["display_content"] = {
                 "chapter_summary": content.get("chapter_summary", content.get("raw_response", "")),
                 "title": content.get("title"),
-                "key_events": content.get("key_events", []),
                 "character_arcs": content.get("character_arcs"),
             }
-            result["editable_fields"] = ["chapter_summary", "title", "key_events"]
+            result["editable_fields"] = ["chapter_summary", "title"]
             result["next_step_suggestion"] = "确认章节摘要后，可以进入正文生成阶段"
 
         elif phase_type == WorkflowPhaseType.CHAPTER_CONTENT:

@@ -403,9 +403,6 @@ class ChapterSummarySubagent(Subagent):
         if len(summary) < 100:
             suggestions.append("章节摘要较简短，建议补充更多情节细节")
 
-        if "key_events" not in summary_result:
-            suggestions.append("建议明确本章的关键事件")
-
         if "character_arcs" not in summary_result:
             suggestions.append("可以考虑本章中人物的成长或变化")
 

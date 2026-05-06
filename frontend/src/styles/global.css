@@ -5276,8 +5276,8 @@ select {
   position: fixed;
   right: 16px;
   top: 72px;
-  width: 480px;
-  height: 700px;
+  width: 560px;
+  height: 820px;
   max-height: calc(100vh - 88px);
   background: var(--card, var(--bg-elevated, #faf9f5));
   border-radius: 16px;
@@ -5286,7 +5286,7 @@ select {
   display: flex;
   flex-direction: column;
   z-index: 9999;
-  border: 2px solid var(--accent, #cc785c);
+  border: 1px solid var(--border, #e6dfd8);
   animation: aiAssistantSlideIn 0.3s ease-out;
 }
 
@@ -5392,23 +5392,22 @@ select {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  padding-right: 12px;
+  gap: 14px;
+  padding: 18px 18px;
+  padding-right: 14px;
 }
 
 .ai-assistant-bubble {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   max-width: 100%;
 }
 
 .ai-assistant-bubble__content {
-  padding: 10px 12px;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  line-height: 1.6;
+  padding: 6px 0;
+  font-size: 0.92rem;
+  line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-serif);
@@ -5422,16 +5421,30 @@ select {
   background: var(--accent, #cc785c);
   color: #fff;
   max-width: 85%;
+  padding: 8px 14px;
+  border-radius: 14px 14px 4px 14px;
 }
 
 .ai-assistant-bubble--assistant {
   align-items: flex-start;
+  position: relative;
+  padding-left: 12px;
+}
+
+.ai-assistant-bubble--assistant::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent, #cc785c);
+  opacity: 0.5;
 }
 
 .ai-assistant-bubble--assistant .ai-assistant-bubble__content {
-  background: var(--bg-hover, #efe9de);
   color: var(--ink, #141413);
-  border: 1px solid var(--border, #e6dfd8);
 }
 
 .ai-assistant-bubble--system {
@@ -5439,12 +5452,24 @@ select {
 }
 
 .ai-assistant-bubble--system .ai-assistant-bubble__content {
-  background: transparent;
+  background: var(--bg-hover, #efe9de);
   color: var(--muted, #6c6a64);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   text-align: center;
-  padding: 4px 12px;
+  padding: 6px 16px;
   font-family: var(--font-ui);
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.ai-assistant-bubble--system .ai-assistant-bubble__content::before {
+  content: "●";
+  font-size: 0.45rem;
+  color: var(--accent, #cc785c);
+  flex-shrink: 0;
 }
 
 .ai-assistant-bubble--error {
@@ -5455,26 +5480,31 @@ select {
   background: color-mix(in oklab, var(--error-soft, #fecaca) 12%, transparent);
   color: var(--error-soft, #fecaca);
   border: 1px solid color-mix(in oklab, var(--error-soft, #fecaca) 25%, transparent);
+  border-radius: 8px;
+  padding: 8px 12px;
 }
 
 .ai-assistant-bubble__editable {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
+  margin-top: 4px;
 }
 
 .ai-assistant-edit-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
 }
 
 .ai-assistant-edit-field__label {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--muted, #6c6a64);
   font-weight: 500;
   font-family: var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .ai-assistant-edit-field__input {
@@ -5492,7 +5522,7 @@ select {
 .ai-assistant-edit-field__input:focus {
   outline: none;
   border-color: var(--accent, #cc785c);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
 }
 
 .ai-assistant-edit-field__input:disabled {
@@ -5503,23 +5533,23 @@ select {
 
 .ai-assistant-edit-field__textarea {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid var(--border, #e6dfd8);
   background: var(--card, var(--bg-elevated, #faf9f5));
   color: var(--ink, #141413);
   font-size: 0.92rem;
-  line-height: 1.6;
+  line-height: 1.8;
   font-family: var(--font-serif);
   resize: vertical;
-  min-height: 80px;
+  min-height: 200px;
   transition: all 0.15s ease;
 }
 
 .ai-assistant-edit-field__textarea:focus {
   outline: none;
   border-color: var(--accent, #cc785c);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
 }
 
 .ai-assistant-edit-field__textarea:disabled {
@@ -5531,53 +5561,114 @@ select {
 .ai-assistant-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border, #e6dfd8);
+  gap: 12px;
+  padding: 14px 18px 16px;
   flex-shrink: 0;
 }
 
 .ai-assistant-action-buttons {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
   width: 100%;
+  align-items: center;
 }
 
 .ai-assistant-action-btn {
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  padding: 8px 16px !important;
-  font-size: 0.9rem !important;
+  gap: 5px;
+  padding: 7px 15px;
+  border-radius: 20px;
+  font-size: 0.83rem;
+  font-weight: 500;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+}
+
+.ai-assistant-action-btn--primary {
+  flex: 1.3;
+  min-width: 140px;
+  background: var(--accent, #cc785c);
+  color: #fff;
+  border-color: var(--accent, #cc785c);
+  box-shadow: 0 1px 6px color-mix(in srgb, var(--accent, #cc785c) 22%, transparent),
+              inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent);
+}
+
+.ai-assistant-action-btn--primary:hover:not(:disabled) {
+  background: var(--accent-active, #b66850);
+  border-color: var(--accent-active, #b66850);
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--accent, #cc785c) 32%, transparent),
+              inset 0 1px 0 color-mix(in srgb, #fff 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.ai-assistant-action-btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--accent, #cc785c) 20%, transparent);
+}
+
+.ai-assistant-action-btn--secondary {
+  background: transparent;
+  color: var(--ink-secondary, #3d3b36);
+  border-color: var(--border-light, #e0d9d0);
+}
+
+.ai-assistant-action-btn--secondary:hover:not(:disabled) {
+  background: var(--bg-hover, #f5efe6);
+  border-color: var(--border, #d4cdc2);
+  color: var(--ink, #141413);
+}
+
+.ai-assistant-action-btn--ghost {
+  background: transparent;
+  color: var(--muted, #9a9690);
+  border-color: transparent;
+  padding: 7px 12px;
+}
+
+.ai-assistant-action-btn--ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error-soft, #a53838) 7%, transparent);
+  color: var(--error-soft, #a53838);
+}
+
+.ai-assistant-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
 .ai-assistant-option {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 0;
 }
 
 .ai-assistant-option__text {
   flex: 1;
-  min-width: 120px;
-  font-size: 0.9rem;
+  min-width: 0;
+  font-size: 0.85rem;
   color: var(--ink, #141413);
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .ai-assistant-option__btn {
   flex-shrink: 0;
-  min-width: 100px;
-  width: 100px;
-  justify-content: center;
 }
 
 .ai-assistant-option .ai-assistant-other-option {
   display: flex;
   flex: 1;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   padding: 0;
 }
@@ -5586,85 +5677,81 @@ select {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding: 8px 0 4px 0;
+  padding: 0;
 }
 
 .ai-assistant-other-option__input {
   flex: 1;
   min-width: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border, #e6dfd8);
-  background: var(--card, var(--bg-elevated, #faf9f5));
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-light, #e0d9d0);
+  background: var(--bg-hover, #f5efe6);
   color: var(--ink, #141413);
-  font-size: 0.9rem;
-  transition: all 0.15s ease;
+  font-size: 0.83rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 38px;
+  font-family: var(--font-ui);
 }
 
 .ai-assistant-other-option__input:focus {
   outline: none;
   border-color: var(--accent, #cc785c);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #cc785c) 10%, transparent);
+  background: var(--card, #faf9f5);
 }
 
 .ai-assistant-other-option__input:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
-  background: var(--bg-hover, #efe9de);
+  background: var(--bg-active, #e8e0d2);
+}
+
+.ai-assistant-other-option__input::placeholder {
+  color: var(--muted, #9a9690);
+  opacity: 0.7;
 }
 
 .ai-assistant-other-option__btn {
   flex-shrink: 0;
-  min-width: 100px;
-  width: 100px;
-  justify-content: center;
-}
-
-.ai-assistant-actions .btn {
-  flex-shrink: 0;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-}
-
-.ai-assistant-actions .btn-primary {
-  background: var(--accent, #cc785c) !important;
-  border-color: var(--accent, #cc785c) !important;
-  color: #fff !important;
-}
-
-.ai-assistant-actions .btn-primary:hover:not(:disabled) {
-  background: var(--accent-active, #b66850) !important;
+  height: 38px;
+  padding: 0 16px !important;
+  font-size: 0.83rem !important;
+  border-radius: 20px !important;
 }
 
 .ai-assistant-input {
   display: flex;
-  gap: 10px;
   align-items: flex-end;
-  padding: 12px 16px;
+  gap: 0;
+  padding: 12px 14px 14px;
   border-top: 1px solid var(--border, #e6dfd8);
   flex-shrink: 0;
+  background: var(--card, var(--bg-elevated, #faf9f5));
+  border-radius: 0 0 16px 16px;
 }
 
 .ai-assistant-input__textarea {
   flex: 1;
   min-height: 44px;
-  max-height: 100px;
-  padding: 10px 12px;
-  border-radius: 12px;
+  max-height: 120px;
+  padding: 10px 14px;
+  border-radius: 14px;
   border: 1px solid var(--border, #e6dfd8);
-  background: var(--card, var(--bg-elevated, #faf9f5));
+  background: var(--bg-hover, #efe9de);
   color: var(--ink, #141413);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   line-height: 1.5;
-  font-family: var(--font-serif);
-  resize: vertical;
-  transition: all 0.15s ease;
+  font-family: var(--font-ui);
+  resize: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  overflow-y: auto;
 }
 
 .ai-assistant-input__textarea:focus {
   outline: none;
   border-color: var(--accent, #cc785c);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent, #cc785c) 10%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent, #cc785c) 12%, transparent);
 }
 
 .ai-assistant-input__textarea:disabled {
@@ -5679,7 +5766,38 @@ select {
 
 .ai-assistant-input__send {
   flex-shrink: 0;
-  min-width: 60px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-active, #e8e0d2);
+  color: var(--muted, #6c6a64);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin-left: 8px;
+  margin-bottom: 2px;
+}
+
+.ai-assistant-input__send--active {
+  background: var(--accent, #cc785c);
+  color: #fff;
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--accent, #cc785c) 35%, transparent);
+}
+
+.ai-assistant-input__send--active:hover:not(:disabled) {
+  background: var(--accent-active, #b66850);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--accent, #cc785c) 45%, transparent);
+  transform: scale(1.05);
+}
+
+.ai-assistant-input__send:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .write-theme--dark .ai-assistant-panel,
@@ -5688,10 +5806,15 @@ select {
   border-color: var(--border, #2a2926);
 }
 
+.write-theme--dark .ai-assistant-bubble--assistant::before,
+.theme--dark .ai-assistant-bubble--assistant::before {
+  background: var(--accent, #cc785c);
+  opacity: 0.6;
+}
+
 .write-theme--dark .ai-assistant-bubble--assistant .ai-assistant-bubble__content,
 .theme--dark .ai-assistant-bubble--assistant .ai-assistant-bubble__content {
-  background: var(--bg-hover, #373530);
-  border-color: var(--border, #2a2926);
+  color: var(--ink, #faf9f5);
 }
 
 .write-theme--dark .ai-assistant-edit-field__input,
@@ -5700,16 +5823,59 @@ select {
 .theme--dark .ai-assistant-edit-field__input,
 .theme--dark .ai-assistant-edit-field__textarea,
 .theme--dark .ai-assistant-input__textarea {
-  background: var(--bg-elevated, #252320);
+  background: var(--bg-hover, #373530);
+  border-color: var(--border, #373530);
+}
+
+.write-theme--dark .ai-assistant-input__send,
+.theme--dark .ai-assistant-input__send {
+  background: var(--bg-active, #44423d);
+}
+
+.write-theme--dark .ai-assistant-input__send--active,
+.theme--dark .ai-assistant-input__send--active {
+  background: var(--accent, #cc785c);
 }
 
 .write-theme--dark .ai-assistant-other-option__input,
 .theme--dark .ai-assistant-other-option__input {
+  background: var(--bg-hover, #373530);
+  border-color: var(--border-light, #3a3832);
+}
+
+.write-theme--dark .ai-assistant-other-option__input:focus,
+.theme--dark .ai-assistant-other-option__input:focus {
   background: var(--bg-elevated, #252320);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #cc785c) 10%, transparent);
+}
+
+.write-theme--dark .ai-assistant-action-btn--secondary,
+.theme--dark .ai-assistant-action-btn--secondary {
+  color: var(--ink-secondary, #d4d0ca);
+  border-color: var(--border-light, #3a3832);
+}
+
+.write-theme--dark .ai-assistant-action-btn--secondary:hover:not(:disabled),
+.theme--dark .ai-assistant-action-btn--secondary:hover:not(:disabled) {
+  background: var(--bg-hover, #373530);
+  border-color: var(--border, #44423d);
+  color: var(--ink, #faf9f5);
+}
+
+.write-theme--dark .ai-assistant-action-btn--ghost,
+.theme--dark .ai-assistant-action-btn--ghost {
+  color: var(--muted, #6c6a64);
+}
+
+.write-theme--dark .ai-assistant-action-btn--ghost:hover:not(:disabled),
+.theme--dark .ai-assistant-action-btn--ghost:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--error-soft, #a53838) 12%, transparent);
+  color: var(--error-soft, #fecaca);
 }
 
 .write-theme--dark .ai-assistant-bubble--system .ai-assistant-bubble__content,
 .theme--dark .ai-assistant-bubble--system .ai-assistant-bubble__content {
+  background: var(--bg-hover, #373530);
   color: var(--muted, #a09d96);
 }
 
