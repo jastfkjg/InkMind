@@ -25,12 +25,9 @@ import {
 import { apiErrorMessage, updateNovel } from "@/api/client";
 import type { Novel } from "@/types";
 import { useI18n } from "@/i18n";
-
 type Ctx = { novel: Novel | null; setNovel: React.Dispatch<React.SetStateAction<Novel | null>> };
-
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-
 export default function NovelSettings() {
   const { t } = useI18n();
   const { novelId } = useParams();
@@ -40,7 +37,6 @@ export default function NovelSettings() {
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-
   useEffect(() => {
     if (!novel) return;
     form.setFieldsValue({
@@ -50,7 +46,6 @@ export default function NovelSettings() {
       writingStyle: novel.writing_style,
     });
   }, [novel, form]);
-
   const onFinish = async (values: {
     title: string;
     background?: string;
@@ -77,7 +72,6 @@ export default function NovelSettings() {
       setSaving(false);
     }
   };
-
   if (!novel) {
     return (
       <div
@@ -92,7 +86,6 @@ export default function NovelSettings() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#faf9f5",
           }}
         >
           <div
@@ -115,7 +108,6 @@ export default function NovelSettings() {
       </div>
     );
   }
-
   return (
     <div
       style={{
@@ -129,17 +121,15 @@ export default function NovelSettings() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#faf9f5",
         }}
         title={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <SettingOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
+            <SettingOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#141413",
               }}
             >
               {t("settings_title")}
@@ -159,7 +149,6 @@ export default function NovelSettings() {
             style={{ marginBottom: "1.5rem" }}
           />
         )}
-
         {errorMsg && (
           <Alert
             message={t("save_error_title")}
@@ -169,7 +158,6 @@ export default function NovelSettings() {
             style={{ marginBottom: "1.5rem" }}
           />
         )}
-
         <Form
           form={form}
           name="novelSettings"
@@ -186,13 +174,13 @@ export default function NovelSettings() {
             type="inner"
             title={
               <Space>
-                <BookOutlined style={{ color: "#cc785c" }} />
+                <BookOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("settings_general")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -203,7 +191,7 @@ export default function NovelSettings() {
                   label={
                     <Space>
                       <span>{t("novel_title")}</span>
-                      <span style={{ color: "#ff4d4f" }}>*</span>
+                      <span style={{ color: "var(--error)" }}>*</span>
                     </Space>
                   }
                   rules={[{ required: true, message: t("please_enter_novel_title") }]}
@@ -211,7 +199,7 @@ export default function NovelSettings() {
                   <Input
                     placeholder={t("enter_novel_title_placeholder")}
                     size="large"
-                    prefix={<BookOutlined style={{ color: "#78716c" }} />}
+                    prefix={<BookOutlined style={{ color: "var(--muted)" }} />}
                     style={{ height: 44 }}
                   />
                 </Form.Item>
@@ -224,7 +212,7 @@ export default function NovelSettings() {
                       <span>{t("novel_genre")}</span>
                       <AntdTooltip title={t("genre_tooltip")}>
                         <QuestionCircleOutlined
-                          style={{ color: "#78716c", cursor: "help" }}
+                          style={{ color: "var(--muted)", cursor: "help" }}
                         />
                       </AntdTooltip>
                     </Space>
@@ -239,18 +227,17 @@ export default function NovelSettings() {
               </Col>
             </Row>
           </Card>
-
           <Card
             type="inner"
             title={
               <Space>
-                <EditOutlined style={{ color: "#cc785c" }} />
+                <EditOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("writing_style_and_background")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -261,7 +248,7 @@ export default function NovelSettings() {
                   <span>{t("writing_style")}</span>
                   <AntdTooltip title={t("writing_style_tooltip")}>
                     <QuestionCircleOutlined
-                      style={{ color: "#78716c", cursor: "help" }}
+                      style={{ color: "var(--muted)", cursor: "help" }}
                     />
                   </AntdTooltip>
                 </Space>
@@ -276,7 +263,6 @@ export default function NovelSettings() {
                 }}
               />
             </Form.Item>
-
             <Form.Item
               name="background"
               label={
@@ -284,7 +270,7 @@ export default function NovelSettings() {
                   <span>{t("background_setting")}</span>
                   <AntdTooltip title={t("background_tooltip")}>
                     <QuestionCircleOutlined
-                      style={{ color: "#78716c", cursor: "help" }}
+                      style={{ color: "var(--muted)", cursor: "help" }}
                     />
                   </AntdTooltip>
                 </Space>
@@ -300,7 +286,6 @@ export default function NovelSettings() {
               />
             </Form.Item>
           </Card>
-
           <Alert
             message={t("tip_title")}
             description={t("tip_description")}
@@ -309,7 +294,6 @@ export default function NovelSettings() {
             icon={<BulbOutlined />}
             style={{ marginBottom: "1.5rem" }}
           />
-
           <Form.Item style={{ marginBottom: 0 }}>
             <Button
               type="primary"

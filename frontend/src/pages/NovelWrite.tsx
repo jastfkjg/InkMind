@@ -24,6 +24,7 @@ import {
   type ProgressEvent,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
 import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
@@ -208,6 +209,7 @@ export default function NovelWrite() {
   const id = Number(novelId);
   const nav = useNavigate();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { t } = useI18n();
 
   const RAIL_ITEMS = useMemo(
@@ -1352,7 +1354,7 @@ export default function NovelWrite() {
     rightTool && hasLlm && (activeId !== null || rightTool === "naming");
 
   return (
-    <div className={`write-shell${focusMode ? " write-focus-mode" : ""}`}>
+    <div className={`write-shell write-theme--${theme}${focusMode ? " write-focus-mode" : ""}`}>
       {err ? <p className="form-error write-err-banner">{err}</p> : null}
 
       {narrow && sidebarOpen && !focusMode ? (
@@ -1861,7 +1863,7 @@ export default function NovelWrite() {
                       <pre className="write-generate-log" style={{ marginTop: "0.5rem" }}>
                         {currentProgress.message}
                         {currentProgress.detail && (
-                          <span style={{ color: "#666", fontSize: "0.875rem", display: "block", marginTop: "0.25rem" }}>
+                          <span style={{ color: "var(--muted)", fontSize: "0.875rem", display: "block", marginTop: "0.25rem" }}>
                             {currentProgress.detail.length > 100 ? currentProgress.detail.slice(0, 100) + "..." : currentProgress.detail}
                           </span>
                         )}
@@ -2228,8 +2230,8 @@ export default function NovelWrite() {
                                       fontSize: "0.7rem",
                                       padding: "0.125rem 0.375rem",
                                       borderRadius: "4px",
-                                      backgroundColor: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#e3f2fd" : "#f5f5f5",
-                                      color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "#1976d2" : "#666",
+                                      backgroundColor: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "var(--info-bg)" : "var(--bg-hover)",
+                                      color: v.change_type.startsWith("ai") || v.change_type.startsWith("selection") ? "var(--info)" : "var(--muted)",
                                     }}
                                   >
                                     {v.change_type === "manual" && t("write_change_manual")}
@@ -2242,21 +2244,21 @@ export default function NovelWrite() {
                                   </span>
                                 </div>
                                 {v.title && (
-                                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                                  <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--muted)" }}>
                                     {t("write_version_title").replace("{title}", v.title.length > 30 ? v.title.slice(0, 30) + "…" : v.title)}
                                   </p>
                                 )}
-                                <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "#888" }}>
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.8rem", color: "var(--muted)" }}>
                                   {new Date(v.created_at).toLocaleString()}
                                 </p>
-                                <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "#aaa" }}>
+                                <p style={{ margin: "0.25rem 0", fontSize: "0.75rem", color: "var(--muted)" }}>
                                   {t("write_version_word_count").replace("{count}", String(v.content.replace(/\s/g, "").length))}
                                 </p>
                               </div>
                             </div>
                             
                             {selectedVersion?.id === v.id && (
-                              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid #eee" }}>
+                              <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border)" }}>
                                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
                                   <button
                                     type="button"
@@ -2295,12 +2297,12 @@ export default function NovelWrite() {
                   )}
                   
                   {versionDiff && (
-                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
                       <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_diff_title")}</h4>
                       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", fontSize: "0.8rem" }}>
-                        <span style={{ color: "#4caf50" }}>{t("write_version_diff_added").replace("{count}", String(versionDiff.added_count))}</span>
-                        <span style={{ color: "#f44336" }}>{t("write_version_diff_removed").replace("{count}", String(versionDiff.removed_count))}</span>
-                        <span style={{ color: "#ff9800" }}>{t("write_version_diff_changed").replace("{count}", String(versionDiff.changed_count))}</span>
+                        <span style={{ color: "var(--success)" }}>{t("write_version_diff_added").replace("{count}", String(versionDiff.added_count))}</span>
+                        <span style={{ color: "var(--error)" }}>{t("write_version_diff_removed").replace("{count}", String(versionDiff.removed_count))}</span>
+                        <span style={{ color: "var(--warning)" }}>{t("write_version_diff_changed").replace("{count}", String(versionDiff.changed_count))}</span>
                       </div>
                       <div
                         className="version-diff-container"
@@ -2308,7 +2310,7 @@ export default function NovelWrite() {
                           maxHeight: "300px",
                           overflowY: "auto",
                           padding: "0.75rem",
-                          backgroundColor: "#fafafa",
+                          backgroundColor: "var(--card)",
                           borderRadius: "4px",
                           fontFamily: "monospace",
                           fontSize: "0.8rem",
@@ -2320,12 +2322,12 @@ export default function NovelWrite() {
                   )}
                   
                   {selectedVersion && !versionDiff && (
-                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #eee" }}>
+                    <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)" }}>
                       <h4 style={{ margin: "0 0 0.5rem", fontSize: "0.95rem" }}>{t("write_version_preview_title")}</h4>
                       {selectedVersion.summary && (
                         <div style={{ marginBottom: "0.5rem" }}>
                           <strong style={{ fontSize: "0.85rem" }}>{t("write_version_summary")}</strong>
-                          <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "#555" }}>
+                          <p style={{ margin: "0.25rem 0", fontSize: "0.85rem", color: "var(--muted)" }}>
                             {selectedVersion.summary}
                           </p>
                         </div>
@@ -2336,7 +2338,7 @@ export default function NovelWrite() {
                           style={{
                             margin: "0.25rem 0",
                             padding: "0.75rem",
-                            backgroundColor: "#fafafa",
+                            backgroundColor: "var(--card)",
                             borderRadius: "4px",
                             fontSize: "0.8rem",
                             whiteSpace: "pre-wrap",

@@ -26,10 +26,8 @@ import {
 import { apiErrorMessage, deleteCharacter, fetchCharacters } from "@/api/client";
 import type { Character } from "@/types";
 import { useI18n } from "@/i18n";
-
 const { Title, Text } = Typography;
 const { confirm } = Modal;
-
 export default function NovelPeople() {
   const { t } = useI18n();
   const { novelId } = useParams();
@@ -37,7 +35,6 @@ export default function NovelPeople() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
   async function load() {
     try {
       const chars = await fetchCharacters(id);
@@ -48,7 +45,6 @@ export default function NovelPeople() {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     (async () => {
       try {
@@ -60,7 +56,6 @@ export default function NovelPeople() {
       }
     })();
   }, [id]);
-
   function showDeleteConfirm(char: Character) {
     confirm({
       title: t("people_delete_character_title"),
@@ -80,7 +75,6 @@ export default function NovelPeople() {
       },
     });
   }
-
   return (
     <div style={{ padding: "0.5rem" }}>
       {err && (
@@ -92,23 +86,20 @@ export default function NovelPeople() {
           style={{ marginBottom: "1rem" }}
         />
       )}
-
       <Card
         style={{
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#faf9f5",
         }}
         title={
           <Space>
-            <TeamOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
+            <TeamOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#141413",
               }}
             >
               {t("people_title")}
@@ -152,7 +143,7 @@ export default function NovelPeople() {
                         <Button
                           type="text"
                           icon={<EditOutlined />}
-                          style={{ color: "#cc785c" }}
+                          style={{ color: "var(--accent)" }}
                         >
                           {t("people_edit")}
                         </Button>
@@ -171,7 +162,6 @@ export default function NovelPeople() {
                   ]}
                   style={{
                     padding: "1rem 0",
-                    borderBottom: "1px solid #e7e0d5",
                   }}
                 >
                   <List.Item.Meta
@@ -192,7 +182,6 @@ export default function NovelPeople() {
                         strong
                         style={{
                           fontSize: "1.05rem",
-                          color: "#141413",
                           fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
                         }}
                       >
@@ -204,7 +193,7 @@ export default function NovelPeople() {
                         {char.profile && (
                           <Text type="secondary" style={{ fontSize: "0.9rem" }}>
                             <InfoCircleOutlined
-                              style={{ marginRight: "0.25rem", color: "#78716c" }}
+                              style={{ marginRight: "0.25rem", color: "var(--muted)" }}
                             />
                             {char.profile.slice(0, 80)}
                             {char.profile.length > 80 ? "…" : ""}

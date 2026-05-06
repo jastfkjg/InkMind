@@ -19,10 +19,8 @@ import {
 } from "@ant-design/icons";
 import { apiErrorMessage, createMemo, fetchMemos, updateMemo } from "@/api/client";
 import { useI18n } from "@/i18n";
-
 const { Title, Text } = Typography;
 const { TextArea } = Input;
-
 export default function NovelMemoForm() {
   const { t } = useI18n();
   const { novelId, memoId } = useParams();
@@ -31,11 +29,9 @@ export default function NovelMemoForm() {
   const isEdit = Number.isFinite(mid);
   const nav = useNavigate();
   const [form] = Form.useForm();
-
   const [loading, setLoading] = useState(isEdit);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     if (!isEdit) return;
     (async () => {
@@ -58,7 +54,6 @@ export default function NovelMemoForm() {
       }
     })();
   }, [id, mid, isEdit, form, t]);
-
   async function onFinish(values: { title: string; body: string }) {
     setErrorMsg("");
     setSaving(true);
@@ -78,7 +73,6 @@ export default function NovelMemoForm() {
       setSaving(false);
     }
   }
-
   if (loading) {
     return (
       <div
@@ -93,7 +87,6 @@ export default function NovelMemoForm() {
             borderRadius: 16,
             border: "none",
             boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-            background: "#faf9f5",
           }}
         >
           <div
@@ -116,7 +109,6 @@ export default function NovelMemoForm() {
       </div>
     );
   }
-
   return (
     <div
       style={{
@@ -130,17 +122,15 @@ export default function NovelMemoForm() {
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#faf9f5",
         }}
         title={
           <Space>
-            <FileTextOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
+            <FileTextOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#141413",
               }}
             >
               {isEdit ? t("memoform_edit_memo") : t("memoform_new_memo")}
@@ -175,18 +165,17 @@ export default function NovelMemoForm() {
               style={{ marginBottom: "1.5rem" }}
             />
           )}
-
           <Card
             type="inner"
             title={
               <Space>
-                <FileTextOutlined style={{ color: "#cc785c" }} />
+                <FileTextOutlined style={{ color: "var(--accent)" }} />
                 <span>{t("memoform_memo_info")}</span>
               </Space>
             }
             style={{
               marginBottom: "1.5rem",
-              background: "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)",
+              background: "transparent",
               borderRadius: 12,
             }}
           >
@@ -210,17 +199,16 @@ export default function NovelMemoForm() {
               <Input
                 placeholder={t("memoform_title_placeholder")}
                 size="large"
-                prefix={<FileTextOutlined style={{ color: "#78716c" }} />}
+                prefix={<FileTextOutlined style={{ color: "var(--muted)" }} />}
                 style={{ height: 44 }}
               />
             </Form.Item>
-
             <Form.Item
               name="body"
               label={
                 <Space>
                   <span>{t("memoform_memo_content")}</span>
-                  <span style={{ color: "#ff4d4f" }}>*</span>
+                  <span style={{ color: "var(--error)" }}>*</span>
                   <Text
                     type="secondary"
                     style={{ fontSize: "0.8rem", cursor: "help" }}
@@ -243,7 +231,6 @@ export default function NovelMemoForm() {
               />
             </Form.Item>
           </Card>
-
           <Alert
             message={t("memoform_tip_title")}
             description={t("memoform_tip_content")}
@@ -251,7 +238,6 @@ export default function NovelMemoForm() {
             showIcon
             style={{ marginBottom: "1.5rem" }}
           />
-
           <Form.Item style={{ marginBottom: 0 }}>
             <Space>
               <Button

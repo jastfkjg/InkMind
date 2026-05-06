@@ -161,6 +161,79 @@
   --theme-border: #373530;
 }
 
+/* ===== 暗色模式：Ant Design 组件覆盖 ===== */
+.theme--dark .ant-alert {
+  border-color: var(--border, #373530);
+}
+
+.theme--dark .ant-alert-info {
+  background-color: rgba(93, 184, 166, 0.1) !important;
+  color: #7dc9ba !important;
+}
+
+.theme--dark .ant-alert-info .ant-alert-icon {
+  color: #7dc9ba !important;
+}
+
+.theme--dark .ant-alert-success {
+  background-color: rgba(93, 184, 114, 0.1) !important;
+  color: #7cc98d !important;
+}
+
+.theme--dark .ant-alert-success .ant-alert-icon {
+  color: #7cc98d !important;
+}
+
+.theme--dark .ant-alert-warning {
+  background-color: rgba(232, 165, 90, 0.1) !important;
+  color: #f0b87a !important;
+}
+
+.theme--dark .ant-alert-warning .ant-alert-icon {
+  color: #f0b87a !important;
+}
+
+.theme--dark .ant-alert-error {
+  background-color: rgba(198, 69, 69, 0.12) !important;
+  color: #d65a5a !important;
+}
+
+.theme--dark .ant-alert-error .ant-alert-icon {
+  color: #d65a5a !important;
+}
+
+.theme--dark .ant-alert-message {
+  color: var(--ink, #faf9f5) !important;
+}
+
+/* Modal / Confirm */
+.theme--dark .ant-modal-content {
+  background-color: var(--bg-elevated, #252320) !important;
+}
+
+.theme--dark .ant-modal-header {
+  background-color: var(--bg-elevated, #252320) !important;
+}
+
+.theme--dark .ant-modal-title {
+  color: var(--ink, #faf9f5) !important;
+}
+
+.theme--dark .ant-modal-close {
+  color: var(--muted, #a09d96) !important;
+}
+
+.theme--dark .ant-modal-close:hover {
+  color: var(--ink, #faf9f5) !important;
+}
+
+/* Message */
+.theme--dark .ant-message-notice-content {
+  background-color: var(--bg-elevated, #252320) !important;
+  color: var(--ink, #faf9f5);
+  border-color: var(--border, #373530) !important;
+}
+
 *,
 *::before,
 *::after {
@@ -1315,6 +1388,31 @@ select {
   right: 100%;
   border-top-color: transparent;
   border-right-color: var(--ink);
+}
+
+.theme--dark .tooltip__content {
+  background: var(--bg-elevated, #252320);
+  color: var(--ink, #faf9f5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.theme--dark .tooltip__content::after {
+  border-top-color: var(--bg-elevated, #252320);
+}
+
+.theme--dark .tooltip--bottom .tooltip__content::after {
+  border-top-color: transparent;
+  border-bottom-color: var(--bg-elevated, #252320);
+}
+
+.theme--dark .tooltip--left .tooltip__content::after {
+  border-top-color: transparent;
+  border-left-color: var(--bg-elevated, #252320);
+}
+
+.theme--dark .tooltip--right .tooltip__content::after {
+  border-top-color: transparent;
+  border-right-color: var(--bg-elevated, #252320);
 }
 
 .label--optional {
@@ -5603,6 +5701,23 @@ select {
 .theme--dark .ai-assistant-edit-field__textarea,
 .theme--dark .ai-assistant-input__textarea {
   background: var(--bg-elevated, #252320);
+}
+
+.write-theme--dark .ai-assistant-other-option__input,
+.theme--dark .ai-assistant-other-option__input {
+  background: var(--bg-elevated, #252320);
+}
+
+.write-theme--dark .ai-assistant-bubble--system .ai-assistant-bubble__content,
+.theme--dark .ai-assistant-bubble--system .ai-assistant-bubble__content {
+  color: var(--muted, #a09d96);
+}
+
+.write-theme--dark .ai-assistant-bubble--error .ai-assistant-bubble__content,
+.theme--dark .ai-assistant-bubble--error .ai-assistant-bubble__content {
+  background: color-mix(in oklab, var(--error-soft, #a53838) 15%, transparent);
+  color: var(--error-soft, #fecaca);
+  border-color: color-mix(in oklab, var(--error-soft, #a53838) 30%, transparent);
 }
 
 @media (max-width: 480px) {

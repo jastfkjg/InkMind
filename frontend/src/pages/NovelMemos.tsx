@@ -23,10 +23,8 @@ import {
 import { apiErrorMessage, deleteMemo, fetchMemos } from "@/api/client";
 import type { Memo } from "@/types";
 import { useI18n } from "@/i18n";
-
 const { Title, Text } = Typography;
 const { confirm } = Modal;
-
 export default function NovelMemos() {
   const { t } = useI18n();
   const { novelId } = useParams();
@@ -34,12 +32,10 @@ export default function NovelMemos() {
   const [items, setItems] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
   async function load() {
     const list = await fetchMemos(id);
     setItems(list);
   }
-
   useEffect(() => {
     (async () => {
       try {
@@ -51,7 +47,6 @@ export default function NovelMemos() {
       }
     })();
   }, [id]);
-
   function showDeleteConfirm(memo: Memo) {
     const title = (memo.title || "").trim();
     const preview = title || memo.body?.slice(0, 30) || t("memos_no_title");
@@ -73,7 +68,6 @@ export default function NovelMemos() {
       },
     });
   }
-
   if (loading) {
     return (
       <div
@@ -91,7 +85,6 @@ export default function NovelMemos() {
       </div>
     );
   }
-
   return (
     <div style={{ padding: "0.5rem" }}>
       {err && (
@@ -103,23 +96,20 @@ export default function NovelMemos() {
           style={{ marginBottom: "1rem" }}
         />
       )}
-
       <Card
         style={{
           borderRadius: 16,
           border: "none",
           boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          background: "#faf9f5",
         }}
         title={
           <Space>
-            <FileTextOutlined style={{ color: "#cc785c", fontSize: "1.25rem" }} />
+            <FileTextOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
             <Title
               level={4}
               style={{
                 margin: 0,
                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                color: "#141413",
               }}
             >
               {t("memos_title")}
@@ -160,7 +150,6 @@ export default function NovelMemos() {
                 const bodyPreview = rawBody
                   ? `${rawBody.slice(0, 120)}${rawBody.length > 120 ? "…" : ""}`
                   : "";
-
                 return (
                   <List.Item
                     key={m.id}
@@ -170,7 +159,7 @@ export default function NovelMemos() {
                           <Button
                             type="text"
                             icon={<EditOutlined />}
-                            style={{ color: "#cc785c" }}
+                            style={{ color: "var(--accent)" }}
                           >
                             {t("memos_edit")}
                           </Button>
@@ -189,7 +178,6 @@ export default function NovelMemos() {
                     ]}
                     style={{
                       padding: "1rem 0",
-                      borderBottom: "1px solid #e7e0d5",
                     }}
                   >
                     <List.Item.Meta
@@ -200,7 +188,6 @@ export default function NovelMemos() {
                               strong
                               style={{
                                 fontSize: "1.05rem",
-                                color: "#141413",
                                 fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
                               }}
                             >
@@ -210,7 +197,6 @@ export default function NovelMemos() {
                             <Text
                               strong
                               style={{
-                                color: "#141413",
                               }}
                             >
                               {bodyPreview}
