@@ -12,7 +12,7 @@ from app.language import Language
 from app.llm.llm_errors import LLMRequestError
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
 from app.llm.providers import list_available_providers, resolve_llm_for_user
-from app.models import Chapter, Novel
+from app.models import Chapter, Character, Novel
 from app.schemas.ai import (
     NovelAiChatIn,
     NovelChapterSummaryInspireIn,
@@ -80,7 +80,9 @@ def novel_ai_chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置任何 LLM API Key",
         )
-    system, user_msg = novel_writing_chat_messages(novel, body.message, body.history, language=language)
+    chapters = db.query(Chapter).filter(Chapter.novel_id == novel_id).order_by(Chapter.sort_order).all()
+    characters = db.query(Character).filter(Character.novel_id == novel_id).order_by(Character.id).all()
+    system, user_msg = novel_writing_chat_messages(novel, body.message, body.history, language=language, chapters=chapters, characters=characters)
 
     def gen():
         try:

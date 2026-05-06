@@ -9,6 +9,7 @@ export type WorkflowPhaseType =
   | "character_design"
   | "chapter_summary"
   | "chapter_content"
+  | "chapter_saved"
   | "polish";
 
 export type WorkflowStatus =
@@ -117,6 +118,7 @@ export const PHASE_NAMES: Record<WorkflowPhaseType, { key: string; icon: string 
   character_design: { key: "workflow_phase_character", icon: "👤" },
   chapter_summary: { key: "workflow_phase_summary", icon: "📝" },
   chapter_content: { key: "workflow_phase_content", icon: "✍️" },
+  chapter_saved: { key: "workflow_phase_chapter_saved", icon: "✅" },
   polish: { key: "workflow_phase_polish", icon: "✨" },
 };
 

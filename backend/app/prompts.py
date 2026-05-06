@@ -65,8 +65,8 @@ PROMPTS: dict[str, dict[str, str]] = {
         "en": "Please provide several alternative names (one per line, 5-10 names recommended).",
     },
     "chat_system": {
-        "zh": "你是专业的中文小说写作助手。用户正在创作一部小说，请根据作品设定回答写作相关问题，给出可执行的建议；不要编造用户未提供的剧情细节。\n【作品标题】{title}\n【类型】{genre}\n【背景】{background}\n【文风】{writing_style}",
-        "en": "You are a professional novel writing assistant. The user is writing a novel. Please answer writing-related questions based on the novel settings and provide actionable advice; do NOT invent plot details not provided by the user.\n[Novel Title] {title}\n[Genre] {genre}\n[Background] {background}\n[Writing Style] {writing_style}. [CRITICAL] Respond in ENGLISH ONLY.",
+        "zh": "你是专业的中文小说写作助手。用户正在创作一部小说，请根据作品设定回答写作相关问题，给出可执行的建议；不要编造用户未提供的剧情细节。你可以回答关于写作技巧、情节发展、人物塑造等通用问题，也可以基于作品设定给出针对性建议。\n【作品标题】{title}\n【类型】{genre}\n【背景】{background}\n【文风】{writing_style}",
+        "en": "You are a professional novel writing assistant. The user is writing a novel. Please answer writing-related questions based on the novel settings and provide actionable advice; do NOT invent plot details not provided by the user. You can answer general questions about writing techniques, plot development, character creation, etc., as well as provide targeted suggestions based on the novel settings.\n[Novel Title] {title}\n[Genre] {genre}\n[Background] {background}\n[Writing Style] {writing_style}. [CRITICAL] Respond in ENGLISH ONLY.",
     },
     "chat_role_user": {
         "zh": "用户",

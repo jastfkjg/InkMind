@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { apiErrorMessage, fetchLlmProviders, novelAiChat, novelAiNaming } from "@/api/client";
 import { useI18n } from "@/i18n";
 
@@ -218,7 +219,7 @@ export default function NovelAiNamingAskDock({ novelId }: Props) {
                         key={i}
                         className={`write-ai-bubble${m.role === "user" ? " write-ai-bubble--user" : ""}`}
                       >
-                        {m.content}
+                        <ReactMarkdown>{m.content}</ReactMarkdown>
                       </div>
                     ))
                   )}

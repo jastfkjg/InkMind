@@ -2250,10 +2250,17 @@ select {
   border: 1px solid var(--border-soft);
   font-size: 0.88rem;
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
   box-shadow: 0 1px 2px var(--shadow-soft);
 }
+
+.write-ai-bubble p { margin: 0 0 0.5em; }
+.write-ai-bubble p:last-child { margin-bottom: 0; }
+.write-ai-bubble strong { font-weight: 600; }
+.write-ai-bubble em { font-style: italic; }
+.write-ai-bubble ul, .write-ai-bubble ol { margin: 0.3em 0; padding-left: 1.5em; }
+.write-ai-bubble li { margin: 0.15em 0; }
+.write-ai-bubble code { background: var(--bg-hover, #efe9de); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
 
 .write-ai-bubble--user {
   align-self: flex-end;
@@ -4996,10 +5003,17 @@ select {
   border-radius: 12px;
   font-size: 0.9rem;
   line-height: 1.6;
-  white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-serif);
 }
+
+.smart-writer-bubble__content p { margin: 0 0 0.5em; }
+.smart-writer-bubble__content p:last-child { margin-bottom: 0; }
+.smart-writer-bubble__content strong { font-weight: 600; }
+.smart-writer-bubble__content em { font-style: italic; }
+.smart-writer-bubble__content ul, .smart-writer-bubble__content ol { margin: 0.3em 0; padding-left: 1.5em; }
+.smart-writer-bubble__content li { margin: 0.15em 0; }
+.smart-writer-bubble__content code { background: var(--write-surface-soft); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
 
 .smart-writer-bubble--user {
   align-items: flex-end;
@@ -5408,10 +5422,17 @@ select {
   padding: 6px 0;
   font-size: 0.92rem;
   line-height: 1.75;
-  white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--font-serif);
 }
+
+.ai-assistant-bubble__content p { margin: 0 0 0.5em; }
+.ai-assistant-bubble__content p:last-child { margin-bottom: 0; }
+.ai-assistant-bubble__content strong { font-weight: 600; }
+.ai-assistant-bubble__content em { font-style: italic; }
+.ai-assistant-bubble__content ul, .ai-assistant-bubble__content ol { margin: 0.3em 0; padding-left: 1.5em; }
+.ai-assistant-bubble__content li { margin: 0.15em 0; }
+.ai-assistant-bubble__content code { background: var(--bg-hover, #efe9de); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; }
 
 .ai-assistant-bubble--user {
   align-items: flex-end;
