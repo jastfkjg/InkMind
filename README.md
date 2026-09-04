@@ -5,12 +5,12 @@
 # InkMind
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-red.svg)](LICENSE)
 
-**AI 辅助小说写作工作台**，以 AI 助手为智能写作入口，覆盖作品管理、章节写作、人物与备忘录设定、AI 生成/改写/评估、Token 用量统计和作品导出。
+**为长篇创作而生的低干扰写作工作台。** 以正文为中心，将作品设定、人物、备忘录、AI 辅助、历史版本和导出放在触手可及的位置。
 
 [功能概览](#功能概览) · [界面预览](#界面预览) · [快速开始](#快速开始) · [配置说明](#配置说明) · [开发指南](#开发指南)
 
@@ -23,6 +23,15 @@
 ## 功能概览
 
 InkMind 面向长篇小说、网文和剧情型内容创作，核心目标是把“设定、正文、AI 辅助和版本确认”放在一个低干扰的写作流里。
+
+### 以写作为中心的工作流
+
+1. **随时继续创作**：按标题或类型搜索作品，按最近编辑排序，一键继续写作。
+2. **把空间留给正文**：搜索章节、调整字号与行距；进入专注模式后隐藏全局导航与 AI 工具，按 `Esc` 返回。
+3. **清楚知道保存状态**：自动保存展示待保存、保存中、已保存和失败重试状态；站内跳转与退出登录会先等待待保存内容提交。
+4. **需要时再请 AI 帮忙**：在编辑器内展开生成、改写、续写、检查或助手；工具面板与助手互相收起，减少遮挡。
+
+浏览器会按账号和作品记住上次章节、光标选区和滚动位置；未同步草稿再次打开时会提示选择是否恢复。具体边界见[保存与恢复](#保存与恢复)。
 
 ### AI 助手
 
@@ -37,9 +46,9 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 
 ### 写作与创作
 
-- **作品管理**：维护作品标题、类型、写作风格、背景设定和创作目标。
-- **章节写作**：章节增删、排序、正文编辑、字体设置、沉浸式写作页。
-- **人物系统**：管理角色姓名、昵称、简介、外观、性格、关系和剧情作用。
+- **作品管理**：维护作品标题、类型、写作风格和背景设定。
+- **章节写作**：章节增删、搜索、正文编辑、历史版本查看与回滚。
+- **人物系统**：维护角色姓名、人物简介和备注，在简介中记录外观、关系与剧情作用。
 - **备忘录系统**：记录世界观、伏笔、灵感、设定补充和待处理事项。
 - **作品导出**：将已完成章节导出为文件，便于备份、审阅或发布。
 
@@ -53,7 +62,7 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 | AI 续写 | 在正文末尾续写新内容 |
 | AI 检查 | 分析章节问题，输出质量建议和可执行修改方向 |
 | 选区扩写/润色 | 对选中的段落单独扩写、润色或调整表达 |
-| 预览确认 | AI 结果先预览，确认后再写入正文 |
+| 预览确认 | 开启生成预览后，先审阅生成的章节再确认保存；并非所有 AI 操作都经过同一确认流程 |
 | 自动审核 | 生成后自动做质量评估和问题检测 |
 
 ### 模型与管理
@@ -62,90 +71,51 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 - **多 Agent 模式**：Flexible Agent、ReAct、直接 LLM 调用，可按用户偏好切换。
 - **自定义模型配置**：支持内置提供商，也支持用户级自定义 API Key、Base URL 和模型名。
 - **Token 用量统计**：记录调用次数、输入/输出 Token、额度消耗和模型来源。
-- **后台任务**：长耗时 AI 任务进入任务队列，可在任务页查看状态。
+- **后台任务**：支持将写作操作提交为后台任务，并在任务页查看状态。
 - **管理后台**：管理员可查看用户、额度和调用日志。
 
 ## 界面预览
 
-<table>
-  <tr>
-    <td align="center" colspan="2">
-      <strong>作品列表</strong><br/>
-      <img src="images/novellistpage.png?v=3" width="960" alt="作品列表"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2">
-      <strong>章节写作</strong><br/>
-      <img src="images/writingpage.png?v=3" width="960" alt="章节写作"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <strong>AI 生成</strong><br/>
-      <img src="images/ai-generate.png?v=3" width="420" alt="AI 生成"/>
-    </td>
-    <td align="center" width="50%">
-      <strong>AI 检查</strong><br/>
-      <img src="images/ai-evaluate.png?v=3" width="420" alt="AI 检查"/>
-    </td>
-  </tr>
-</table>
+以下图片来自当前前端，使用虚构作品与隔离的内存演示数据；不展示真实账户、小说正文、API Key 或生产用量。截图为中文界面，应用同时支持英文。
 
-### AI 助手
+### 从作品列表继续写作
 
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <strong>上下文写作</strong><br/>
-      <img src="images/ai-assistant-1.png?v=3" width="320" alt="AI 助手上下文写作"/>
-    </td>
-    <td align="center" width="33%">
-      <strong>任务执行</strong><br/>
-      <img src="images/ai-assistant-2.png?v=3" width="320" alt="AI 助手任务执行"/>
-    </td>
-    <td align="center" width="33%">
-      <strong>章节确认</strong><br/>
-      <img src="images/ai-assistant3.png?v=3" width="320" alt="AI 助手章节确认"/>
-    </td>
-  </tr>
-</table>
+搜索、排序与继续写作更直接；导出和删除仍保留在“更多”菜单。
 
-### AI 选区扩写与润色
+![作品列表：搜索、排序与继续写作](images/readme/library.jpg)
+
+### 更安静的章节编辑器
+
+章节搜索、行内保存状态与紧凑的 AI 命令，让正文保持在视线中心。
+
+![章节写作：章节导航、正文与保存状态](images/readme/writing.jpg)
+
+<details>
+<summary>展开查看：AI 工具与深色专注模式</summary>
+
+需要时才展开 AI 命令。这里展示生成表单，不代表真实模型生成结果。
+
+![按需展开的 AI 生成面板](images/readme/ai-tools.jpg)
+
+专注模式隐藏导航与 AI 工具，可调节行宽，保持舒适阅读。
+
+![深色专注模式与居中正文阅读区](images/readme/focus-dark.jpg)
+
+</details>
+
+<details>
+<summary>展开查看：手机浅色编辑器与深色 AI 面板</summary>
 
 <table>
   <tr>
-    <td align="center" width="50%">
-      <strong>选区工具</strong><br/>
-      <img src="images/selection-ai-menu-1.png?v=3" width="520" alt="AI 选区工具"/>
-    </td>
-    <td align="center" width="50%">
-      <strong>扩写与润色</strong><br/>
-      <img src="images/selection-ai-menu-2.png?v=3" width="520" alt="AI 选区扩写与润色"/>
-    </td>
+    <td align="center"><img src="images/readme/mobile-light.jpg" width="300" alt="手机尺寸下的浅色章节编辑器"/><br/>浅色编辑器</td>
+    <td align="center"><img src="images/readme/mobile-dark.jpg" width="300" alt="手机尺寸下的深色 AI 生成底部面板"/><br/>深色 AI 面板</td>
   </tr>
 </table>
 
-### Token 用量与 AI 设置
+</details>
 
-<table>
-  <tr>
-    <td align="center" colspan="2">
-      <strong>Token 用量</strong><br/>
-      <img src="images/tokenusage.png?v=3" width="960" alt="Token 用量"/>
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="50%">
-      <strong>模型配置</strong><br/>
-      <img src="images/ai-settings-1.png?v=3" width="520" alt="AI 模型配置"/>
-    </td>
-    <td align="center" width="50%">
-      <strong>助手配置</strong><br/>
-      <img src="images/ai-settings-2.png?v=3" width="520" alt="AI 助手配置"/>
-    </td>
-  </tr>
-</table>
+截图尺寸：桌面 1440 × 900，手机 390 × 844。[截图复现说明](images/readme/README.md)。
 
 ## 技术栈
 
@@ -164,13 +134,13 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 ### 环境要求
 
 - Python 3.12+
-- Node.js 18+（本地开发）；Docker 构建前端镜像时使用 Node 20
+- Node.js 20+（本地开发）；Docker 构建前端镜像时使用 Node 20
 - npm 9+
 
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/yourname/InkMind.git
+git clone https://github.com/jastfkjg/InkMind.git
 cd InkMind
 ```
 
@@ -217,7 +187,7 @@ curl http://localhost:8000/health
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -308,6 +278,20 @@ docker compose down
 
 ## 开发指南
 
+### 构建与回归检查
+
+在 `frontend/` 下运行：
+
+```bash
+npm ci
+npm test
+npm run build
+```
+
+单元测试覆盖草稿存储、账号/作品隔离、并发保存合并与失败重试。[浏览器回归指南](frontend/tests/README.md)提供隔离演示服务，以及导航、AI 预览、版本恢复与响应式检查清单；这些检查不能替代真实后端和模型集成测试。
+
+不配置数据库或 API Key 也能预览界面：以 `node tests/ui-fixture.mjs --demo` 启动演示服务，再按指南的独立 Vite 命令运行前端。这是本地 UI 示例，不是完整离线应用。
+
 ### 主要路由
 
 前端：
@@ -374,6 +358,7 @@ InkMind/
 │   │   ├── styles/              # 主题、基础样式、页面样式
 │   │   ├── types/               # TypeScript 类型
 │   │   └── App.tsx              # 路由入口
+│   ├── tests/                   # 保存回归测试与本地 UI 演示服务
 │   ├── package.json
 │   └── vite.config.ts
 ├── images/                      # README 截图
@@ -393,6 +378,14 @@ InkMind/
 - UI 修改需要检查浅色、深色、桌面宽屏和移动端。
 
 ## 常见问题
+
+### 保存与恢复
+
+- 普通编辑会自动保存。失败时请留在当前页并点击重试；有未保存修改时，站内导航与退出登录会先等待保存成功。
+- 浏览器存储可用时，未同步正文也会保留为本地草稿；重新打开后可选择恢复，或保留服务器版本，不会静默覆盖。
+- 草稿与阅读位置属于当前浏览器和账号，不是跨设备同步或可靠备份。隐私模式、清理缓存或存储空间限制都可能影响恢复，重要作品请定期导出。
+- AI 流式生成内容和未确认的生成预览不会作为普通编辑自动保存；请先确认或取消预览，再继续编辑。
+- 关闭浏览器不同于站内跳转：尤其在网络异常时，应等待“已保存”再关闭页面。
 
 ### 前端接口 404 或无法登录
 

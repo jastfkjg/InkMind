@@ -1,0 +1,85 @@
+/* Writing-first refinements; existing theme tokens remain the source of truth. */
+.app-header { gap: 16px; flex-wrap: wrap; }
+.app-header__left { min-width: 0; flex: 1; }
+.app-header__actions { flex-shrink: 0; }
+.user-menu-trigger { border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.app-header__user-details { max-width: 160px; }
+.app-header__user-details .ant-typography { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.novel-header__content { display: flex; align-items: center; gap: 16px; min-width: 0; flex-wrap: wrap; }
+.novel-header__identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.novel-header__identity h5 { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.novel-header__tabs { min-width: 0; }
+.novel-header__tabs .ant-tabs-nav { margin: 0; }
+.dashboard-controls { display: flex; gap: 12px; margin-bottom: 24px; }
+.dashboard-controls .ant-input-search { max-width: 360px; }
+.dashboard-controls .ant-select { min-width: 144px; }
+.dashboard-content .ant-card-meta-title > div > a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.write-sidenav-tools[hidden] { display: none; }
+.write-left-sidebar:not(.is-open) { visibility: hidden; }
+body:has(.write-shell :is(.write-ai-drawer, .write-evaluate-panel, .write-selection-result-float)) .ai-assistant-float-btn { display: none; }
+.write-sidenav-toggle { border-radius: 12px; box-shadow: none; }
+.write-editor-card.card, .write-editor-card.card:hover { border-radius: 12px; box-shadow: none; }
+.write-chapter-search { flex-shrink: 0; margin: 4px 0 12px; font-size: 13px; }
+.write-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 12px 16px; margin-bottom: 12px; border: 1px solid var(--write-hairline); border-radius: 8px; background: var(--write-surface-soft); color: var(--write-ink); font-size: 14px; }
+.write-notice > span { flex: 1 1 280px; }
+.write-retry-save { background: none; border: 0; color: var(--write-accent-active); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.write-theme--dark .write-retry-save { color: var(--accent-soft); }
+.write-save-status--error { color: var(--error); }
+.write-ai-unavailable { margin: 0; font-size: 13px; line-height: 1.5; color: var(--write-muted); }
+.write-ai-drawer { right: 24px; top: 96px; bottom: auto; width: min(460px, calc(100vw - 48px)); max-height: calc(100dvh - 120px); z-index: 880; }
+.write-version-panel { bottom: 24px; }
+.write-shell button:focus-visible, .write-shell input:focus-visible, .write-shell textarea:focus-visible, .user-menu-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.write-shell textarea.editor-body:focus-visible { outline-offset: -2px; }
+.write-shell [role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.write-focus-mode .write-sidenav-toggle:focus-within { opacity: 1; pointer-events: auto; }
+.inkmind-writing-focus .novel-layout > .app-header,
+.inkmind-writing-focus .ai-assistant-float-btn,
+.inkmind-writing-focus .ai-assistant-panel { display: none; }
+.write-shell.write-focus-mode { position: fixed; inset: 0; z-index: 900; margin: 0; padding: 16px; background: var(--write-canvas); --write-frame-height: calc(100dvh - 32px); min-height: 0; display: flex; flex-direction: column; }
+.write-focus-mode .write-workspace { flex: 1; min-height: 0; height: auto; }
+.write-focus-mode .write-notice { flex-shrink: 0; }
+.write-focus-mode .write-editor-card.card { border: 0; }
+.write-focus-mode .write-editor-header { border: 0; }
+.write-focus-mode .write-editor-footer { flex-shrink: 0; }
+
+@media (max-width: 1100px) {
+  .app-header__user-details { display: none; }
+  .novel-header__identity h5 { max-width: 180px; }
+}
+@media (max-width: 767px) {
+  .app-header { padding: 12px 16px !important; gap: 12px !important; min-height: 64px !important; line-height: normal; }
+  .app-header__actions { gap: 8px !important; flex-wrap: wrap; }
+  .app-header__left { flex: 1 1 200px; }
+  .app-header__actions { margin-left: auto; }
+  .dashboard-layout .app-header__left, .novel-layout .app-header__left { flex: 1 1 0%; }
+  .app-header__preference { display: none; }
+  .app-header__left h3 { white-space: nowrap; font-size: 1.15rem !important; }
+  .app-header__actions .ant-btn-primary { padding-inline: 12px !important; font-size: 14px; }
+  .app-header .user-menu-trigger { padding: 4px !important; min-width: 44px; min-height: 44px; }
+  .novel-layout .app-header { align-items: flex-start !important; flex-wrap: nowrap !important; }
+  .novel-header__content { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 8px; }
+  .novel-header__back { width: 44px; height: 44px; padding: 0 !important; }
+  .novel-header__back > span:not(.ant-btn-icon) { display: none; }
+  .novel-header__identity h5 { max-width: 100%; }
+  .novel-header__identity .ant-tag { display: none; }
+  .novel-header__tabs { grid-column: 1 / -1; margin: 0 !important; }
+  .novel-header__tabs .ant-tabs-tab { font-size: 14px !important; padding: 10px 0 !important; }
+  .novel-header__tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 16px !important; }
+  .novel-header__tabs .ant-tabs-tab .anticon { display: none; }
+  .novel-content--write { padding: 0 8px 8px !important; }
+  .dashboard-content { padding: 20px 16px !important; }
+  .dashboard-controls { flex-wrap: wrap; }
+  .dashboard-controls .ant-input-search { max-width: none; }
+  .write-shell { --write-frame-height: max(300px, calc(100dvh - 160px)); padding: 8px 0 max(16px, env(safe-area-inset-bottom)); min-height: 0; }
+  .write-workspace { gap: 6px; }
+  .write-sidenav-toggle { flex-basis: 44px; padding: 0; border: 0; background: transparent; }
+  .write-editor-header, .write-body-wrapper { padding-left: 12px; padding-right: 12px; }
+  .write-chapter-meta { flex-wrap: wrap; }
+  .write-left-sidebar { top: 120px; bottom: max(12px, env(safe-area-inset-bottom)); }
+  .write-ai-drawer { top: auto; bottom: 0; max-height: 78dvh; border-radius: 16px 16px 0 0; }
+  .write-save-status { font-size: 12px; }
+  .write-retry-save { min-height: 44px; }
+  .chapter-del { min-width: 44px; min-height: 44px; }
+  .write-shell.write-focus-mode { padding: 8px; --write-frame-height: calc(100dvh - 16px); }
+  .write-focus-mode .write-body-wrapper { padding-left: 12px; padding-right: 12px; }
+}

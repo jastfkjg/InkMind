@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Layout,
@@ -14,6 +14,9 @@ import {
   Tooltip,
   message,
   Modal,
+  Input,
+  Select,
+  Dropdown,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,6 +25,7 @@ import {
   DeleteOutlined,
   BookOutlined,
   QuestionCircleOutlined,
+  MoreOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -51,6 +55,11 @@ export default function Dashboard() {
   const [creating, setCreating] = useState(false);
   const [exportNovel, setExportNovel] = useState<Novel | null>(null);
   const nav = useNavigate();
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("recent");
+  const visibleNovels = useMemo(() => novels
+    .filter((novel) => `${novel.title} ${novel.genre}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+    .sort((a, b) => sort === "title" ? a.title.localeCompare(b.title) : Date.parse(b.updated_at) - Date.parse(a.updated_at)), [novels, query, sort]);
 
   async function load() {
     setErr("");
@@ -112,6 +121,7 @@ export default function Dashboard() {
 
   return (
     <Layout
+      className="dashboard-layout"
       style={{
         minHeight: "100vh",
         background: bgColor,
@@ -153,6 +163,7 @@ export default function Dashboard() {
       />
 
       <Content
+        className="dashboard-content"
         style={{
           padding: "2rem",
           maxWidth: 1200,
@@ -211,6 +222,14 @@ export default function Dashboard() {
                 {t("dashboard_title")} ({novels.length})
               </Title>
 
+              <div className="dashboard-controls">
+                <Input.Search allowClear value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("dashboard_search")} aria-label={t("dashboard_search")} />
+                <Select value={sort} onChange={setSort} aria-label={t("dashboard_sort")} options={[
+                  { value: "recent", label: t("dashboard_sort_recent") },
+                  { value: "title", label: t("dashboard_sort_title") },
+                ]} />
+              </div>
+
               <List
                 grid={{
                   gutter: [24, 24],
@@ -220,7 +239,8 @@ export default function Dashboard() {
                   lg: 2,
                   xl: 2,
                 }}
-                dataSource={novels}
+                dataSource={visibleNovels}
+                locale={{ emptyText: t("write_search_empty") }}
                 renderItem={(novel) => {
                   const entry = novelPrimaryHref(novel);
                   const ready = isNovelSetupComplete(novel);
@@ -249,26 +269,12 @@ export default function Dashboard() {
                               </Button>
                             </Link>
                           </Tooltip>,
-                          <Tooltip title={t("dashboard_export_novel")} key="export">
-                            <Button
-                              type="text"
-                              icon={<ExportOutlined />}
-                              onClick={() => setExportNovel(novel)}
-                              style={{ color: "#cc785c" }}
-                            >
-                              {t("dashboard_export_novel")}
-                            </Button>
-                          </Tooltip>,
-                          <Tooltip title={t("dashboard_delete_novel")} key="delete">
-                            <Button
-                              type="text"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => showDeleteConfirm(novel)}
-                            >
-                              {t("dashboard_delete_novel")}
-                            </Button>
-                          </Tooltip>,
+                          <Dropdown key="more" trigger={["click"]} menu={{ items: [
+                            { key: "export", icon: <ExportOutlined />, label: t("dashboard_export_novel"), onClick: () => setExportNovel(novel) },
+                            { key: "delete", icon: <DeleteOutlined />, label: t("dashboard_delete_novel"), danger: true, onClick: () => showDeleteConfirm(novel) },
+                          ] }}>
+                            <Button type="text" icon={<MoreOutlined />} aria-label={`${novel.title} · ${t("dashboard_more")}`}>{t("dashboard_more")}</Button>
+                          </Dropdown>,
                         ]}
                       >
                         <Card.Meta
@@ -322,7 +328,7 @@ export default function Dashboard() {
                                   transition: "color 0.3s ease",
                                 }}
                               >
-                                {t("dashboard_created")}{new Date(novel.updated_at).toLocaleString()}
+                                {t("dashboard_updated")}{new Date(novel.updated_at).toLocaleString()}
                               </Text>
                             </div>
                           }

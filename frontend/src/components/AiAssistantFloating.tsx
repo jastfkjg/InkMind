@@ -390,6 +390,14 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   const { t } = useI18n();
 
   const [isOpen, setIsOpen] = useState(false);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("inkmind:assistant-visibility", { detail: { open: isOpen } }));
+  }, [isOpen]);
+  useEffect(() => {
+    const minimize = () => setIsOpen(false);
+    window.addEventListener("inkmind:assistant-minimize", minimize);
+    return () => window.removeEventListener("inkmind:assistant-minimize", minimize);
+  }, []);
   const [novels, setNovels] = useState<Novel[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedNovelId, setSelectedNovelId] = useState<number | undefined>(novelId);

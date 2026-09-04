@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,6 +20,8 @@ type NavigationState = {
   lastValidPage: string | null;
   currentPath: string;
   goBackSmart: () => void;
+  registerLeaveGuard: (guard: () => Promise<boolean>) => () => void;
+  beforeLeave: () => Promise<boolean>;
 };
 
 const NavigationContext = createContext<NavigationState | null>(null);
@@ -26,6 +29,12 @@ const NavigationContext = createContext<NavigationState | null>(null);
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const nav = useNavigate();
+  const leaveGuard = useRef<(() => Promise<boolean>) | null>(null);
+  const registerLeaveGuard = useCallback((guard: () => Promise<boolean>) => {
+    leaveGuard.current = guard;
+    return () => { if (leaveGuard.current === guard) leaveGuard.current = null; };
+  }, []);
+  const beforeLeave = useCallback(async () => leaveGuard.current ? leaveGuard.current() : true, []);
   const [lastValidPage, setLastValidPage] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState(location.pathname);
 
@@ -51,8 +60,10 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
       lastValidPage,
       currentPath,
       goBackSmart,
+      registerLeaveGuard,
+      beforeLeave,
     }),
-    [lastValidPage, currentPath, goBackSmart]
+    [lastValidPage, currentPath, goBackSmart, registerLeaveGuard, beforeLeave]
   );
 
   return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;

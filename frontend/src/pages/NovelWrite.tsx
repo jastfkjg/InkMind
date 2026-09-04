@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useBlocker } from "react-router-dom";
 import { Modal } from "antd";
 import {
   CheckCircleOutlined,
@@ -33,6 +33,7 @@ import {
   type ProgressEvent,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigation } from "@/context/NavigationContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
 import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
@@ -42,6 +43,7 @@ import EditorSettings, { useEditorSettings } from "@/components/write/EditorSett
 import ChapterSidebar from "@/components/write/ChapterSidebar";
 import SelectionFloatMenu from "@/components/write/SelectionFloatMenu";
 import type { AiTool, SelectionAiMode, GenerateTab } from "@/components/write/types";
+import { draftKey, readDraft, readPosition, sameSnapshot, sessionKey, singleFlight, type WritingDraft, type WritingPosition } from "@/utils/writeSession";
 
 function parseBatchChapterCountInput(value: string): number | null {
   const trimmed = value.trim();
@@ -63,8 +65,10 @@ export default function NovelWrite() {
   const id = Number(novelId);
   const nav = useNavigate();
   const { user } = useAuth();
+  const { registerLeaveGuard } = useNavigation();
   const { theme } = useTheme();
   const { t } = useI18n();
+  const [modal, modalContextHolder] = Modal.useModal();
   const editorSettings = useEditorSettings();
   const { lineHeightId, lineWidthId, focusMode, setFocusMode, bodyFontSizePx, typewriterMode } = editorSettings;
 
@@ -73,7 +77,7 @@ export default function NovelWrite() {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [content, setContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 900);
   const [rightTool, setRightTool] = useState<AiTool | null>(null);
   const [commandPanelPos, setCommandPanelPos] = useState<{ left: number; top: number } | null>(null);
   const [commandPanelDragging, setCommandPanelDragging] = useState(false);
@@ -155,8 +159,12 @@ export default function NovelWrite() {
   selectionRangeRef.current = selectionRange;
   const [err, setErr] = useState("");
 
-  type SaveStatus = "saved" | "saving" | "unsaved";
+  type SaveStatus = "saved" | "saving" | "unsaved" | "error";
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const [editorChapterId, setEditorChapterId] = useState<number | null>(null);
+  const [recoveryDraft, setRecoveryDraft] = useState<WritingDraft | null>(null);
+  const restorePositionRef = useRef<WritingPosition | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [previewResult, setPreviewResult] = useState<ChapterPreviewResult | null>(null);
@@ -182,10 +190,15 @@ export default function NovelWrite() {
   chaptersRef.current = chapters;
   const narrowRef = useRef(narrow);
   narrowRef.current = narrow;
+  const saveBlockedRef = useRef(false);
+  const bodyStreamingRef = useRef(false);
+  saveBlockedRef.current = isPreviewMode || Boolean(recoveryDraft);
+  const createVersionRef = useRef(false);
 
   const handleToggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
   const handleDrawerClose = useCallback(() => setRightTool(null), []);
   const handleOpenSmartWriterPrompt = useCallback((prompt: string) => {
+    setRightTool(null);
     window.dispatchEvent(new CustomEvent("inkmind:assistant-open", {
       detail: { novelId: id, prompt },
     }));
@@ -409,7 +422,7 @@ export default function NovelWrite() {
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
+      if (hasUnsavedChanges || isPreviewMode || busy || previewLoading) {
         e.preventDefault();
         e.returnValue = "";
         return "";
@@ -417,7 +430,7 @@ export default function NovelWrite() {
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, isPreviewMode, busy, previewLoading]);
 
   useEffect(() => {
     if (focusMode) {
@@ -425,6 +438,44 @@ export default function NovelWrite() {
       setRightTool(null);
     }
   }, [focusMode]);
+
+  useEffect(() => {
+    document.body.classList.toggle("inkmind-writing-focus", focusMode);
+    return () => document.body.classList.remove("inkmind-writing-focus");
+  }, [focusMode]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const open = Boolean((event as CustomEvent<{ open: boolean }>).detail?.open);
+      setAssistantOpen(open);
+      if (open) setRightTool(null);
+    };
+    window.addEventListener("inkmind:assistant-visibility", handler);
+    return () => window.removeEventListener("inkmind:assistant-visibility", handler);
+  }, []);
+
+  useEffect(() => {
+    if (rightTool) window.dispatchEvent(new Event("inkmind:assistant-minimize"));
+  }, [rightTool]);
+
+  useEffect(() => {
+    if (!rightTool || focusMode) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = commandPanelRef.current;
+    panel?.querySelector<HTMLButtonElement>(".write-ai-close")?.focus({ preventScroll: true });
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && panel?.contains(document.activeElement)) {
+        event.preventDefault(); setRightTool(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      if (opener?.isConnected && (panel?.contains(document.activeElement) || document.activeElement === document.body)) {
+        opener.focus({ preventScroll: true });
+      }
+    };
+  }, [rightTool, focusMode]);
 
   useEffect(() => {
     if (typewriterMode !== "on") return;
@@ -450,6 +501,7 @@ export default function NovelWrite() {
     setErr("");
     setChapters([]);
     setActiveId(null);
+    setEditorChapterId(null);
     setTitle("");
     setSummary("");
     setContent("");
@@ -462,7 +514,8 @@ export default function NovelWrite() {
         setChapters(list);
         setLlmOptions(meta.builtin.map((p) => p.id));
         if (list.length > 0) {
-          setActiveId(list[0].id);
+          const previous = user ? readPosition(localStorage, sessionKey(user.id, id)) : null;
+          setActiveId(list.find((chapter) => chapter.id === previous?.chapterId)?.id ?? list[0].id);
         } else {
           setActiveId(null);
         }
@@ -480,7 +533,7 @@ export default function NovelWrite() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => {
     const handler = async (e: Event) => {
@@ -488,7 +541,7 @@ export default function NovelWrite() {
       if (detail && detail.id) {
         try {
           await flushSave();
-        } catch { /* ignore */ }
+        } catch (error) { setErr(apiErrorMessage(error)); return; }
         try {
           const full = await loadChapters();
           const target = full.find((c) => c.id === detail.id);
@@ -500,7 +553,7 @@ export default function NovelWrite() {
             setContent(normalizeBodyParagraphIndent(target.content || ""));
           }
           setChapters(full);
-        } catch { /* ignore */ }
+        } catch (error) { setErr(apiErrorMessage(error)); return; }
       }
     };
     window.addEventListener("inkmind:chapter-saved", handler);
@@ -576,6 +629,7 @@ export default function NovelWrite() {
   useEffect(() => {
     if (activeId === null) {
       lastLoadedChapterIdRef.current = null;
+      setEditorChapterId(null);
       setTitle("");
       setSummary("");
       setContent("");
@@ -589,10 +643,45 @@ export default function NovelWrite() {
       return;
     }
     lastLoadedChapterIdRef.current = activeId;
+    setEditorChapterId(activeId);
+    setSaveStatus("saved");
     setTitle(ch.title);
     setSummary(ch.summary);
     setContent(normalizeBodyParagraphIndent(ch.content));
+    if (user) {
+      const key = draftKey(user.id, id, activeId);
+      const draft = readDraft(localStorage, key);
+      setRecoveryDraft(draft && !sameSnapshot(draft, ch) ? draft : null);
+      restorePositionRef.current = readPosition(localStorage, sessionKey(user.id, id));
+    }
   }, [activeId, chapters]);
+
+  useLayoutEffect(() => {
+    if (editorChapterId !== activeId || loading) return;
+    const previous = restorePositionRef.current;
+    const textarea = bodyTextareaRef.current;
+    if (!textarea) return;
+    if (previous?.chapterId === activeId) {
+      textarea.setSelectionRange(Math.min(previous.start, textarea.value.length), Math.min(previous.end, textarea.value.length));
+      textarea.scrollTop = previous.scrollTop;
+    } else {
+      textarea.setSelectionRange(0, 0);
+      textarea.scrollTop = 0;
+    }
+    restorePositionRef.current = null;
+  }, [editorChapterId, activeId, loading]);
+
+  const rememberPosition = useCallback(() => {
+    const textarea = bodyTextareaRef.current;
+    if (!user || !textarea || !activeId || editorChapterId !== activeId) return;
+    try {
+      localStorage.setItem(sessionKey(user.id, id), JSON.stringify({
+        chapterId: activeId, start: textarea.selectionStart, end: textarea.selectionEnd, scrollTop: textarea.scrollTop,
+      }));
+    } catch { /* Writing remains available when browser storage is full/disabled. */ }
+  }, [user?.id, id, activeId, editorChapterId]);
+
+  useEffect(() => { rememberPosition(); }, [rememberPosition]);
 
   useEffect(() => {
     if (!busy) return;
@@ -605,9 +694,17 @@ export default function NovelWrite() {
   const hasBody = (content || "").trim().length > 0;
   const hasLlm = llmOptions.length > 0;
 
+  function canMutateChapter(): boolean {
+    if (busy || previewLoading || versionActionLoading || saveBlockedRef.current || navigationPendingRef.current) {
+      setErr(t(isPreviewMode ? "write_resolve_preview" : recoveryDraft ? "write_resolve_draft" : "write_wait_for_operation"));
+      return false;
+    }
+    return true;
+  }
+
   const confirmAction = useCallback((message: string) => (
     new Promise<boolean>((resolve) => {
-      Modal.confirm({
+      modal.confirm({
         title: t("common_confirm"),
         content: message,
         okText: t("common_confirm"),
@@ -617,7 +714,7 @@ export default function NovelWrite() {
         onCancel: () => resolve(false),
       });
     })
-  ), [t]);
+  ), [t, modal]);
 
   function captureSelection(): { start: number; end: number } | null {
     const ta = bodyTextareaRef.current;
@@ -712,6 +809,7 @@ export default function NovelWrite() {
     mode: SelectionAiMode,
     rangeOverride?: { start: number; end: number }
   ) {
+    if (!canMutateChapter()) return;
     const r = rangeOverride ?? selectionRange ?? captureSelection();
     if (!r || r.start === r.end || activeId === null) return;
     const sel = content.slice(r.start, r.end);
@@ -724,10 +822,13 @@ export default function NovelWrite() {
       return;
     }
     setErr("");
+    setRightTool(null);
+    window.dispatchEvent(new Event("inkmind:assistant-minimize"));
     setSelectionPanelPos(getSelectionResultAnchor(r));
     setSelectionPanel({ mode, start: r.start, end: r.end, text: "", streaming: "" });
     setBusy(true);
     try {
+      await flushSave();
       let acc = "";
       const { text } = await chapterSelectionAi(
         id,
@@ -760,6 +861,7 @@ export default function NovelWrite() {
   }
 
   function applySelectionReplace() {
+    if (!canMutateChapter()) return;
     if (!selectionPanel || !selectionPanel.text.trim()) return;
     const { start, end, text } = selectionPanel;
     setContent((c) => {
@@ -832,6 +934,7 @@ export default function NovelWrite() {
   }
 
   async function handleRollback(versionId: number, saveCurrent: boolean = true) {
+    if (!canMutateChapter()) return;
     if (activeId === null) return;
     const confirmMsg = saveCurrent
       ? t("write_confirm_rollback_save")
@@ -841,6 +944,7 @@ export default function NovelWrite() {
     setVersionActionLoading(true);
     setErr("");
     try {
+      await flushSave();
       const ch = await rollbackChapterToVersion(id, activeId, versionId, saveCurrent);
       setTitle(ch.title);
       setSummary(ch.summary);
@@ -903,41 +1007,82 @@ export default function NovelWrite() {
     };
   }, [showSelectionBar, selectionRange, content, bodyFontSizePx]);
 
-  const flushSave = useCallback(async (): Promise<void> => {
+  const drainSave = useMemo(() => singleFlight(async () => {
+    const aid = activeIdRef.current;
+    if (aid === null || saveBlockedRef.current || bodyStreamingRef.current) return;
+    try {
+      while (activeIdRef.current === aid && novelIdRef.current === id && !saveBlockedRef.current && !bodyStreamingRef.current) {
+        const snapshot = { ...editorSnapshotRef.current };
+        const before = chaptersRef.current.find((chapter) => chapter.id === aid);
+        if (!before || sameSnapshot(before, snapshot)) break;
+        setSaveStatus("saving");
+        const skipVersion = !createVersionRef.current;
+        createVersionRef.current = false;
+        const chapter = await updateChapter(id, aid, { ...snapshot, skip_version: skipVersion } as Parameters<typeof updateChapter>[2]);
+        if (novelIdRef.current !== id) return;
+        // Update the baseline immediately, before React renders the response.
+        chaptersRef.current = chaptersRef.current.map((item) => item.id === aid ? chapter : item);
+        setChapters(chaptersRef.current);
+        if (user && sameSnapshot(editorSnapshotRef.current, snapshot)) {
+          try { localStorage.removeItem(draftKey(user.id, id, aid)); } catch { /* ignore */ }
+        }
+      }
+      setSaveStatus("saved");
+      createVersionRef.current = false;
+    } catch (error) {
+      setSaveStatus("error");
+      throw error;
+    }
+  }), [id, user?.id]);
+
+  const flushSave = useCallback(async (createVersion = true): Promise<void> => {
+    createVersionRef.current ||= createVersion;
     if (debounceTimerRef.current !== null) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
-    const aid = activeIdRef.current;
-    if (aid === null) return;
-    const { title: t, summary: s, content: c } = editorSnapshotRef.current;
-    const before = chaptersRef.current.find((x) => x.id === aid);
-    if (!before) return;
-    if (before.title === t && before.summary === s && before.content === c) return;
-    setSaveStatus("saving");
-    try {
-      const ch = await updateChapter(id, aid, { title: t, summary: s, content: c });
-      setChapters((prev) => prev.map((x) => (x.id === ch.id ? ch : x)));
-      setSaveStatus("saved");
-    } catch {
-      setSaveStatus("unsaved");
-      throw new Error("flush save failed");
+    await drainSave();
+  }, [drainSave]);
+
+  const beforeLeave = useCallback(async () => {
+    rememberPosition();
+    if (busy || previewLoading || versionActionLoading || isPreviewMode || recoveryDraft) {
+      setErr(t(isPreviewMode ? "write_resolve_preview" : recoveryDraft ? "write_resolve_draft" : "write_wait_for_operation"));
+      return false;
     }
-  }, [id]);
+    try {
+      await flushSave();
+      return true;
+    } catch (error) {
+      setErr(`${t("write_save_failed")} ${apiErrorMessage(error)}`);
+      return false;
+    }
+  }, [rememberPosition, busy, previewLoading, versionActionLoading, isPreviewMode, recoveryDraft, flushSave, t]);
+
+  useEffect(() => registerLeaveGuard(beforeLeave), [registerLeaveGuard, beforeLeave]);
+
+  const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+    currentLocation.pathname !== nextLocation.pathname &&
+    (hasUnsavedChanges || isPreviewMode || saveStatus === "saving" || busy || previewLoading || versionActionLoading || Boolean(recoveryDraft))
+  );
+  const navigationPendingRef = useRef(false);
+  useEffect(() => {
+    if (blocker.state !== "blocked" || navigationPendingRef.current) return;
+    navigationPendingRef.current = true;
+    void beforeLeave().then((canLeave) => {
+      if (canLeave) blocker.proceed();
+      else blocker.reset();
+    }).finally(() => { navigationPendingRef.current = false; });
+  }, [blocker, beforeLeave]);
 
   const selectChapter = useCallback(async (cid: number) => {
     if (cid === activeIdRef.current) return;
     setErr("");
-    try {
-      await flushSave();
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-      return;
-    }
+    if (!(await beforeLeave())) return;
     setActiveId(cid);
     clearVersionState();
     if (narrowRef.current) setSidebarOpen(false);
-  }, [flushSave]);
+  }, [beforeLeave]);
 
   const activeIndex = chapters.findIndex((c) => c.id === activeId);
   const hasPrevChapter = activeIndex > 0;
@@ -958,8 +1103,8 @@ export default function NovelWrite() {
   }, [rightTool, activeId]);
 
   useEffect(() => {
-    if (activeId === null) return;
-    if (isPreviewMode) return;
+    if (activeId === null || editorChapterId !== activeId) return;
+    if (isPreviewMode || busy || previewLoading || versionActionLoading || recoveryDraft) return;
     const snap = chapters.find((c) => c.id === activeId);
     if (!snap) return;
     if (snap.title === title && snap.summary === summary && snap.content === content) {
@@ -970,27 +1115,17 @@ export default function NovelWrite() {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
-    setSaveStatus("unsaved");
-    const scheduledForId = activeId;
+    setSaveStatus((status) => status === "saving" ? status : "unsaved");
+    if (user) {
+      try {
+        localStorage.setItem(draftKey(user.id, id, activeId), JSON.stringify({
+          title, summary, content, chapterId: activeId, savedAt: Date.now(),
+        } satisfies WritingDraft));
+      } catch { /* Server saving and unload protection still work without local storage. */ }
+    }
     debounceTimerRef.current = window.setTimeout(() => {
       debounceTimerRef.current = null;
-      if (activeIdRef.current !== scheduledForId) return;
-      void (async () => {
-        setSaveStatus("saving");
-        try {
-          const ch = await updateChapter(id, scheduledForId, {
-            title,
-            summary,
-            content,
-            skip_version: true,
-          } as Parameters<typeof updateChapter>[2]);
-          setChapters((prev) => prev.map((c) => (c.id === ch.id ? ch : c)));
-          setSaveStatus("saved");
-        } catch (e) {
-          setErr(apiErrorMessage(e));
-          setSaveStatus("unsaved");
-        }
-      })();
+      void flushSave(false).catch((error) => setErr(apiErrorMessage(error)));
     }, 850);
     return () => {
       if (debounceTimerRef.current !== null) {
@@ -998,7 +1133,7 @@ export default function NovelWrite() {
         debounceTimerRef.current = null;
       }
     };
-  }, [title, summary, content, activeId, id, chapters, isPreviewMode]);
+  }, [title, summary, content, activeId, editorChapterId, id, chapters, isPreviewMode, busy, previewLoading, versionActionLoading, recoveryDraft, flushSave, user?.id]);
 
   function toggleVersionsPanel() {
     if (activeId === null) return;
@@ -1007,6 +1142,7 @@ export default function NovelWrite() {
   }
 
   function handleBodyKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.currentTarget.readOnly) return;
     if (e.key !== "Enter" || e.shiftKey) return;
     if (e.nativeEvent.isComposing) return;
     e.preventDefault();
@@ -1029,7 +1165,7 @@ export default function NovelWrite() {
     const nid = id;
     setErr("");
     try {
-      await flushSave();
+      if (!(await beforeLeave())) return;
       if (novelIdRef.current !== nid) return;
       const list = await loadChapters();
       if (novelIdRef.current !== nid) return;
@@ -1047,16 +1183,19 @@ export default function NovelWrite() {
         setErr(apiErrorMessage(e));
       }
     }
-  }, [id, flushSave, loadChapters]);
+  }, [id, beforeLeave, loadChapters]);
 
   const onDeleteChapterById = useCallback(async (cid: number) => {
     const nid = id;
     if (!(await confirmAction(t("write_confirm_delete_chapter")))) return;
     setErr("");
     try {
-      await flushSave();
+      if (!(await beforeLeave())) return;
       if (novelIdRef.current !== nid) return;
       await deleteChapter(nid, cid);
+      if (user) {
+        try { localStorage.removeItem(draftKey(user.id, nid, cid)); } catch { /* ignore */ }
+      }
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
       if (novelIdRef.current !== nid) return;
@@ -1077,9 +1216,10 @@ export default function NovelWrite() {
         setErr(apiErrorMessage(e));
       }
     }
-  }, [id, t, confirmAction, flushSave, loadChapters]);
+  }, [id, t, confirmAction, beforeLeave, loadChapters, user?.id]);
 
   async function onSummaryInspire() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId || !hasLlm) return;
     setSummaryInspireBusy(true);
@@ -1104,6 +1244,7 @@ export default function NovelWrite() {
   }
 
   async function onBatchSummaryInspire() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId || !hasLlm) return;
     if (!isLatestChapter) {
@@ -1136,6 +1277,7 @@ export default function NovelWrite() {
   }
 
   async function onGenerate() {
+    if (!canMutateChapter()) return;
     const nid = id;
     const s = summary.trim();
     if (!s) {
@@ -1147,9 +1289,11 @@ export default function NovelWrite() {
       const ok = await confirmAction(t("write_confirm_regenerate"));
       if (!ok) return;
     }
+    try { await flushSave(); } catch (error) { setErr(apiErrorMessage(error)); return; }
     preGenerateSnapshotRef.current = { title, summary, content };
     const savedContent = content;
     const savedTitle = title;
+    bodyStreamingRef.current = true;
     setBusy(true);
     setErr("");
     setContent("");
@@ -1201,6 +1345,7 @@ export default function NovelWrite() {
         setContent(savedContent);
       }
     } finally {
+      bodyStreamingRef.current = false;
       setBusy(false);
       setCurrentProgress(null);
     }
@@ -1239,6 +1384,7 @@ export default function NovelWrite() {
   }
 
   function onCancelPreview() {
+    setErr("");
     const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
     setPreviewResult(null);
     setEvaluateResult(null);
@@ -1249,6 +1395,7 @@ export default function NovelWrite() {
   }
 
   async function onBatchGenerate() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId) return;
     if (!isLatestChapter) {
@@ -1302,6 +1449,7 @@ export default function NovelWrite() {
   }
 
   async function onGenerateBackground() {
+    if (!canMutateChapter()) return;
     const nid = id;
     const s = summary.trim();
     if (!s) {
@@ -1313,6 +1461,7 @@ export default function NovelWrite() {
     setBusy(true);
     setErr("");
     try {
+      await flushSave();
       await createSingleBackgroundTask({
         novel_id: nid,
         chapter_id: activeId,
@@ -1322,6 +1471,7 @@ export default function NovelWrite() {
         task_type: hasBody ? "rewrite_chapter" : "single_chapter",
       });
       
+      setBusy(false);
       nav("/tasks");
     } catch (e) {
       setErr(apiErrorMessage(e));
@@ -1331,6 +1481,7 @@ export default function NovelWrite() {
   }
 
   async function onBatchGenerateBackground() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId) return;
     if (!isLatestChapter) {
@@ -1360,6 +1511,7 @@ export default function NovelWrite() {
         chapter_count: batchChapterCount,
       });
       
+      setBusy(false);
       nav("/tasks");
     } catch (e) {
       if (novelIdRef.current === nid) {
@@ -1371,6 +1523,7 @@ export default function NovelWrite() {
   }
 
   async function onRunRewrite() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId || !rewriteInstr.trim()) {
       setErr(t("write_err_rewrite_instr_required"));
@@ -1384,6 +1537,8 @@ export default function NovelWrite() {
     setErr("");
     const savedBody = content;
     try {
+      await flushSave();
+      bodyStreamingRef.current = true;
       let acc = "";
       const ch = await reviseChapter(
         nid,
@@ -1409,11 +1564,13 @@ export default function NovelWrite() {
         setContent(savedBody);
       }
     } finally {
+      bodyStreamingRef.current = false;
       setBusy(false);
     }
   }
 
   async function onRunAppend() {
+    if (!canMutateChapter()) return;
     const nid = id;
     if (!activeId || !appendInstr.trim()) {
       setErr(t("write_err_append_instr_required"));
@@ -1423,6 +1580,8 @@ export default function NovelWrite() {
     setErr("");
     const savedAppendBody = content;
     try {
+      await flushSave();
+      bodyStreamingRef.current = true;
       const before = savedAppendBody.trimEnd();
       let addition = "";
       const ch = await reviseChapter(
@@ -1451,11 +1610,13 @@ export default function NovelWrite() {
         setContent(savedAppendBody);
       }
     } finally {
+      bodyStreamingRef.current = false;
       setBusy(false);
     }
   }
 
   async function onRunNaming() {
+    if (!canMutateChapter()) return;
     const d = namingDesc.trim();
     if (!d) {
       setErr(t("write_err_naming_desc_required"));
@@ -1496,6 +1657,7 @@ export default function NovelWrite() {
   }
 
   async function onRunEvaluate() {
+    if (!canMutateChapter()) return;
     const aid = activeId;
     if (aid === null) return;
     if (!(content || "").trim()) {
@@ -1504,6 +1666,8 @@ export default function NovelWrite() {
     }
     if (!(await confirmAction(t("write_confirm_evaluate_chapter")))) return;
     setEvaluateBusy(true);
+    setRightTool(null);
+    window.dispatchEvent(new Event("inkmind:assistant-minimize"));
     setErr("");
     setEvaluateResult(null);
     setEvaluatePanelPos(getEvaluatePanelDefaultPos());
@@ -1558,7 +1722,31 @@ export default function NovelWrite() {
 
   return (
     <div className={`write-shell write-theme--${theme}${focusMode ? " write-focus-mode" : ""}`}>
-      {err ? <p className="form-error write-err-banner">{err}</p> : null}
+      {modalContextHolder}
+      {err ? <p className="form-error write-err-banner" role="alert">{err}</p> : null}
+      {recoveryDraft && (
+        <div className="write-notice" role="status">
+          <span>{t("write_draft_found")}</span>
+          <button type="button" className="btn btn-primary" onClick={() => {
+            setTitle(recoveryDraft.title); setSummary(recoveryDraft.summary); setContent(recoveryDraft.content);
+            setRecoveryDraft(null); setErr("");
+          }}>{t("write_restore_draft")}</button>
+          <button type="button" className="btn btn-ghost" onClick={async () => {
+            if (!(await confirmAction(t("write_discard_draft_confirm")))) return;
+            if (user && activeId) {
+              try { localStorage.removeItem(draftKey(user.id, id, activeId)); } catch { /* ignore */ }
+            }
+            setRecoveryDraft(null); setErr("");
+          }}>{t("write_keep_server")}</button>
+        </div>
+      )}
+      {isPreviewMode && (
+        <div className="write-notice" role="status">
+          <span>{t("write_resolve_preview")}</span>
+          <button type="button" className="btn btn-primary" disabled={previewLoading} onClick={() => void onConfirmPreview()}>{t("write_confirm_save")}</button>
+          <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={onCancelPreview}>{t("common_cancel")}</button>
+        </div>
+      )}
 
       {narrow && sidebarOpen && !focusMode ? (
         <button
@@ -1585,6 +1773,7 @@ export default function NovelWrite() {
           onSelectChapter={selectChapter}
           onAddChapter={onAddChapter}
           onDeleteChapter={onDeleteChapterById}
+          disabled={busy || isPreviewMode || previewLoading || versionActionLoading || Boolean(recoveryDraft)}
         />
 
         <div className="write-main write-main--with-rail">
@@ -1617,6 +1806,8 @@ export default function NovelWrite() {
                     </div>
                     <input
                       className="editor-title editor-title--improved"
+                      aria-label={t("write_chapter_title_placeholder")}
+                      readOnly={busy || isPreviewMode || Boolean(recoveryDraft) || versionActionLoading}
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder={t("write_chapter_title_placeholder")}
@@ -1634,12 +1825,17 @@ export default function NovelWrite() {
                         <svg className={`write-summary-toggle__chevron${summaryOpen ? " is-open" : ""}`} width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5l3 3 3-3" /></svg>
                         <span className="write-summary-toggle__label">{t("write_chapter_summary")}</span>
                       </button>
-                      <span className={`write-save-status write-save-status--${saveStatus}`}>
+                      <span className={`write-save-status write-save-status--${saveStatus}`} role="status" aria-live="polite">
                         {saveStatus === "saving" && <span className="write-save-dot write-save-dot--saving" aria-hidden />}
                         {saveStatus === "saved" && <span className="write-save-dot write-save-dot--saved" aria-hidden />}
                         {saveStatus === "unsaved" && <span className="write-save-dot write-save-dot--unsaved" aria-hidden />}
-                        {saveStatus === "saving" ? t("write_saving") : saveStatus === "saved" ? t("write_saved") : t("write_save_unsaved")}
+                        {isPreviewMode ? t("write_preview_not_saved") : busy ? t("write_ai_working") : saveStatus === "error" ? t("write_save_failed") : saveStatus === "saving" ? t("write_saving") : saveStatus === "saved" ? t("write_saved") : t("write_save_pending")}
                       </span>
+                      {saveStatus === "error" && !busy && !isPreviewMode && (
+                        <button type="button" className="write-retry-save" onClick={() => {
+                          setErr(""); void flushSave().catch((error) => setErr(apiErrorMessage(error)));
+                        }}>{t("write_retry_save")}</button>
+                      )}
                       <span className="write-meta-word-stat">{wordCountText}</span>
                     </div>
                   </div>
@@ -1647,6 +1843,8 @@ export default function NovelWrite() {
                     <div className="write-summary-panel">
                       <textarea
                         className="textarea write-summary-textarea"
+                        aria-label={t("write_chapter_summary")}
+                        readOnly={busy || isPreviewMode || Boolean(recoveryDraft) || versionActionLoading}
                         rows={summaryRows}
                         value={summary}
                         onChange={(e) => setSummary(e.target.value)}
@@ -1713,18 +1911,25 @@ export default function NovelWrite() {
                       </button>
                     </div>
                   ) : null}
+                  {!hasLlm && !focusMode && (
+                    <p className="write-ai-unavailable">{t("write_ai_unavailable")} <button type="button" className="write-retry-save" onClick={() => nav("/settings")}>{t("nav_ai_settings")}</button></p>
+                  )}
                 </div>
                 <div className={`write-body-wrapper write-body-wrapper--${lineWidthId}`}>
                   <div className="field write-body-field">
                     <textarea
                       ref={bodyTextareaRef}
+                      aria-label={t("write_body_label")}
+                      readOnly={busy || isPreviewMode || Boolean(recoveryDraft) || versionActionLoading}
+                      onBlur={rememberPosition}
+                      onScroll={rememberPosition}
                       className={`textarea editor-body editor-body--line-height-${lineHeightId}${typewriterMode === "on" ? " editor-body--typewriter" : ""}`}
                       style={{ fontSize: `${bodyFontSizePx}px` }}
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       onKeyDown={handleBodyKeyDown}
                       onMouseUp={syncSelectionFromTextarea}
-                      onSelect={syncSelectionFromTextarea}
+                      onSelect={() => { syncSelectionFromTextarea(); rememberPosition(); }}
                       onKeyUp={syncSelectionFromTextarea}
                       placeholder={t("write_start_writing")}
                     />
@@ -1754,6 +1959,8 @@ export default function NovelWrite() {
       {!focusMode && drawerOpen && rightTool && (
         <div
           ref={commandPanelRef}
+          role="region"
+          aria-label={drawerTitle}
           className={`write-ai-drawer${rightTool === "versions" ? " write-version-panel" : ` write-command-panel write-command-panel--${rightTool}`}${commandPanelDragging ? " is-dragging" : ""}`}
           style={rightTool !== "versions" && commandPanelPos ? {
             left: commandPanelPos.left,
@@ -2188,6 +2395,14 @@ export default function NovelWrite() {
                         {versions.map((v) => (
                           <div
                             key={v.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={selectedVersion?.id === v.id}
+                            onKeyDown={(event) => {
+                              if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                                event.preventDefault(); setSelectedVersion(v); setVersionDiff(null);
+                              }
+                            }}
                             className={`version-item${selectedVersion?.id === v.id ? " version-item--active" : ""}`}
                             onClick={() => {
                               setSelectedVersion(v);
@@ -2304,7 +2519,7 @@ export default function NovelWrite() {
         </div>
       )}
 
-      {evaluateResult && evaluatePanelPosition ? (
+      {!focusMode && !assistantOpen && !rightTool && !selectionPanel && evaluateResult && evaluatePanelPosition ? (
         <div
           ref={evaluatePanelRef}
           className={`write-evaluate-panel${evaluatePanelDragging ? " is-dragging" : ""}`}
@@ -2370,7 +2585,7 @@ export default function NovelWrite() {
         />
       ) : null}
 
-      {selectionPanel && selectionPanelPosition ? (
+      {!focusMode && !assistantOpen && !rightTool && selectionPanel && selectionPanelPosition ? (
         <div
           ref={selectionPanelRef}
           className={`write-selection-result-float${selectionPanelDragging ? " is-dragging" : ""}`}
