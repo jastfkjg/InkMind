@@ -98,13 +98,13 @@ Claude Agent SDK 包含随平台分发的执行资源，加上 Electron 和 Pyth
 
 流程定义：`.github/workflows/release-macos.yml`，参考 ContextCue 的标签发布方式。普通分支提交不会发布桌面版本，也不会改变现有 `main` 分支的 Web 部署流程。
 
-1. 首次发布可使用当前 `desktop/package.json` 的 `0.1.0`；后续先运行 `npm version patch --prefix desktop --no-git-tag-version`（或指定版本），提交 `desktop/package.json` 和锁文件及本次发布代码。
+1. 当前桌面版本为 `0.1.1`；后续先运行 `npm version patch --prefix desktop --no-git-tag-version`（或指定版本），提交 `desktop/package.json` 和锁文件及本次发布代码。
 2. 将提交推到远程，再推送与桌面版本严格一致的标签：
 
    ```bash
    git push origin HEAD
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
 
 3. 在仓库 Actions 的 **Release macOS** 查看进度。流程分别使用 `macos-15`（arm64）和 `macos-15-intel`（x64），每台机器安装 Node 22 / Python 3.12 并原生构建后端。标签与桌面版本不符会在构建前失败。
@@ -140,6 +140,8 @@ python3 desktop/scripts/smoke-backend.py \
 ```
 
 Runner 与签名配置依据：[GitHub runner 文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)、[electron-builder v26 macOS 签名说明](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/)。
+
+Intel macOS 的 `cryptography` 源码构建使用 `OPENSSL_STATIC=1`，避免 PyInstaller 收集 Python 的另一版本 `libssl` 后发生符号冲突。构建脚本会检查并重建旧虚拟环境中动态链接的加密依赖；原生构建需要 Xcode、Rust 和 OpenSSL 开发库（GitHub macOS runner 已提供）。依据：[cryptography 静态链接说明](https://cryptography.io/en/latest/installation/)。
 
 ## 发布检查
 

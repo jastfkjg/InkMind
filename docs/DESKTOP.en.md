@@ -98,13 +98,13 @@ Claude Agent SDK includes platform runtime resources. Together with Electron and
 
 `.github/workflows/release-macos.yml` follows ContextCue's tag-based release flow. Ordinary branch pushes do not publish desktop releases; the existing Web deployment on `main` is unchanged.
 
-1. Use the current desktop version `0.1.0` for the first release. For subsequent versions, run `npm version patch --prefix desktop --no-git-tag-version` (or specify a version), then commit the desktop manifest, lockfile, and release changes.
+1. The current desktop version is `0.1.1`. For subsequent versions, run `npm version patch --prefix desktop --no-git-tag-version` (or specify a version), then commit the desktop manifest, lockfile, and release changes.
 2. Push the commit and a stable tag that exactly matches `desktop/package.json`:
 
    ```bash
    git push origin HEAD
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v0.1.1
+   git push origin v0.1.1
    ```
 
 3. Watch **Release macOS** under repository Actions. `macos-15` builds arm64 and `macos-15-intel` builds x64, each with native Node 22 / Python 3.12. Tag/version mismatches fail before packaging.
@@ -140,6 +140,8 @@ python3 desktop/scripts/smoke-backend.py \
 ```
 
 References: [GitHub runner documentation](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [electron-builder v26 macOS signing](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/).
+
+Intel macOS source builds of `cryptography` use `OPENSSL_STATIC=1` to avoid symbol conflicts when PyInstaller bundles Python's different `libssl`. The build script checks and rebuilds dynamically linked copies in existing virtual environments. Native compilation needs Xcode, Rust and OpenSSL development libraries, provided by GitHub's macOS runner. See [cryptography's static linking instructions](https://cryptography.io/en/latest/installation/).
 
 ## Release Checklist
 
