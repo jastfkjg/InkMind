@@ -12,6 +12,7 @@ InkMind 是一个 AI 辅助小说写作工具，核心体验围绕作品管理�
 
 - 后端：Python 3.12+、FastAPI、SQLAlchemy、Pydantic、SQLite、JWT、OpenAI/Anthropic SDK。
 - 前端：React 18、TypeScript、Vite、React Router、Ant Design、Axios。
+- 桌面端：Electron、electron-builder；PyInstaller 打包本地 FastAPI 后端。
 - 设计系统：`DESIGN.md` 是唯一权威来源，前端主题配置在 `frontend/src/styles/`。
 
 ## 关键目录
@@ -26,6 +27,9 @@ InkMind 是一个 AI 辅助小说写作工具，核心体验围绕作品管理�
 - `frontend/src/context/`：认证、主题、导航上下文。
 - `frontend/src/i18n/`：国际化文案。
 - `frontend/src/api/client.ts`：Axios 客户端。
+- `desktop/main.ts`：Electron 主进程、本地后端生命周期和窗口安全策略。
+- `desktop/preload.ts`：桌面运行时与前端之间的受限桥接。
+- `docs/DESKTOP.md`：桌面架构、数据目录、构建发布和排障。
 
 ## 常用命令
 
@@ -52,6 +56,13 @@ npm run build
 
 ```bash
 ./start-dev.sh
+```
+
+桌面开发与 macOS 打包：
+
+```bash
+./start-desktop.sh
+cd desktop && npm run package:mac
 ```
 
 Vite 默认代理后端 `http://localhost:8000`。排查接口问题时先确认后端已启动。
@@ -92,6 +103,8 @@ Vite 默认代理后端 `http://localhost:8000`。排查接口问题时先确认
 - 优先复用现有 Context、API client、组件和 CSS 变量。
 - `@/` 指向 `frontend/src`。
 - 修改用户菜单、返回逻辑或布局壳时，要检查跨页面一致性。
+- 桌面模式不展示注册、登录和退出入口；本地会话只允许 Electron 主进程通过每次启动生成的令牌获取。
+- 桌面数据必须写到 Electron `userData`，不要写进 `.app` 或安装资源目录。
 - 修改 Token 用量 UI 时，注意已用量、剩余额度、总输入/输出 Token 的口径一致。
 - 构建前端至少运行 `npm run build`；若失败，修复相关类型错误，或明确说明失败来自无关既有问题。
 

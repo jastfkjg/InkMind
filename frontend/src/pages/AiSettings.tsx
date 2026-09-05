@@ -17,11 +17,14 @@ import { useNavigation } from "@/context/NavigationContext";
 import { useI18n } from "@/i18n";
 import {
   fetchLlmProviders,
+  isDesktopApp,
   createCustomLLM,
   updateCustomLLM,
   deleteCustomLLM,
 } from "@/api/client";
 import type { LlmProvidersResponse, CustomLlmInfo } from "@/types";
+
+import { llmSelection } from "@/utils/llmSelection";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -70,7 +73,7 @@ export default function AiSettings() {
   const [genModel, setGenModel] = useState<string>("");
   const [genSaving, setGenSaving] = useState(false);
 
-  const [agentProviderValue, setAgentProviderValue] = useState<string>("builtin:anthropic");
+  const [agentProviderValue, setAgentProviderValue] = useState<string>("");
   const [agentModel, setAgentModel] = useState<string>("");
   const [agentSaving, setAgentSaving] = useState(false);
 
@@ -85,7 +88,7 @@ export default function AiSettings() {
   const loadProviderInfo = useCallback(async () => {
     try {
       const data = await fetchLlmProviders();
-      setProviderInfo(data);
+      setProviderInfo(isDesktopApp ? { ...data, builtin: [], agent_builtin: null, default: "" } : data);
       return data;
     } catch {
       return null;
@@ -99,29 +102,11 @@ export default function AiSettings() {
   useEffect(() => {
     if (!user || !providerInfo) return;
 
-    if (user.generation_use_custom && user.generation_custom_llm_id) {
-      setGenProviderValue(`custom:${user.generation_custom_llm_id}`);
-      const customLlm = providerInfo.custom_llms.find(
-        (c) => c.id === user.generation_custom_llm_id
-      );
-      setGenModel(user.preferred_llm_model || customLlm?.models?.[0] || "");
-    } else {
-      const p = user.preferred_llm_provider || providerInfo.default;
-      setGenProviderValue(`builtin:${p}`);
-      const pInfo = providerInfo.builtin.find((b) => b.id === p);
-      setGenModel(user.preferred_llm_model || pInfo?.default_model || "");
-    }
-
-    if (user.agent_use_custom && user.agent_custom_llm_id) {
-      setAgentProviderValue(`custom:${user.agent_custom_llm_id}`);
-      const customLlm = providerInfo.custom_llms.find(
-        (c) => c.id === user.agent_custom_llm_id
-      );
-      setAgentModel(user.agent_model || customLlm?.models?.[0] || "");
-    } else {
-      setAgentProviderValue("builtin:anthropic");
-      setAgentModel(providerInfo.agent_builtin?.model || "");
-    }
+    const selected = llmSelection(user, providerInfo, isDesktopApp);
+    setGenProviderValue(selected.generationProvider);
+    setGenModel(selected.generationModel);
+    setAgentProviderValue(selected.agentProvider);
+    setAgentModel(selected.agentModel);
 
     form.setFieldsValue({
       agent_mode: user.agent_mode || "flexible",
@@ -436,7 +421,7 @@ export default function AiSettings() {
         })()
     : "";
 
-  const agentCurrentModel = agentModel || providerInfo?.agent_builtin?.model || "-";
+  const agentCurrentModel = agentProviderValue ? agentModel : "";
 
   return (
     <Layout
@@ -550,7 +535,7 @@ export default function AiSettings() {
                     >
                       {t("ai_settings_custom_tag")}
                     </Tag>
-                  ) : (
+                  ) : agentProviderValue ? (
                     <Tag
                       color="blue"
                       style={{
@@ -562,10 +547,10 @@ export default function AiSettings() {
                     >
                       {t("ai_settings_builtin_tag")}
                     </Tag>
-                  )}
+                  ) : null}
                 </div>
                 <Text strong style={{ color: textColor, fontSize: "1rem" }}>
-                  {agentProviderLabel}
+                  {agentProviderLabel || t("ai_settings_not_configured")}
                 </Text>
                 <Text
                   style={{ color: secondaryTextColor, fontSize: "0.85rem", marginLeft: 8 }}
@@ -606,7 +591,7 @@ export default function AiSettings() {
                     >
                       {t("ai_settings_custom_tag")}
                     </Tag>
-                  ) : (
+                  ) : genProviderValue ? (
                     <Tag
                       color="blue"
                       style={{
@@ -618,10 +603,10 @@ export default function AiSettings() {
                     >
                       {t("ai_settings_builtin_tag")}
                     </Tag>
-                  )}
+                  ) : null}
                 </div>
                 <Text strong style={{ color: textColor, fontSize: "1rem" }}>
-                  {genProviderLabel}
+                  {genProviderLabel || t("ai_settings_not_configured")}
                 </Text>
                 <Text
                   style={{ color: secondaryTextColor, fontSize: "0.85rem", marginLeft: 8 }}
@@ -690,6 +675,8 @@ export default function AiSettings() {
                       size="large"
                       style={{ width: "100%" }}
                       value={agentProviderValue || undefined}
+                      placeholder={t("ai_settings_provider_placeholder")}
+                      notFoundContent={t("ai_settings_add_provider_hint")}
                       onChange={handleAgentProviderChange}
                       disabled={agentSaving}
                       suffixIcon={
@@ -718,7 +705,7 @@ export default function AiSettings() {
                           </Space>
                         </Option>
                       )}
-                      {providerInfo?.custom_llms.map((cl) => (
+                      {providerInfo?.custom_llms.filter((cl) => !isDesktopApp || cl.provider === "anthropic").map((cl) => (
                         <Option key={`custom:${cl.id}`} value={`custom:${cl.id}`}>
                           <Space>
                             {cl.provider_label}
@@ -766,6 +753,7 @@ export default function AiSettings() {
                         size="large"
                         style={{ height: 44 }}
                         value={agentCurrentModel}
+                        placeholder={t("ai_settings_model_placeholder")}
                         readOnly
                         disabled
                       />
@@ -778,7 +766,7 @@ export default function AiSettings() {
                   type="secondary"
                   style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
                 >
-                  {t("ai_settings_switch_hint")}
+                  {isDesktopApp && !agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
                 </Text>
               </div>
             </Card>
@@ -809,6 +797,8 @@ export default function AiSettings() {
                       size="large"
                       style={{ width: "100%" }}
                       value={genProviderValue || undefined}
+                      placeholder={t("ai_settings_provider_placeholder")}
+                      notFoundContent={t("ai_settings_add_provider_hint")}
                       onChange={handleGenProviderChange}
                       disabled={genSaving}
                       suffixIcon={
@@ -892,6 +882,7 @@ export default function AiSettings() {
                         size="large"
                         style={{ height: 44 }}
                         value={genModel}
+                        placeholder={t("ai_settings_model_placeholder")}
                         readOnly
                         disabled
                       />
@@ -904,7 +895,7 @@ export default function AiSettings() {
                   type="secondary"
                   style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
                 >
-                  {t("ai_settings_switch_hint")}
+                  {isDesktopApp && !genProviderValue ? t("ai_settings_add_provider_hint") : t("ai_settings_switch_hint")}
                 </Text>
               </div>
             </Card>

@@ -115,6 +115,7 @@ export default function NovelLayout() {
 
   return (
     <Layout
+      className="novel-layout"
       style={{
         minHeight: "100vh",
         background: bgColor,
@@ -127,13 +128,13 @@ export default function NovelLayout() {
         padding="0 1.5rem"
         headerStyle={{ flexWrap: "wrap", gap: "1rem" }}
         leftContent={
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => nav("/")} size="large">
+          <div className="novel-header__content">
+            <Button className="novel-header__back" aria-label={t("nav_dashboard")} type="text" icon={<ArrowLeftOutlined />} onClick={() => nav("/")} size="large">
               {t("nav_back")}
             </Button>
             {novel && (
-              <Space size="small" style={{ flexShrink: 0 }}>
-                <Title level={5} style={{
+              <div className="novel-header__identity">
+                <Title level={5} title={novel.title} style={{
                   margin: 0,
                   fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
                   color: textColor,
@@ -141,10 +142,11 @@ export default function NovelLayout() {
                 }}>
                   {novel.title || t("novel_untitled")}
                 </Title>
-                {novel.genre && <Tag color="blue" style={{ margin: 0 }}>{novel.genre}</Tag>}
-              </Space>
+                {novel.genre && <Tag style={{ margin: 0 }}>{novel.genre}</Tag>}
+              </div>
             )}
             <Tabs
+              className="novel-header__tabs"
               activeKey={getActiveTab()}
               items={tabItems}
               onChange={handleTabChange}
@@ -167,6 +169,7 @@ export default function NovelLayout() {
       )}
 
       <Content
+        className={writeTabActive ? "novel-content novel-content--write" : "novel-content"}
         style={{
           padding: writeTabActive ? "0.75rem 1rem 1rem" : "1rem",
           maxWidth: writeTabActive ? 1280 : 1200,

@@ -15,6 +15,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
+import { useNavigation } from "@/context/NavigationContext";
+import { isDesktopApp } from "@/api/client";
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -79,6 +81,7 @@ export default function AppHeader({
   const { theme, setTheme } = useTheme();
   const { t, isZh, setLanguage } = useI18n();
   const colors = useHeaderTheme();
+  const { beforeLeave } = useNavigation();
 
   const languageMenuItems = useMemo(
     () => [
@@ -99,7 +102,9 @@ export default function AppHeader({
   );
 
   const userMenuItems = useMemo(() => {
-    const handleLogout = onLogout ?? (() => logout());
+    const handleLogout = async () => {
+      if (await beforeLeave()) (onLogout ?? logout)();
+    };
     return [
       ...(user?.is_admin
         ? [
@@ -132,19 +137,22 @@ export default function AppHeader({
         disabled: disabledMenuItem === "tasks",
         onClick: disabledMenuItem === "tasks" ? undefined : () => nav("/tasks"),
       },
-      { key: "divider", type: "divider" as const },
-      {
-        key: "logout",
-        icon: <LogoutOutlined />,
-        label: t("nav_logout"),
-        danger: true,
-        onClick: handleLogout,
-      },
+      ...(!isDesktopApp ? [
+        { key: "divider", type: "divider" as const },
+        {
+          key: "logout",
+          icon: <LogoutOutlined />,
+          label: t("nav_logout"),
+          danger: true,
+          onClick: handleLogout,
+        },
+      ] : []),
     ];
-  }, [user?.is_admin, disabledMenuItem, t, nav, onLogout, logout]);
+  }, [user?.is_admin, disabledMenuItem, t, nav, onLogout, logout, beforeLeave]);
 
   return (
     <Header
+      className="app-header"
       style={{
         padding,
         background: colors.headerBg,
@@ -158,14 +166,15 @@ export default function AppHeader({
         ...headerStyle,
       }}
     >
-      {leftContent}
+      <div className="app-header__left">{leftContent}</div>
 
-      <Space size="middle">
+      <Space size="middle" className="app-header__actions">
         {extraActions}
 
-        <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight">
+        <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight" trigger={["click"]}>
           <Button
             type="text"
+            className="app-header__preference"
             icon={<GlobalOutlined />}
             size="large"
             style={{ color: colors.textColor, transition: "color 0.3s ease" }}
@@ -176,6 +185,7 @@ export default function AppHeader({
 
         <Button
           type="text"
+          className="app-header__preference"
           icon={theme === "dark" ? <MoonOutlined /> : <SunOutlined />}
           size="large"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -183,8 +193,15 @@ export default function AppHeader({
           style={{ color: colors.textColor, transition: "color 0.3s ease" }}
         />
 
-        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-          <div
+        <Dropdown menu={{ items: [
+          ...userMenuItems,
+          { type: "divider" },
+          { key: "language", icon: <GlobalOutlined />, label: t("nav_language"), children: languageMenuItems },
+          { key: "theme", icon: theme === "dark" ? <SunOutlined /> : <MoonOutlined />, label: theme === "dark" ? t("theme_light") : t("theme_dark"), onClick: () => setTheme(theme === "dark" ? "light" : "dark") },
+        ] }} placement="bottomRight" trigger={["click"]}>
+          <button
+            type="button"
+            aria-label={t("nav_account_menu")}
             className="user-menu-trigger"
             style={{
               display: "flex",
@@ -206,7 +223,7 @@ export default function AppHeader({
             >
               {user?.display_name?.charAt(0) || user?.email?.charAt(0)}
             </Avatar>
-            <div style={{ lineHeight: 1.2 }}>
+            <span className="app-header__user-details" style={{ lineHeight: 1.2 }}>
               <Text
                 strong
                 style={{
@@ -218,7 +235,7 @@ export default function AppHeader({
               >
                 {user?.display_name || user?.email}
               </Text>
-              {user?.display_name && (
+              {user?.display_name && !isDesktopApp && (
                 <Text
                   type="secondary"
                   style={{
@@ -231,8 +248,8 @@ export default function AppHeader({
                   {user.email}
                 </Text>
               )}
-            </div>
-          </div>
+            </span>
+          </button>
         </Dropdown>
       </Space>
     </Header>

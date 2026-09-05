@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,8 +10,59 @@ from app.models import User, UserCustomLLM
 from app.schemas.auth import Token, UserCreate, UserLogin, UserOut, UserUpdate
 from app.llm.providers import list_available_providers
 from app.security import create_access_token, hash_password, verify_password
+from app.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_DESKTOP_USER_EMAIL = "local@inkmind.desktop"
+
+
+@router.post("/desktop-session", response_model=Token, include_in_schema=False)
+def desktop_session(
+    db: Session = Depends(get_db),
+    desktop_token: str | None = Header(default=None, alias="X-InkMind-Desktop-Token"),
+) -> Token:
+    """Create a session for the single local desktop author.
+
+    Electron starts the API on loopback and keeps the per-launch token in its
+    main process. The endpoint does not exist as a usable login path in web mode.
+    """
+    expected = settings.desktop_session_token
+    if (
+        not settings.desktop_mode
+        or not expected
+        or not desktop_token
+        or not secrets.compare_digest(desktop_token, expected)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    user = db.query(User).filter(User.email == _DESKTOP_USER_EMAIL).first()
+    if user is None:
+        user = User(
+            email=_DESKTOP_USER_EMAIL,
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+            display_name="本地作者",
+        )
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            # React Strict Mode can request the startup session twice. Another
+            # request may have created the single local author in the meantime.
+            db.rollback()
+            user = db.query(User).filter(User.email == _DESKTOP_USER_EMAIL).one()
+        db.refresh(user)
+
+    # The local author supplies their own model credentials, so server-style
+    # account quotas do not apply in desktop mode.
+    if user.token_quota is not None:
+        user.token_quota = None
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = create_access_token(str(user.id))
+    return Token(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/register", response_model=Token)

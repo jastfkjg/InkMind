@@ -219,6 +219,7 @@ class NovelOrchestrator(Orchestrator):
             context["chapter_count"] = state.target_chapter_count or 1
 
         elif phase_type == WorkflowPhaseType.CHAPTER_CONTENT:
+            context["target_chapter"] = state.target_chapter
             summary_result = state.get_effective_content(WorkflowPhaseType.CHAPTER_SUMMARY)
             context["chapter_summary"] = summary_result.get("chapter_summary", "")
             context["fixed_title"] = summary_result.get("title")

@@ -23,7 +23,7 @@ def llm_providers(user: OptionalUser, db: Session = Depends(get_db)) -> dict:
     builtin = get_builtin_provider_info()
 
     agent_builtin = None
-    if settings.anthropic_api_key:
+    if not settings.desktop_mode and settings.anthropic_api_key:
         agent_builtin = {
             "model": settings.anthropic_model,
             "base_url": settings.anthropic_base_url,
@@ -47,7 +47,7 @@ def llm_providers(user: OptionalUser, db: Session = Depends(get_db)) -> dict:
 
     return {
         "builtin": builtin,
-        "default": settings.default_llm_provider,
+        "default": "" if settings.desktop_mode else settings.default_llm_provider,
         "agent_builtin": agent_builtin,
         "custom_llms": custom_llms,
         "generation_custom_llm_id": getattr(user, "generation_custom_llm_id", None) if user else None,

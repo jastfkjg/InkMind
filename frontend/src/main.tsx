@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider, useTheme } from "@/context/ThemeContext";
@@ -25,14 +25,16 @@ function AppWithTheme() {
   );
 }
 
+// A data router enables navigation blocking without changing the existing route tree.
+const router = createBrowserRouter([{
+  path: "*",
+  element: <AuthProvider><AppWithTheme /></AuthProvider>,
+}]);
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <AppWithTheme />
-        </AuthProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ThemeProvider>
   </StrictMode>
 );

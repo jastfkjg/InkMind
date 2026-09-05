@@ -46,19 +46,6 @@ class ChapterUpdate(BaseModel):
     )
 
 
-class ChapterOut(BaseModel):
-    id: int
-    novel_id: int
-    title: str
-    summary: str
-    content: str
-    sort_order: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
 class ChapterReviseIn(BaseModel):
     instruction: str = Field(..., min_length=1, description="对当前章节的修改说明")
     llm_provider: str | None = Field(

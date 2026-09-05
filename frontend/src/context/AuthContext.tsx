@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import type { User } from "@/types";
-import { authLogin, authMe, authRegister, clearToken, getToken, patchAuthMe, setAiLanguage, setToken } from "@/api/client";
+import { authLogin, authMe, authRegister, clearToken, getDesktopSession, getToken, isDesktopApp, patchAuthMe, setAiLanguage, setToken } from "@/api/client";
 
 type AuthState = {
   user: User | null;
@@ -42,6 +42,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (isDesktopApp) {
+      (async () => {
+        try {
+          const data = await getDesktopSession();
+          setToken(data.access_token);
+          setUser(data.user);
+          setAiLanguage(data.user.ai_language || null);
+        } catch {
+          clearToken();
+        } finally {
+          setLoading(false);
+        }
+      })();
+      return;
+    }
     const t = getToken();
     if (!t) {
       setLoading(false);

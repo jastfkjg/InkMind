@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
+import { SettingOutlined } from "@ant-design/icons";
 import { useI18n } from "@/i18n";
 import type { LineHeightId, LineWidthId, WriteBodyFontSizeId, TypewriterModeId } from "./types";
 
@@ -148,6 +149,7 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
   const [sizeMenuOpen, setSizeMenuOpen] = useState(false);
   const [lineHeightMenuOpen, setLineHeightMenuOpen] = useState(false);
   const [lineWidthMenuOpen, setLineWidthMenuOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const LINE_HEIGHTS = useMemo(
     () => LINE_HEIGHT_IDS.map((id) => ({ id, label: t(LINE_HEIGHT_LABEL_KEYS[id]), value: LINE_HEIGHT_VALUES[id] })),
@@ -191,7 +193,7 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
 
   useEffect(() => {
     if (focusMode) {
-      onToggleSidebar();
+      setToolsOpen(false);
       onDrawerClose?.();
     }
   }, [focusMode]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -202,6 +204,7 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
         type="button"
         className="write-icon-btn"
         title={sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
+        aria-label={sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
         aria-expanded={sidebarOpen}
         onClick={onToggleSidebar}
       >
@@ -209,7 +212,13 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
           <span /><span /><span />
         </span>
       </button>
-      <div className="write-sidenav-tools" ref={sidebarToolsRef}>
+      <button type="button" className="write-icon-btn" title={t("write_editor_settings")} aria-label={t("write_editor_settings")} aria-expanded={toolsOpen} onClick={() => setToolsOpen((value) => !value)}>
+        <SettingOutlined aria-hidden="true" />
+      </button>
+      <button type="button" className={`write-icon-btn write-focus-btn${focusMode ? " is-active" : ""}`} title={focusMode ? t("write_exit_focus_mode_shortcut") : t("write_focus_mode_shortcut")} aria-label={t("write_focus_mode")} aria-pressed={focusMode} onClick={() => setFocusMode((value) => !value)}>
+        <span className="write-focus-icon" aria-hidden><span /><span /><span /><span /></span>
+      </button>
+      <div className="write-sidenav-tools" ref={sidebarToolsRef} hidden={!toolsOpen}>
         <div className="write-size-picker">
           <button
             type="button"
@@ -337,18 +346,6 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
             </ul>
           ) : null}
         </div>
-
-        <button
-          type="button"
-          className={`write-icon-btn write-focus-btn${focusMode ? " is-active" : ""}`}
-          title={focusMode ? t("write_exit_focus_mode_shortcut") : t("write_focus_mode_shortcut")}
-          aria-label={t("write_focus_mode")}
-          onClick={() => setFocusMode((v) => !v)}
-        >
-          <span className="write-focus-icon" aria-hidden>
-            <span /><span /><span /><span />
-          </span>
-        </button>
 
         <button
           type="button"

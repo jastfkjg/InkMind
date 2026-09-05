@@ -581,6 +581,20 @@ When photography is used (rare — mostly testimonials), avatars crop to perfect
 
 ## Theme Support
 
+### InkMind 应用界面补充规范
+
+上文营销网站的 hero、96px 分区间距与大型展示卡片，不直接用于 InkMind 的写作和管理页面。
+应用界面保留现有奶油色、暖珊瑚色与深色主题 Token，并遵循以下规则：
+
+- **写作优先**：正文为主要视觉区域；章节目录可收起，排版选项按需展开，避免新增装饰层。
+- **专注模式**：覆盖整页，隐藏全局导航与助手悬浮层；保留可访问的退出按钮与 Escape 快捷键。
+- **保存反馈**：明确区分已保存、待保存、保存中、保存失败与 AI 预览；失败提供重试，不清空作者输入。
+- **AI 操作**：保留生成、改写、续写、评估、选区和版本功能；面板协调显示，不让浮动入口遮挡操作。
+- **移动导航**：长书名截断；账户菜单保留语言、主题和全局页面入口；常用写作按钮触控区不小于 44px。
+- **管理页面**：标题、搜索与主要操作采用紧凑布局；删除与导出归入更多菜单，不与继续写作争夺视觉重点。
+- **可访问性**：输入框有明确标签，图标按钮有名称；保留键盘焦点，并让弹层关闭后焦点回到入口。
+- **测试原则**：调整公共布局时检查中英文、浅深主题、桌面与窄屏；验证功能使用隔离数据，不修改用户作品。
+
 InkMind supports **two** theme modes:
 
 1. **Light (日间)** — Cream canvas (`{colors.canvas}` — #faf9f5) as the default floor, warm ink text, coral accents. This is the brand-defining mode.

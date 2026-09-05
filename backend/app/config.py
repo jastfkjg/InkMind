@@ -83,6 +83,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Desktop runtime. These values are supplied by the Electron main process and
+    # stay disabled for the normal web deployment.
+    desktop_mode: bool = False
+    desktop_session_token: str | None = None
+    desktop_frontend_dir: str | None = None
+
     # OpenTelemetry：AI 相关 Span + FastAPI/HTTPX 自动插桩（见 app.observability.otel_setup）
     otel_enabled: bool = Field(default=False, validation_alias="OTEL_ENABLED")
     otel_service_name: str = Field(default="inkmind-api", validation_alias="OTEL_SERVICE_NAME")
@@ -109,6 +115,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _moonshot_key_from_kimi_env(self) -> Self:
+        if self.desktop_mode:
+            # Desktop has no server-provided credentials, including those loaded
+            # from a developer's .env or inherited shell environment.
+            for name, field in type(self).model_fields.items():
+                if name.endswith(("_api_key", "_base_url", "_model")):
+                    object.__setattr__(self, name, field.default)
+            return self
         if self.moonshot_api_key is None:
             k = os.getenv("KIMI_API_KEY", "").strip()
             if k:

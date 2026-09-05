@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { useI18n } from "@/i18n";
 import type { Chapter } from "@/types";
 
@@ -9,6 +9,7 @@ interface ChapterSidebarProps {
   onSelectChapter: (id: number) => void;
   onAddChapter: () => void;
   onDeleteChapter: (id: number) => void;
+  disabled?: boolean;
 }
 
 function ChapterSidebar({
@@ -18,28 +19,36 @@ function ChapterSidebar({
   onSelectChapter,
   onAddChapter,
   onDeleteChapter,
+  disabled = false,
 }: ChapterSidebarProps) {
   const { t } = useI18n();
+  const [query, setQuery] = useState("");
+  const filtered = chapters.map((chapter, index) => ({ chapter, index })).filter(({ chapter, index }) =>
+    `${index + 1} ${chapter.title}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())
+  );
 
   return (
     <aside className={`write-left-sidebar${sidebarOpen ? " is-open" : ""}`}>
       <div className="write-left-inner card">
         <div className="write-left-head">
           <strong>{t("write_chapters")}</strong>
-          <button type="button" className="btn btn-ghost write-chapter-add-btn" onClick={(e) => { e.stopPropagation(); void onAddChapter(); }}>
+          <button type="button" disabled={disabled} className="btn btn-ghost write-chapter-add-btn" onClick={(e) => { e.stopPropagation(); void onAddChapter(); }}>
             {t("write_new_chapter")}
           </button>
         </div>
+        <input className="input write-chapter-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("write_search_chapters")} aria-label={t("write_search_chapters")} />
         <div className="chapter-list stack-sm">
           {chapters.length === 0 ? (
             <p className="muted write-chapter-empty-hint">
               {t("write_no_chapters")}
             </p>
           ) : (
-            chapters.map((c, idx) => (
+            filtered.map(({ chapter: c, index: idx }) => (
               <div key={c.id} className="chapter-row">
                 <button
                   type="button"
+                  disabled={disabled}
+                  aria-current={c.id === activeId ? "page" : undefined}
                   className={`chapter-item${c.id === activeId ? " active" : ""}`}
                   onClick={(e) => { e.stopPropagation(); void onSelectChapter(c.id); }}
                 >
@@ -47,6 +56,7 @@ function ChapterSidebar({
                 </button>
                 <button
                   type="button"
+                  disabled={disabled}
                   className="chapter-del"
                   title={t("write_delete_chapter")}
                   aria-label={t("write_delete_chapter")}
@@ -63,6 +73,7 @@ function ChapterSidebar({
               </div>
             ))
           )}
+          {chapters.length > 0 && filtered.length === 0 && <p className="muted write-chapter-empty-hint">{t("write_search_empty")}</p>}
         </div>
       </div>
     </aside>

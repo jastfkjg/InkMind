@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
@@ -156,4 +158,23 @@ setup_otel(app)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "mode": "desktop" if settings.desktop_mode else "web"}
+
+
+if settings.desktop_mode and settings.desktop_frontend_dir:
+    _desktop_frontend = Path(settings.desktop_frontend_dir).resolve()
+    _desktop_index = _desktop_frontend / "index.html"
+
+    @app.get("/{asset_path:path}", include_in_schema=False)
+    def desktop_frontend(asset_path: str) -> FileResponse:
+        """Serve the built React app and fall back to its client-side router."""
+        candidate = (_desktop_frontend / asset_path).resolve()
+        if (
+            asset_path
+            and candidate.is_relative_to(_desktop_frontend)
+            and candidate.is_file()
+        ):
+            return FileResponse(candidate)
+        if not _desktop_index.is_file():
+            raise RuntimeError(f"Desktop frontend is missing: {_desktop_index}")
+        return FileResponse(_desktop_index)

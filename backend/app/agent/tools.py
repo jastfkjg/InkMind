@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
@@ -12,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.agent.base import BaseTool
 from app.agent.memory import NovelMemory
 from app.llm.base import calc_max_tokens_from_word_count
-from app.models import Character, Chapter, Novel
+from app.models import Chapter, Novel
 from app.prompts import get_prompt
 from app.language import Language
 
@@ -38,19 +37,15 @@ class GetPreviousChaptersTool(BaseTool):
     name = "get_previous_chapters"
     description = "获取作品的前 N 章概要，用于了解故事进展。参数 limit 指定章节数量（默认3）。"
 
-    def __init__(self, db: Session, novel: Novel) -> None:
-        self._db = db
-        self._novel = novel
+    def __init__(
+        self, db: Session, novel: Novel, *,
+        before_chapter: Chapter | None = None,
+        before_sort_order: int | None = None,
+    ) -> None:
+        self._memory = NovelMemory(db, novel, before_chapter=before_chapter, before_sort_order=before_sort_order)
 
     def run(self, limit: int = 3) -> str:
-        chapters = (
-            self._db.query(Chapter)
-            .filter(Chapter.novel_id == self._novel.id)
-            .filter(Chapter.summary.isnot(None), Chapter.summary != "")
-            .order_by(Chapter.sort_order.desc(), Chapter.id.desc())
-            .limit(limit)
-            .all()
-        )
+        chapters = self._memory.get_relevant_chapters(limit)
         if not chapters:
             return "（尚无其他章节概要）"
         lines = []
@@ -76,23 +71,11 @@ class GetCharacterProfilesTool(BaseTool):
         if not chapter_summary:
             return "（未提供概要，无法召回人物）"
 
-        chinese_words = re.findall(r"[\u4e00-\u9fff]{2,}", chapter_summary)
-        english_words = re.findall(r"[a-zA-Z]{2,}", chapter_summary)
-        keywords = set(chinese_words + english_words)
-
-        all_chars = self._db.query(Character).filter(Character.novel_id == self._novel.id).all()
-        matched: list[tuple[int, Character]] = []
-        for char in all_chars:
-            char_keywords = set(re.findall(r"[\u4e00-\u9fff]{2,}|[a-zA-Z]{2,}", f"{char.name} {char.profile}"))
-            overlap = keywords & char_keywords
-            if overlap:
-                matched.append((len(overlap), char))
-
-        matched.sort(key=lambda x: x[0], reverse=True)
+        matched = NovelMemory(self._db, self._novel).get_relevant_characters(chapter_summary)
         if not matched:
             return "（无相关人物记录）"
         lines = []
-        for _, char in matched:
+        for char in matched:
             profile = _clip(char.profile, 400) or "（未填写）"
             notes = _clip(char.notes, 200)
             entry = f"【{char.name}】\n设定：{profile}"
@@ -142,17 +125,19 @@ class GenerateChapterTool(BaseTool):
         *,
         word_count: int | None = None,
         language: Language = "zh",
+        before_chapter: Chapter | None = None,
+        before_sort_order: int | None = None,
     ) -> None:
         self._db = db
         self._novel = novel
         self._llm = llm
         self._word_count = word_count
         self._language = language
+        self._memory = NovelMemory(db, novel, before_chapter=before_chapter, before_sort_order=before_sort_order)
 
     def run(self, chapter_summary: str = "", fixed_title: str | None = None) -> str:
         """执行章节生成，返回 JSON 格式的完整内容。"""
-        memory = NovelMemory(self._db, self._novel)
-        context = memory.build_context(chapter_summary)
+        context = self._memory.build_context(chapter_summary)
 
         word_count_req = ""
         if self._word_count and 500 <= self._word_count <= 4000:
@@ -177,8 +162,7 @@ class GenerateChapterTool(BaseTool):
 
     def run_stream(self, chapter_summary: str = "", fixed_title: str | None = None) -> Iterator[str]:
         """执行章节生成，流式返回正文内容（纯文本，非 JSON）。"""
-        memory = NovelMemory(self._db, self._novel)
-        context = memory.build_context(chapter_summary)
+        context = self._memory.build_context(chapter_summary)
 
         word_count_req = ""
         if self._word_count and 500 <= self._word_count <= 4000:
