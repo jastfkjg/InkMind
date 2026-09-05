@@ -40,6 +40,22 @@ from app.workflow.base import (
 log = logging.getLogger(__name__)
 
 
+def _target_chapter(db: Session, novel: Novel, context: dict[str, Any]) -> Chapter | None:
+    """Workflow target_chapter is a one-based chapter number, not a database ID."""
+    number = context.get("target_chapter")
+    if number is None:
+        return None
+    if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+        raise ValueError("目标章节号必须是正整数")
+    return (
+        db.query(Chapter)
+        .filter(Chapter.novel_id == novel.id)
+        .order_by(Chapter.sort_order, Chapter.id)
+        .offset(number - 1)
+        .first()
+    )
+
+
 class NovelSetupSubagent(Subagent):
     """作品设定完善 Subagent。
 
@@ -339,7 +355,9 @@ class ChapterSummarySubagent(Subagent):
             novel_tool = GetNovelContextTool(self._db, self._novel)
             novel_context = novel_tool.run()
 
-            prev_chapters_tool = GetPreviousChaptersTool(self._db, self._novel)
+            prev_chapters_tool = GetPreviousChaptersTool(
+                self._db, self._novel, before_chapter=_target_chapter(self._db, self._novel, context)
+            )
             prev_chapters = prev_chapters_tool.run(limit=3)
 
             character_profiles = ""
@@ -440,7 +458,9 @@ class ChapterContentSubagent(Subagent):
 
             word_count = context.get("word_count")
 
-            memory = NovelMemory(self._db, self._novel)
+            memory = NovelMemory(
+                self._db, self._novel, before_chapter=_target_chapter(self._db, self._novel, context)
+            )
             context_built = memory.build_context(chapter_summary)
 
             word_count_req = ""
@@ -500,7 +520,9 @@ class ChapterContentSubagent(Subagent):
         yield "[开始生成章节正文]\n"
 
         try:
-            memory = NovelMemory(self._db, self._novel)
+            memory = NovelMemory(
+                self._db, self._novel, before_chapter=_target_chapter(self._db, self._novel, context)
+            )
             context_built = memory.build_context(chapter_summary)
 
             word_count_req = ""

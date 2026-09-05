@@ -139,12 +139,13 @@ def build_generation_prompt(
     fixed_title: str | None = None,
     word_count: int | None = None,
     language: Language = "zh",
+    new_sort_order: int | None = None,
 ) -> tuple[str, str]:
     """构建章节生成的 system prompt 和 user prompt。
 
     内部使用 NovelMemory 统一管理上下文检索（章节召回 + 人物召回）。
     """
-    memory = NovelMemory(db, novel)
+    memory = NovelMemory(db, novel, before_chapter=target_chapter, before_sort_order=new_sort_order)
 
     word_count_req = ""
     if word_count and 500 <= word_count <= 4000:
@@ -201,10 +202,11 @@ def run_react_chapter_generation(
     from sqlalchemy import func, select
 
     tools = [
-        GetPreviousChaptersTool(db, novel),
+        GetPreviousChaptersTool(db, novel, before_chapter=target_chapter, before_sort_order=new_sort_order),
         GetCharacterProfilesTool(db, novel),
         GetNovelContextTool(db, novel),
-        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language),
+        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language,
+                            before_chapter=target_chapter, before_sort_order=new_sort_order),
         AskUserTool(),
     ]
 
@@ -354,10 +356,11 @@ def run_flexible_chapter_generation(
     from sqlalchemy import func, select
 
     tools = [
-        GetPreviousChaptersTool(db, novel),
+        GetPreviousChaptersTool(db, novel, before_chapter=target_chapter, before_sort_order=new_sort_order),
         GetCharacterProfilesTool(db, novel),
         GetNovelContextTool(db, novel),
-        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language),
+        GenerateChapterTool(db, novel, llm, word_count=word_count, language=language,
+                            before_chapter=target_chapter, before_sort_order=new_sort_order),
         AskUserTool(),
         FinishTool(),
     ]
@@ -492,7 +495,7 @@ def plan_batch_chapters(
     after_chapter: Chapter | None = None,
     language: Language = "zh",
 ) -> list[dict[str, str]]:
-    memory = NovelMemory(db, novel)
+    memory = NovelMemory(db, novel, through_chapter=after_chapter)
     context = memory.build_context(total_summary)
     existing_titles = list_existing_chapter_titles(
         db,
@@ -594,7 +597,8 @@ def run_direct_chapter_generation(
 
     system, user = build_generation_prompt(
         db, novel, chapter_summary, target_chapter,
-        fixed_title=fixed_title, word_count=word_count, language=language
+        fixed_title=fixed_title, word_count=word_count, language=language,
+        new_sort_order=new_sort_order,
     )
 
     max_tokens = calc_max_tokens_from_word_count(word_count, language=language)

@@ -1094,25 +1094,6 @@ def list_chapter_versions(
     return get_chapter_versions(db, chapter_id, limit=limit)
 
 
-@router.get("/{chapter_id}/versions/{version_id}", response_model=ChapterVersionOut)
-def get_chapter_version_detail(
-    novel_id: int,
-    chapter_id: int,
-    version_id: int,
-    user: CurrentUser,
-    db: Annotated[Session, Depends(get_db)],
-) -> ChapterVersion:
-    _get_owned_novel(db, user.id, novel_id)
-    ch = db.get(Chapter, chapter_id)
-    if ch is None or ch.novel_id != novel_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
-    
-    version = get_chapter_version(db, chapter_id, version_id)
-    if version is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
-    return version
-
-
 @router.get("/{chapter_id}/versions/compare", response_model=ChapterVersionDiffOut)
 def compare_two_versions(
     novel_id: int,
@@ -1131,6 +1112,25 @@ def compare_two_versions(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
     return ChapterVersionDiffOut(**result)
+
+
+@router.get("/{chapter_id}/versions/{version_id}", response_model=ChapterVersionOut)
+def get_chapter_version_detail(
+    novel_id: int,
+    chapter_id: int,
+    version_id: int,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ChapterVersion:
+    _get_owned_novel(db, user.id, novel_id)
+    ch = db.get(Chapter, chapter_id)
+    if ch is None or ch.novel_id != novel_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="章节不存在")
+
+    version = get_chapter_version(db, chapter_id, version_id)
+    if version is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在")
+    return version
 
 
 @router.get("/{chapter_id}/versions/{version_id}/compare-current", response_model=ChapterVersionDiffOut)
