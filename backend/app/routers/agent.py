@@ -77,7 +77,7 @@ def _get_backend(user: object | None = None, db: Session | None = None) -> str:
     agent_config = resolve_agent_llm_for_user(user, db)
     if agent_config["api_key"]:
         return "anthropic"
-    if settings.deepseek_api_key:
+    if not settings.desktop_mode and settings.deepseek_api_key:
         return "deepseek-anthropic"
     return "none"
 
@@ -89,7 +89,7 @@ def _create_orchestrator(
     language: Language,
 ) -> ClaudeOrchestrator:
     agent_config = resolve_agent_llm_for_user(user, db)
-    if not agent_config["api_key"] and not settings.deepseek_api_key:
+    if not agent_config["api_key"] and (settings.desktop_mode or not settings.deepseek_api_key):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="未配置 AI 助手的 API Key，请在 AI 设置中配置 Anthropic API Key",

@@ -115,6 +115,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _moonshot_key_from_kimi_env(self) -> Self:
+        if self.desktop_mode:
+            # Desktop has no server-provided credentials, including those loaded
+            # from a developer's .env or inherited shell environment.
+            for name, field in type(self).model_fields.items():
+                if name.endswith(("_api_key", "_base_url", "_model")):
+                    object.__setattr__(self, name, field.default)
+            return self
         if self.moonshot_api_key is None:
             k = os.getenv("KIMI_API_KEY", "").strip()
             if k:

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/favicon.png?v=2" width="160" alt="InkMind Logo"/>
+<img src="images/favicon.png?v=3" width="160" alt="InkMind Logo"/>
 
 # InkMind
 
@@ -133,6 +133,10 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 ## 快速开始
 
 ### macOS 本地桌面版
+
+桌面图标采用陶土色圆角底与象牙白钢笔尖，带透明外边缘及多尺寸 macOS 资源；维护方式见[桌面图标说明](desktop/assets/README.md)。
+
+桌面版不提供内置模型，也不使用 `.env` 或启动环境中的模型凭据。请在“AI 设置 → 自定义 LLM 管理”中添加 API Key 和服务地址，再分别为 AI 助手与正文生成选择供应商和模型；AI 助手需要 Anthropic 兼容的配置。未配置或删除配置后，对应功能保持“未配置”，不会回退到内置模型。
 
 桌面版会启动仅监听本机回环地址的 FastAPI 服务，并把数据库保存在 macOS 应用数据目录。它使用单一本地作者身份，不需要注册或登录，也不会与 Web 版同步作品。正文、设定、人物、备忘录、版本和用量记录只写入这台 Mac；配置在线模型后，AI 请求仍会发送到所选模型服务。
 

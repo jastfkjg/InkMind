@@ -7,11 +7,12 @@
   "license": "GPL-3.0",
   "main": "dist/main.js",
   "scripts": {
+    "build:icons": "node scripts/build-icons.mjs",
     "dev": "npm run build:main && concurrently -k -s first \"npm --prefix ../frontend run dev -- --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && INKMIND_FRONTEND_DEV_URL=http://127.0.0.1:5173 electron .\"",
     "build:main": "tsc -p tsconfig.json",
     "build:ui": "npm --prefix ../frontend run build",
     "build:backend": "./scripts/build-backend.sh",
-    "build": "npm run build:main && npm run build:ui",
+    "build": "npm run build:icons && npm run build:main && npm run build:ui",
     "package:mac": "npm run build && npm run build:backend && electron-builder --mac dmg zip --publish never"
   },
   "devDependencies": {
@@ -19,6 +20,7 @@
     "concurrently": "^9.2.1",
     "electron": "^41.7.1",
     "electron-builder": "^26.15.3",
+    "sharp": "^0.35.4",
     "typescript": "~5.7.2",
     "wait-on": "^8.0.4"
   },
@@ -48,7 +50,7 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "icon": "icon.png",
+      "icon": "build/icon.icns",
       "target": ["dmg", "zip"],
       "hardenedRuntime": true
     }

@@ -245,6 +245,10 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_base_url_tooltip: "留空使用默认地址。可填写代理或自建服务的地址。",
     ai_settings_model: "模型",
     ai_settings_model_placeholder: "选择模型",
+    ai_settings_not_configured: "未配置",
+    ai_settings_provider_placeholder: "选择已配置的供应商",
+    ai_settings_add_provider_hint: "请先在下方添加自定义 LLM，再选择供应商和模型。",
+    ai_settings_agent_setup_hint: "请先在下方添加 Anthropic 兼容的自定义 LLM，再为 AI 助手选择供应商和模型。",
     ai_settings_generation_model_placeholder: "如 gpt-4o-mini, deepseek-chat 等",
     ai_settings_provider: "供应商",
 
@@ -1472,6 +1476,10 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_base_url_tooltip: "Leave empty to use the default URL. You can enter a proxy or self-hosted service URL.",
     ai_settings_model: "Model",
     ai_settings_model_placeholder: "Select model",
+    ai_settings_not_configured: "Not configured",
+    ai_settings_provider_placeholder: "Select a configured provider",
+    ai_settings_add_provider_hint: "Add a custom LLM below, then select its provider and model.",
+    ai_settings_agent_setup_hint: "Add an Anthropic-compatible custom LLM below, then select its provider and model for the AI assistant.",
     ai_settings_generation_model_placeholder: "e.g. gpt-4o-mini, deepseek-chat",
     ai_settings_provider: "Provider",
 

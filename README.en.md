@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/favicon.png?v=2" width="160" alt="InkMind Logo"/>
+<img src="images/favicon.png?v=3" width="160" alt="InkMind Logo"/>
 
 # InkMind
 
@@ -133,6 +133,10 @@ Capture sizes: desktop 1440 × 900, mobile 390 × 844. See [screenshot reproduct
 ## Quick Start
 
 ### Local macOS Desktop App
+
+The desktop icon pairs a terracotta rounded tile with an ivory pen nib, transparent edges, and multiple macOS resolutions. See the [icon maintenance notes](desktop/assets/README.md).
+
+Desktop provides no built-in models and ignores model credentials from `.env` and the launch environment. Add your API key and service URL under AI Settings → Custom LLM Management, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Missing or deleted configurations stay unconfigured without falling back to built-ins.
 
 The desktop app starts a FastAPI service bound only to the loopback interface and stores its SQLite database in the macOS application data directory. It uses one automatic local author, has no registration or login flow, and does not sync writing with the Web deployment. Prose, settings, characters, memos, versions, and usage records stay on this Mac. Configured AI features still send requests to the selected model provider.
 

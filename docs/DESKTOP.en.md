@@ -22,6 +22,8 @@ In production, the FastAPI process also serves the compiled React assets. Browse
 
 ## Local Data and Network Boundary
 
+Desktop provides no built-in models and ignores model credentials from `.env` and the launch environment. Add your API key and service URL under AI Settings → Custom LLM Management, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Missing or deleted configurations stay unconfigured without falling back to built-ins.
+
 The default macOS data location is:
 
 ```text
@@ -67,6 +69,14 @@ npm run build:backend
 ```
 
 ## macOS Packaging
+
+### Icon assets
+
+The master artwork is `desktop/assets/icon-master.png`. Run `npm run build:icons` in `desktop` to generate a 1024px `icon.png` with transparent padding and a macOS `build/icon.icns` containing 16–1024px representations. Packaging runs this step automatically; electron-builder uses the ICNS. Do not copy the web favicon directly into the desktop icon: its opaque background or padding may be unsuitable for the Dock.
+
+See [assets/README.md](../desktop/assets/README.md) for the design and provenance. Rebuild and restart the app after changing the icon; replace an existing installation with the new package.
+
+### Build the installers
 
 ```bash
 cd desktop

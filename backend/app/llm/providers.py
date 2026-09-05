@@ -62,6 +62,8 @@ _PROVIDER_LABELS: dict[str, str] = {
 
 
 def list_available_providers() -> list[str]:
+    if settings.desktop_mode:
+        return []
     out: list[str] = []
     if settings.openai_api_key:
         out.append("openai")
@@ -96,6 +98,8 @@ def get_builtin_provider_info() -> list[dict]:
 
 
 def get_llm(provider: str | None, model: str | None = None) -> LLMProvider:
+    if settings.desktop_mode:
+        raise ValueError("请在 AI 设置中添加自定义 LLM，并为正文生成选择供应商和模型")
     name = (provider or settings.default_llm_provider).lower().strip()
     if name == "openai":
         if not settings.openai_api_key:
@@ -140,13 +144,20 @@ def get_llm_from_user_config(
     base_url: str | None = None,
     model: str | None = None,
 ) -> LLMProvider:
+    if not api_key.strip():
+        raise ValueError("请在 AI 设置中为自定义 LLM 配置 API Key")
     name = provider.lower().strip()
     if name == "moonshot":
         name = "kimi"
     if name == "anthropic":
+        if settings.desktop_mode:
+            base_url = base_url or "https://api.anthropic.com"
+            model = model or _PROVIDER_DEFAULTS["anthropic"]["model"]
         return AnthropicLLM(api_key=api_key, base_url=base_url, model=model)
     defaults = _PROVIDER_DEFAULTS.get(name, _PROVIDER_DEFAULTS["openai"])
     effective_base_url = base_url or defaults.get("base_url")
+    if settings.desktop_mode and not effective_base_url:
+        effective_base_url = "https://api.openai.com/v1"
     effective_model = model or defaults.get("model", "gpt-4o-mini")
     send_temperature = defaults.get("send_temperature", True)
     timeout = defaults.get("timeout", 120.0)
@@ -234,13 +245,17 @@ def resolve_agent_llm_for_user(user: object | None, db: Session | None = None) -
         if use_custom and custom_llm_id:
             from app.models import UserCustomLLM
             custom_llm = db.get(UserCustomLLM, custom_llm_id)
-            if custom_llm and custom_llm.user_id == getattr(user, "id", None):
+            if (custom_llm and custom_llm.user_id == getattr(user, "id", None)
+                    and custom_llm.api_key.strip()
+                    and (not settings.desktop_mode or custom_llm.provider == "anthropic")):
                 return {
                     "api_key": custom_llm.api_key,
-                    "base_url": custom_llm.base_url,
+                    "base_url": custom_llm.base_url or ("https://api.anthropic.com" if settings.desktop_mode else None),
                     "model": getattr(user, "agent_model", None),
                     "source": "custom",
                 }
+    if settings.desktop_mode:
+        return {"api_key": None, "base_url": None, "model": None, "source": "custom"}
     return {
         "api_key": settings.anthropic_api_key,
         "base_url": settings.anthropic_base_url,

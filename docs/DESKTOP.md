@@ -22,6 +22,8 @@ React renderer ──HTTP/SSE──> local FastAPI ──SQLAlchemy──> local
 
 ## 本地数据与网络边界
 
+桌面版不提供内置模型，也不使用 `.env` 或启动环境中的模型凭据。请在“AI 设置 → 自定义 LLM 管理”中添加 API Key 和服务地址，再分别为 AI 助手与正文生成选择供应商和模型；AI 助手需要 Anthropic 兼容的配置。未配置或删除配置后，对应功能保持“未配置”，不会回退到内置模型。
+
 macOS 默认数据目录是：
 
 ```text
@@ -67,6 +69,14 @@ npm run build:backend
 ```
 
 ## macOS 打包
+
+### 图标资源
+
+图标母版为 `desktop/assets/icon-master.png`。在 `desktop` 中运行 `npm run build:icons`，生成带透明留白的 1024px `icon.png`，并使用 macOS `iconutil` 生成包含 16–1024px 各档尺寸的 `build/icon.icns`。打包脚本会自动执行这一步，electron-builder 使用该 ICNS。不要把网页 favicon 直接复制为桌面图标，以免重新引入不透明方底或不合适的 Dock 留白。
+
+图标设计与来源见 [assets/README.md](../desktop/assets/README.md)。更换图标后需重新构建并退出、重启应用；已有安装应使用新包覆盖安装。
+
+### 构建安装包
 
 ```bash
 cd desktop
