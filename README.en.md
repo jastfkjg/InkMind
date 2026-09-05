@@ -134,6 +134,8 @@ Capture sizes: desktop 1440 × 900, mobile 390 × 844. See [screenshot reproduct
 
 ### Local macOS Desktop App
 
+**Download:** [Latest Release](https://github.com/jastfkjg/InkMind/releases/latest) · [Apple Silicon installer](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-arm64.dmg) · [Intel installer](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-x64.dmg). Fixed download links become available after the first Release is published; check its notes for signing status.
+
 The desktop icon pairs a terracotta rounded tile with an ivory pen nib, transparent edges, and multiple macOS resolutions. See the [icon maintenance notes](desktop/assets/README.md).
 
 Desktop provides no built-in models and ignores model credentials from `.env` and the launch environment. Add your API key and service URL under AI Settings → Custom LLM Management, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Missing or deleted configurations stay unconfigured without falling back to built-ins.
@@ -154,7 +156,7 @@ npm install
 npm run package:mac
 ```
 
-Artifacts are written to `desktop/release/`. PyInstaller bundles the Python runtime and backend dependencies, so installed users do not need Python. The build targets the current machine's CPU architecture. Distribution to other users requires Developer ID signing and Apple notarization.
+Artifacts are written to `desktop/release/`. PyInstaller bundles Python and the backend dependencies. Local builds target the current machine's CPU architecture. Pushing a `vX.Y.Z` tag matching `desktop/package.json` automatically builds Apple Silicon / Intel DMG and ZIP installers, adds checksums, and publishes a GitHub Release. Without signing credentials these are non-notarized early-access builds; standard trusted distribution requires Developer ID signing and Apple notarization.
 
 See the [desktop development and release guide](docs/DESKTOP.en.md) for architecture, data paths, backup, packaging checks, and troubleshooting.
 

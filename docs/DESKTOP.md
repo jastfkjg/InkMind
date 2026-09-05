@@ -94,6 +94,53 @@ desktop/release/
 
 Claude Agent SDK 包含随平台分发的执行资源，加上 Electron 和 Python 运行时后，安装包会明显大于 Web 静态资源。PyInstaller 不是跨平台编译器：Apple Silicon 构建产生 arm64 后端；Intel macOS、Windows 和 Linux 应分别在对应架构与系统构建。
 
+## GitHub Actions 自动发布
+
+流程定义：`.github/workflows/release-macos.yml`，参考 ContextCue 的标签发布方式。普通分支提交不会发布桌面版本，也不会改变现有 `main` 分支的 Web 部署流程。
+
+1. 首次发布可使用当前 `desktop/package.json` 的 `0.1.0`；后续先运行 `npm version patch --prefix desktop --no-git-tag-version`（或指定版本），提交 `desktop/package.json` 和锁文件及本次发布代码。
+2. 将提交推到远程，再推送与桌面版本严格一致的标签：
+
+   ```bash
+   git push origin HEAD
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+3. 在仓库 Actions 的 **Release macOS** 查看进度。流程分别使用 `macos-15`（arm64）和 `macos-15-intel`（x64），每台机器安装 Node 22 / Python 3.12 并原生构建后端。标签与桌面版本不符会在构建前失败。
+4. 前后端测试、应用签名校验、打包后本地 API 启动检查和 DMG/ZIP 完整性校验全部通过后，才创建草稿、上传两种架构的全部文件，再公开 Release 并标记 Latest。
+
+产物包括 `InkMind-<version>-arm64/x64.dmg`、对应 ZIP、固定名称 `InkMind-mac-arm64.dmg` / `InkMind-mac-x64.dmg`，以及 `SHA256SUMS`。README 的固定下载链接始终指向最新 Release；首次发布前链接尚不可用。当前应用不使用自动更新元数据，也不提供应用内自动安装更新。
+
+失败时可在 Actions 重新运行；发布阶段会续传已有草稿，但拒绝覆盖已公开的同名版本。版本已经公开时，应增加版本号并使用新标签。`workflow_dispatch` 支持手动输入已有标签重试；该入口需要工作流先存在于默认分支，首次在功能分支发布可直接推送标签。
+
+### 签名模式
+
+默认不需要 Apple Secrets，会生成 ad-hoc 签名、未经过 Apple 公证的早期体验包。Release 会明确说明该状态，macOS 可能阻止安装；这不等同于正式可信分发。
+
+正式发布时，在仓库 Settings → Secrets and variables → Actions 设置变量 `MACOS_SIGNING_ENABLED=true`，并添加以下 Secrets：
+
+| Secret | 用途 |
+| --- | --- |
+| `CSC_LINK` | Developer ID Application 证书的 Base64 编码 `.p12` |
+| `CSC_KEY_PASSWORD` | 证书导出密码 |
+| `APPLE_ID` | Apple 开发者账号 |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Apple 专用密码 |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+
+开启后流程会强制签名、公证并验证票据，缺少凭据或公证失败会阻止发布，不会降级为早期体验包。不要向此流程传入作品数据库、`.env` 或模型 API Key；它只使用本次运行的 `GITHUB_TOKEN` 上传 Release，以及上述可选签名凭据。
+
+本地验证发布逻辑：
+
+```bash
+node --test desktop/tests/*.test.mjs
+python3 desktop/scripts/smoke-backend.py \
+  desktop/release/mac-arm64/InkMind.app/Contents/Resources/backend/inkmind-backend \
+  desktop/release/mac-arm64/InkMind.app/Contents/Resources/frontend
+```
+
+Runner 与签名配置依据：[GitHub runner 文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)、[electron-builder v26 macOS 签名说明](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/)。
+
 ## 发布检查
 
 面向其他用户发布前至少完成以下检查：

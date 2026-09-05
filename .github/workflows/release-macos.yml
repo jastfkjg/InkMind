@@ -1,0 +1,195 @@
+name: Release macOS
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing stable tag, e.g. v0.1.0 (must match desktop/package.json)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-macos-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate tag and desktop version
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          node desktop/scripts/validate-release-tag.mjs "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build macOS (${{ matrix.arch }})
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.validate.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: ${{ matrix.arch }}
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-desktop.txt
+      - name: Verify native toolchain architecture
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+        run: |
+          node -e 'if (process.arch !== process.env.BUILD_ARCH) throw new Error("Node architecture mismatch")'
+          python -c 'import os, platform; assert platform.machine() == {"arm64": "arm64", "x64": "x86_64"}[os.environ["BUILD_ARCH"]]'
+      - name: Install JavaScript dependencies
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+      - name: Test and build shared UI and desktop resources
+        run: |
+          npm test --prefix frontend
+          node --test desktop/tests/*.test.mjs
+          npm run build --prefix desktop
+          npm run build:backend --prefix desktop
+      - name: Run backend regression tests
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite://
+        run: .venv-desktop/bin/python -m unittest discover -s tests -v
+      - name: Package early-access builds
+        if: vars.MACOS_SIGNING_ENABLED != 'true'
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          BUILD_ARCH: ${{ matrix.arch }}
+        run: |
+          npx --no-install electron-builder --mac dmg zip --"$BUILD_ARCH" --publish never \
+            -c.mac.identity=- -c.mac.hardenedRuntime=false \
+            -c.mac.preAutoEntitlements=false -c.mac.notarize=false
+      - name: Sign and notarize production builds
+        if: vars.MACOS_SIGNING_ENABLED == 'true'
+        working-directory: desktop
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for required in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!required}" ]]; then
+              echo "Missing required signing secret: $required"
+              exit 1
+            fi
+          done
+          npx --no-install electron-builder --mac dmg zip --"$BUILD_ARCH" --publish never \
+            -c.forceCodeSigning=true -c.mac.hardenedRuntime=true -c.mac.notarize=true
+      - name: Verify packaged application and local API
+        env:
+          BUILD_ARCH: ${{ matrix.arch }}
+          SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
+        run: |
+          if [[ "$BUILD_ARCH" == arm64 ]]; then app_path=desktop/release/mac-arm64/InkMind.app; else app_path=desktop/release/mac/InkMind.app; fi
+          codesign --verify --deep --strict "$app_path"
+          if [[ "$SIGNING_ENABLED" == true ]]; then
+            spctl --assess --type execute "$app_path"
+            xcrun stapler validate "$app_path"
+          fi
+          python desktop/scripts/smoke-backend.py "$app_path/Contents/Resources/backend/inkmind-backend" "$app_path/Contents/Resources/frontend"
+          for archive in desktop/release/InkMind-*.zip; do unzip -tq "$archive"; done
+          for archive in desktop/release/InkMind-*.dmg; do hdiutil verify "$archive"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkmind-macos-${{ matrix.arch }}
+          path: |
+            desktop/release/InkMind-*.dmg
+            desktop/release/InkMind-*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish complete GitHub Release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.validate.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: inkmind-macos-*
+          path: release-input
+      - name: Prepare both architectures and checksums
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: node desktop/scripts/prepare-release.mjs release-input release-assets "${RELEASE_TAG#v}"
+      - name: Publish Release with installer downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          SIGNING_ENABLED: ${{ vars.MACOS_SIGNING_ENABLED }}
+        run: |
+          if [[ "$SIGNING_ENABLED" == true ]]; then
+            echo 'Developer ID signed and Apple notarized macOS build.' > release-notes.md
+          else
+            echo 'Early-access macOS build: ad-hoc signed, not Apple notarized. macOS may block this download; a Developer ID signed and notarized release is required for standard trusted distribution.' > release-notes.md
+          fi
+          cat >> release-notes.md <<'NOTES'
+
+          **Download:** Apple Silicon (M1/M2/M3/M4 or newer): `InkMind-mac-arm64.dmg`; Intel: `InkMind-mac-x64.dmg`. ZIP archives and SHA256SUMS are also included.
+
+          **下载：** Apple Silicon 选择 `InkMind-mac-arm64.dmg`，Intel 选择 `InkMind-mac-x64.dmg`。退出 InkMind 后，将应用安装到 Applications；升级时替换应用即可，本地作品数据保存在应用之外。
+
+          InkMind stores writing locally and does not sync with the Web deployment. AI features require your own model configuration. No automatic in-app updating is included.
+          NOTES
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > existing-release.json 2>/dev/null; then
+            node -e 'if (!require("./existing-release.json").isDraft) throw new Error("Refusing to overwrite an already published release")'
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "InkMind $RELEASE_TAG — macOS" --notes-file release-notes.md --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -134,6 +134,8 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 
 ### macOS 本地桌面版
 
+**下载：** [最新 Release](https://github.com/jastfkjg/InkMind/releases/latest) · [Apple Silicon 安装包](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-arm64.dmg) · [Intel 安装包](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-x64.dmg)。固定下载链接在首次 Release 发布后生效；签名状态请查看对应发布说明。
+
 桌面图标采用陶土色圆角底与象牙白钢笔尖，带透明外边缘及多尺寸 macOS 资源；维护方式见[桌面图标说明](desktop/assets/README.md)。
 
 桌面版不提供内置模型，也不使用 `.env` 或启动环境中的模型凭据。请在“AI 设置 → 自定义 LLM 管理”中添加 API Key 和服务地址，再分别为 AI 助手与正文生成选择供应商和模型；AI 助手需要 Anthropic 兼容的配置。未配置或删除配置后，对应功能保持“未配置”，不会回退到内置模型。
@@ -154,7 +156,7 @@ npm install
 npm run package:mac
 ```
 
-安装产物写入 `desktop/release/`。Python 后端由 PyInstaller 一并打包，使用者不需要另行安装 Python。当前脚本构建运行机器对应的 CPU 架构；正式发布给其他用户前还需要配置 Developer ID 签名与 Apple 公证。
+安装产物写入 `desktop/release/`。Python 后端由 PyInstaller 一并打包，使用者不需要另行安装 Python。本地脚本构建运行机器对应的 CPU 架构；推送与 `desktop/package.json` 版本一致的 `vX.Y.Z` 标签后，GitHub Actions 自动构建 Apple Silicon / Intel 的 DMG、ZIP 和校验文件，并发布 Release。未配置发布证书时为未公证的早期体验包；标准公开分发需要 Developer ID 签名与 Apple 公证。
 
 桌面架构、数据路径、备份方式、发布检查和故障排查见[桌面版开发与发布指南](docs/DESKTOP.md)。
 

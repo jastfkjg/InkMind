@@ -94,6 +94,53 @@ desktop/release/
 
 Claude Agent SDK includes platform runtime resources. Together with Electron and Python, this makes the installer substantially larger than the Web assets. PyInstaller is platform-specific: an Apple Silicon build contains an arm64 backend. Build Intel macOS, Windows, and Linux releases on the matching architecture and operating system.
 
+## Automated GitHub Releases
+
+`.github/workflows/release-macos.yml` follows ContextCue's tag-based release flow. Ordinary branch pushes do not publish desktop releases; the existing Web deployment on `main` is unchanged.
+
+1. Use the current desktop version `0.1.0` for the first release. For subsequent versions, run `npm version patch --prefix desktop --no-git-tag-version` (or specify a version), then commit the desktop manifest, lockfile, and release changes.
+2. Push the commit and a stable tag that exactly matches `desktop/package.json`:
+
+   ```bash
+   git push origin HEAD
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+3. Watch **Release macOS** under repository Actions. `macos-15` builds arm64 and `macos-15-intel` builds x64, each with native Node 22 / Python 3.12. Tag/version mismatches fail before packaging.
+4. Both architectures must pass frontend/backend tests, signature verification, a bundled API startup check, and DMG/ZIP integrity checks. Only then does the workflow create a draft, upload all assets, publish it, and mark it Latest.
+
+Assets include versioned DMG/ZIP files for both architectures, stable `InkMind-mac-arm64.dmg` / `InkMind-mac-x64.dmg` aliases, and `SHA256SUMS`. The README download URLs follow the latest Release and become available after the first publication. In-app automatic installation and updater metadata are not included.
+
+Retry failures with Actions' rerun control. Publication resumes existing drafts but refuses to overwrite a published version; increment the version and use a new tag instead. Manual `workflow_dispatch` accepts an existing tag and requires the workflow to be on the default branch. Tag pushes also work for the first release from a feature branch.
+
+### Signing modes
+
+The default creates ad-hoc signed, non-notarized early-access builds without Apple Secrets. Release notes identify this status; macOS may block installation. This is not standard trusted distribution.
+
+For production, set the repository Actions variable `MACOS_SIGNING_ENABLED=true` and add these Secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `CSC_LINK` | Base64-encoded Developer ID Application `.p12` certificate |
+| `CSC_KEY_PASSWORD` | Certificate export password |
+| `APPLE_ID` | Apple developer account |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Apple app-specific password |
+| `APPLE_TEAM_ID` | Apple Developer Team ID |
+
+This mode requires signing, notarization, and ticket verification. Missing credentials or notarization failures stop publication rather than falling back. Do not provide writing databases, `.env`, or model API keys to the release workflow. It uses the run's `GITHUB_TOKEN` for release uploads and the optional signing credentials above.
+
+Local release checks:
+
+```bash
+node --test desktop/tests/*.test.mjs
+python3 desktop/scripts/smoke-backend.py \
+  desktop/release/mac-arm64/InkMind.app/Contents/Resources/backend/inkmind-backend \
+  desktop/release/mac-arm64/InkMind.app/Contents/Resources/frontend
+```
+
+References: [GitHub runner documentation](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), [electron-builder v26 macOS signing](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/).
+
 ## Release Checklist
 
 Before distributing a release:
