@@ -12,7 +12,7 @@
 
 **A low-distraction workspace for long-form fiction.** Keep your prose at the center, with novel settings, characters, memos, AI assistance, version history, and export close at hand.
 
-[Features](#features) · [Preview](#preview) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Development Guide](#development-guide)
+[Features](#features) · [Preview](#preview) · [Desktop](#local-macos-desktop-app) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Development Guide](#development-guide)
 
 🌐 Language: [中文](README.md)
 
@@ -127,9 +127,32 @@ Capture sizes: desktop 1440 × 900, mobile 390 × 844. See [screenshot reproduct
 | Authentication | JWT · passlib/bcrypt |
 | AI Integration | OpenAI SDK · Anthropic SDK · OpenAI-compatible APIs |
 | Observability | OpenTelemetry · Prometheus metrics |
-| Deployment | Docker · Docker Compose · Nginx |
+| Desktop | Electron · electron-builder · PyInstaller |
+| Web deployment | Docker · Docker Compose · Nginx |
 
 ## Quick Start
+
+### Local macOS Desktop App
+
+The desktop app starts a FastAPI service bound only to the loopback interface and stores its SQLite database in the macOS application data directory. It uses one automatic local author, has no registration or login flow, and does not sync writing with the Web deployment. Prose, settings, characters, memos, versions, and usage records stay on this Mac. Configured AI features still send requests to the selected model provider.
+
+Start the desktop development environment from the repository root:
+
+```bash
+./start-desktop.sh
+```
+
+Build installable DMG and ZIP artifacts:
+
+```bash
+cd desktop
+npm install
+npm run package:mac
+```
+
+Artifacts are written to `desktop/release/`. PyInstaller bundles the Python runtime and backend dependencies, so installed users do not need Python. The build targets the current machine's CPU architecture. Distribution to other users requires Developer ID signing and Apple notarization.
+
+See the [desktop development and release guide](docs/DESKTOP.en.md) for architecture, data paths, backup, packaging checks, and troubleshooting.
 
 ### Requirements
 
@@ -361,8 +384,16 @@ InkMind/
 │   ├── tests/                   # Save regression tests and local UI fixture
 │   ├── package.json
 │   └── vite.config.ts
+├── desktop/                     # Electron main process, preload, and macOS packaging
+│   ├── main.ts                  # Local API lifecycle, window, and session bridge
+│   ├── preload.ts               # Restricted desktop API
+│   └── scripts/                 # PyInstaller backend build
+├── docs/
+│   ├── DESKTOP.md               # Chinese desktop guide
+│   └── DESKTOP.en.md            # Desktop architecture, data, and release guide
 ├── images/                      # README screenshots
 ├── docker-compose.yml
+├── start-desktop.sh             # Desktop development entry point
 ├── start-dev.sh
 ├── DESIGN.md                    # Visual system and UI guidelines
 ├── AGENTS.md                    # Collaboration and engineering conventions
@@ -390,6 +421,8 @@ InkMind/
 ### Frontend API calls return 404 or login does not work
 
 Make sure the backend is running at `VITE_BACKEND_HOST:VITE_BACKEND_PORT`, which defaults to `127.0.0.1:8000`. In development, the frontend calls `/api/*`, and Vite proxies those requests to the backend.
+
+The desktop app does not show a login page. If it cannot enter the novel library, quit InkMind completely and inspect `~/Library/Application Support/inkmind-desktop/logs/backend.log`. Do not start the backend executable inside the installed app manually.
 
 ### AI features say no model is configured
 

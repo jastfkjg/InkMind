@@ -11,11 +11,20 @@ import type {
   SaveChapterResponse,
 } from "@/types/workflow";
 
+const desktopApiBaseUrl = window.inkMindDesktop?.apiBaseUrl?.replace(/\/$/, "");
+
 const baseURL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+  desktopApiBaseUrl || import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
   (import.meta.env.DEV ? "/api" : "http://127.0.0.1:8000");
 
 export const api = axios.create({ baseURL });
+
+export const isDesktopApp = window.inkMindDesktop?.isDesktop === true;
+
+export async function getDesktopSession() {
+  if (!window.inkMindDesktop) throw new Error("桌面运行环境不可用");
+  return window.inkMindDesktop.getSession();
+}
 
 /** AI 评估结果（与后端 ChapterEvaluateOut 一致） */
 export type ChapterEvaluateResult = {

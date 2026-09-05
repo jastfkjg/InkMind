@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiErrorMessage, fetchLlmProviders } from "@/api/client";
+import { apiErrorMessage, fetchLlmProviders, isDesktopApp } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
 import type { LlmProvidersResponse } from "@/types";
@@ -71,7 +71,9 @@ export default function UserMenu() {
       </button>
       {open ? (
         <div className="user-menu-dropdown card" role="menu">
-          <div className="user-menu-email muted">{user?.email}</div>
+          <div className="user-menu-email muted">
+            {isDesktopApp ? t("usermenu_local_data") : user?.email}
+          </div>
 
           {hasCustomAgent && (
             <div style={{ marginTop: "0.5rem", fontSize: "0.85rem", color: "var(--muted)" }}>
@@ -133,9 +135,11 @@ export default function UserMenu() {
           >
             {t("usermenu_token_usage")}
           </Link>
-          <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.75rem" }} onClick={logout}>
-            {t("usermenu_logout")}
-          </button>
+          {!isDesktopApp ? (
+            <button type="button" className="btn btn-ghost" style={{ width: "100%", marginTop: "0.75rem" }} onClick={logout}>
+              {t("usermenu_logout")}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

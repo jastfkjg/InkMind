@@ -12,7 +12,7 @@
 
 **为长篇创作而生的低干扰写作工作台。** 以正文为中心，将作品设定、人物、备忘录、AI 辅助、历史版本和导出放在触手可及的位置。
 
-[功能概览](#功能概览) · [界面预览](#界面预览) · [快速开始](#快速开始) · [配置说明](#配置说明) · [开发指南](#开发指南)
+[功能概览](#功能概览) · [界面预览](#界面预览) · [桌面版](#macos-本地桌面版) · [快速开始](#快速开始) · [配置说明](#配置说明) · [开发指南](#开发指南)
 
 🌐 Language: [English](README.en.md)
 
@@ -127,9 +127,32 @@ AI 助手是 InkMind 的主要智能写作入口。它以悬浮面板的形式�
 | 认证 | JWT · passlib/bcrypt |
 | AI 接入 | OpenAI SDK · Anthropic SDK · OpenAI 兼容接口 |
 | 可观测性 | OpenTelemetry · Prometheus 指标 |
-| 部署 | Docker · Docker Compose · Nginx |
+| 桌面端 | Electron · electron-builder · PyInstaller |
+| Web 部署 | Docker · Docker Compose · Nginx |
 
 ## 快速开始
+
+### macOS 本地桌面版
+
+桌面版会启动仅监听本机回环地址的 FastAPI 服务，并把数据库保存在 macOS 应用数据目录。它使用单一本地作者身份，不需要注册或登录，也不会与 Web 版同步作品。正文、设定、人物、备忘录、版本和用量记录只写入这台 Mac；配置在线模型后，AI 请求仍会发送到所选模型服务。
+
+首次启动开发版会安装桌面和 Python 依赖：
+
+```bash
+./start-desktop.sh
+```
+
+生成可安装的 DMG 和 ZIP：
+
+```bash
+cd desktop
+npm install
+npm run package:mac
+```
+
+安装产物写入 `desktop/release/`。Python 后端由 PyInstaller 一并打包，使用者不需要另行安装 Python。当前脚本构建运行机器对应的 CPU 架构；正式发布给其他用户前还需要配置 Developer ID 签名与 Apple 公证。
+
+桌面架构、数据路径、备份方式、发布检查和故障排查见[桌面版开发与发布指南](docs/DESKTOP.md)。
 
 ### 环境要求
 
@@ -361,8 +384,16 @@ InkMind/
 │   ├── tests/                   # 保存回归测试与本地 UI 演示服务
 │   ├── package.json
 │   └── vite.config.ts
+├── desktop/                     # Electron 主进程、preload 与 macOS 打包配置
+│   ├── main.ts                  # 本地后端生命周期、窗口和会话桥接
+│   ├── preload.ts               # 受限桌面 API
+│   └── scripts/                 # PyInstaller 后端构建脚本
+├── docs/
+│   ├── DESKTOP.md               # 桌面架构、数据与发布指南
+│   └── DESKTOP.en.md            # 英文桌面指南
 ├── images/                      # README 截图
 ├── docker-compose.yml
+├── start-desktop.sh             # 桌面开发环境入口
 ├── start-dev.sh
 ├── DESIGN.md                    # 视觉系统与 UI 规范
 ├── AGENTS.md                    # 协作与工程约定
@@ -390,6 +421,8 @@ InkMind/
 ### 前端接口 404 或无法登录
 
 确认后端已经启动在 `VITE_BACKEND_HOST:VITE_BACKEND_PORT`，默认是 `127.0.0.1:8000`。开发环境下前端会请求 `/api/*`，再由 Vite 代理到后端。
+
+桌面版不会显示登录页。若桌面窗口无法进入作品库，请先完全退出 InkMind，再查看 `~/Library/Application Support/inkmind-desktop/logs/backend.log`；不要同时手动启动安装包内的后端程序。
 
 ### AI 功能提示未配置模型
 

@@ -83,6 +83,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Desktop runtime. These values are supplied by the Electron main process and
+    # stay disabled for the normal web deployment.
+    desktop_mode: bool = False
+    desktop_session_token: str | None = None
+    desktop_frontend_dir: str | None = None
+
     # OpenTelemetry：AI 相关 Span + FastAPI/HTTPX 自动插桩（见 app.observability.otel_setup）
     otel_enabled: bool = Field(default=False, validation_alias="OTEL_ENABLED")
     otel_service_name: str = Field(default="inkmind-api", validation_alias="OTEL_SERVICE_NAME")

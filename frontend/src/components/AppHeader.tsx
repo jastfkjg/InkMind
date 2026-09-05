@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
 import { useNavigation } from "@/context/NavigationContext";
+import { isDesktopApp } from "@/api/client";
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -136,14 +137,16 @@ export default function AppHeader({
         disabled: disabledMenuItem === "tasks",
         onClick: disabledMenuItem === "tasks" ? undefined : () => nav("/tasks"),
       },
-      { key: "divider", type: "divider" as const },
-      {
-        key: "logout",
-        icon: <LogoutOutlined />,
-        label: t("nav_logout"),
-        danger: true,
-        onClick: handleLogout,
-      },
+      ...(!isDesktopApp ? [
+        { key: "divider", type: "divider" as const },
+        {
+          key: "logout",
+          icon: <LogoutOutlined />,
+          label: t("nav_logout"),
+          danger: true,
+          onClick: handleLogout,
+        },
+      ] : []),
     ];
   }, [user?.is_admin, disabledMenuItem, t, nav, onLogout, logout, beforeLeave]);
 
@@ -232,7 +235,7 @@ export default function AppHeader({
               >
                 {user?.display_name || user?.email}
               </Text>
-              {user?.display_name && (
+              {user?.display_name && !isDesktopApp && (
                 <Text
                   type="secondary"
                   style={{

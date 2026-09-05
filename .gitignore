@@ -23,6 +23,11 @@ htmlcov/
 # Node / frontend
 frontend/node_modules/
 frontend/dist/
+desktop/node_modules/
+desktop/dist/
+desktop/release/
+backend/.venv-desktop/
+backend/inkmind-backend.spec
 *.tsbuildinfo
 *.local
 
