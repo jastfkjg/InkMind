@@ -1,35 +1,16 @@
 import { useEffect, useState } from "react";
 import { useOutletContext, useParams } from "react-router-dom";
-import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Spin,
-  Alert,
-  Typography,
-  Space,
-  Tooltip as AntdTooltip,
-  message,
-  Row,
-  Col,
-} from "antd";
-import {
-  SaveOutlined,
-  BookOutlined,
-  QuestionCircleOutlined,
-  BulbOutlined,
-  SettingOutlined,
-  EditOutlined,
-} from "@ant-design/icons";
+import { Form, Input, Button, Alert, App as AntApp } from "antd";
+import { SaveOutlined } from "@ant-design/icons";
 import { apiErrorMessage, updateNovel } from "@/api/client";
 import type { Novel } from "@/types";
 import { useI18n } from "@/i18n";
+import { FormSection, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
 type Ctx = { novel: Novel | null; setNovel: React.Dispatch<React.SetStateAction<Novel | null>> };
-const { Title, Text } = Typography;
 const { TextArea } = Input;
 export default function NovelSettings() {
   const { t } = useI18n();
+  const { message: messageApi } = AntApp.useApp();
   const { novelId } = useParams();
   const id = Number(novelId);
   const { novel, setNovel } = useOutletContext<Ctx>();
@@ -63,7 +44,7 @@ export default function NovelSettings() {
         writing_style: values.writingStyle || "",
       });
       setNovel(n);
-      message.success(t("settings_success"));
+      messageApi.success(t("settings_success"));
       setSuccessMsg(t("settings_success"));
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (e) {
@@ -72,248 +53,38 @@ export default function NovelSettings() {
       setSaving(false);
     }
   };
-  if (!novel) {
-    return (
-      <div
-        style={{
-          padding: "2rem",
-          maxWidth: 900,
-          margin: "0 auto",
-        }}
-      >
-        <Card
-          style={{
-            borderRadius: 16,
-            border: "none",
-            boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "4rem 2rem",
-            }}
-          >
-            <Spin size="large" />
-            <Text
-              type="secondary"
-              style={{ marginLeft: "1rem", fontSize: "1rem" }}
-            >
-              {t("loading_novel_info")}
-            </Text>
-          </div>
-        </Card>
-      </div>
-    );
-  }
   return (
-    <div
-      style={{
-        padding: "1rem",
-        maxWidth: 900,
-        margin: "0 auto",
-      }}
-    >
-      <Card
-        style={{
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-        }}
-        title={
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <SettingOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-              }}
-            >
-              {t("settings_title")}
-            </Title>
+    <ManagementPage title={t("settings_title")} description={t("manage_novel_basic_info")}>
+      {successMsg && <Alert title={successMsg} type="success" showIcon role="status" />}
+      {errorMsg && <Alert title={t("save_error_title")} description={errorMsg} type="error" showIcon />}
+      {!novel && <ManagementLoading label={t("loading_novel_info")} />}
+      <Form hidden={!novel} form={form} name="novelSettings" onFinish={onFinish} layout="vertical"
+        className="novel-form-surface" initialValues={{ title: "", background: "", genre: "", writingStyle: "" }}>
+        <FormSection title={t("settings_general")} description={t("management_basic_hint")}>
+          <div className="novel-form-grid">
+            <Form.Item name="title" label={t("novel_title")} rules={[{ required: true, message: t("please_enter_novel_title") }]}>
+              <Input placeholder={t("enter_novel_title_placeholder")} />
+            </Form.Item>
+            <Form.Item name="genre" label={t("novel_genre")} tooltip={t("genre_tooltip")}>
+              <Input placeholder={t("genre_placeholder")} />
+            </Form.Item>
           </div>
-        }
-        extra={
-          <Text type="secondary">{t("manage_novel_basic_info")}</Text>
-        }
-      >
-        {successMsg && (
-          <Alert
-            message={t("save_success_title")}
-            description={successMsg}
-            type="success"
-            showIcon
-            style={{ marginBottom: "1.5rem" }}
-          />
-        )}
-        {errorMsg && (
-          <Alert
-            message={t("save_error_title")}
-            description={errorMsg}
-            type="error"
-            showIcon
-            style={{ marginBottom: "1.5rem" }}
-          />
-        )}
-        <Form
-          form={form}
-          name="novelSettings"
-          onFinish={onFinish}
-          layout="vertical"
-          initialValues={{
-            title: "",
-            background: "",
-            genre: "",
-            writingStyle: "",
-          }}
-        >
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <BookOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("settings_general")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Row gutter={24}>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="title"
-                  label={
-                    <Space>
-                      <span>{t("novel_title")}</span>
-                      <span style={{ color: "var(--error)" }}>*</span>
-                    </Space>
-                  }
-                  rules={[{ required: true, message: t("please_enter_novel_title") }]}
-                >
-                  <Input
-                    placeholder={t("enter_novel_title_placeholder")}
-                    size="large"
-                    prefix={<BookOutlined style={{ color: "var(--muted)" }} />}
-                    style={{ height: 44 }}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item
-                  name="genre"
-                  label={
-                    <Space>
-                      <span>{t("novel_genre")}</span>
-                      <AntdTooltip title={t("genre_tooltip")}>
-                        <QuestionCircleOutlined
-                          style={{ color: "var(--muted)", cursor: "help" }}
-                        />
-                      </AntdTooltip>
-                    </Space>
-                  }
-                >
-                  <Input
-                    placeholder={t("genre_placeholder")}
-                    size="large"
-                    style={{ height: 44 }}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Card>
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <EditOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("writing_style_and_background")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Form.Item
-              name="writingStyle"
-              label={
-                <Space>
-                  <span>{t("writing_style")}</span>
-                  <AntdTooltip title={t("writing_style_tooltip")}>
-                    <QuestionCircleOutlined
-                      style={{ color: "var(--muted)", cursor: "help" }}
-                    />
-                  </AntdTooltip>
-                </Space>
-              }
-            >
-              <TextArea
-                rows={2}
-                placeholder={t("writing_style_placeholder")}
-                style={{
-                  minHeight: 60,
-                  lineHeight: 1.8,
-                }}
-              />
-            </Form.Item>
-            <Form.Item
-              name="background"
-              label={
-                <Space>
-                  <span>{t("background_setting")}</span>
-                  <AntdTooltip title={t("background_tooltip")}>
-                    <QuestionCircleOutlined
-                      style={{ color: "var(--muted)", cursor: "help" }}
-                    />
-                  </AntdTooltip>
-                </Space>
-              }
-            >
-              <TextArea
-                rows={3}
-                placeholder={t("background_placeholder")}
-                style={{
-                  minHeight: 80,
-                  lineHeight: 1.8,
-                }}
-              />
-            </Form.Item>
-          </Card>
-          <Alert
-            message={t("tip_title")}
-            description={t("tip_description")}
-            type="info"
-            showIcon
-            icon={<BulbOutlined />}
-            style={{ marginBottom: "1.5rem" }}
-          />
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              icon={<SaveOutlined />}
-              loading={saving}
-              size="large"
-              style={{
-                height: 44,
-                fontSize: "1rem",
-                fontWeight: 600,
-                paddingLeft: 32,
-                paddingRight: 32,
-              }}
-            >
-              {t("settings_save")}
-            </Button>
+        </FormSection>
+        <FormSection title={t("writing_style_and_background")} description={t("management_world_hint")}>
+          <Form.Item name="writingStyle" label={t("writing_style")} tooltip={t("writing_style_tooltip")}>
+            <TextArea rows={3} placeholder={t("writing_style_placeholder")} />
           </Form.Item>
-        </Form>
-      </Card>
-    </div>
+          <Form.Item name="background" label={t("background_setting")} tooltip={t("background_tooltip")}>
+            <TextArea rows={5} placeholder={t("background_placeholder")} />
+          </Form.Item>
+        </FormSection>
+        <footer className="novel-form-footer">
+          <p>{t("management_settings_hint")}</p>
+          <div className="novel-form-footer__actions">
+            <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>{t("settings_save")}</Button>
+          </div>
+        </footer>
+      </Form>
+    </ManagementPage>
   );
 }

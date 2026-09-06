@@ -1,5 +1,5 @@
 import axios, { AxiosError } from "axios";
-import type { BackgroundTask, Chapter, ChapterVersion, ChapterVersionDiff, Character, CreateBatchTaskRequest, CreateSingleTaskRequest, CustomLlmInfo, LlmProvidersResponse, LlmUsageSummary, Memo, Novel, TaskProgress, User } from "@/types";
+import type { BackgroundTask, Chapter, ChapterVersion, ChapterVersionDiff, Character, CreateBatchTaskRequest, CreateSingleTaskRequest, CustomLlmInfo, LlmProvidersResponse, LlmUsageSummary, Memo, Novel, NovelListItem, TaskProgress, User } from "@/types";
 import type {
   WorkflowProgress,
   CreateWorkflowRequest,
@@ -245,11 +245,11 @@ export async function patchAuthMe(payload: {
 }
 
 export async function fetchNovels() {
-  const { data } = await api.get<Novel[]>("/novels");
+  const { data } = await api.get<NovelListItem[]>("/novels");
   return data;
 }
 
-export async function createNovel(payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style">>) {
+export async function createNovel(payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style">> & { create_first_chapter?: boolean }) {
   const { data } = await api.post<Novel>("/novels", payload);
   return data;
 }

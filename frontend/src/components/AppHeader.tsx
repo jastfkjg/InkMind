@@ -223,32 +223,34 @@ export default function AppHeader({
             >
               {user?.display_name?.charAt(0) || user?.email?.charAt(0)}
             </Avatar>
-            <span className="app-header__user-details" style={{ lineHeight: 1.2 }}>
-              <Text
-                strong
-                style={{
-                  display: "block",
-                  color: colors.textColor,
-                  fontSize: "0.9rem",
-                  transition: "color 0.3s ease",
-                }}
-              >
-                {user?.display_name || user?.email}
-              </Text>
-              {user?.display_name && !isDesktopApp && (
+            {!isDesktopApp && (
+              <span className="app-header__user-details" style={{ lineHeight: 1.2 }}>
                 <Text
-                  type="secondary"
+                  strong
                   style={{
                     display: "block",
-                    fontSize: "0.75rem",
-                    color: colors.secondaryTextColor,
+                    color: colors.textColor,
+                    fontSize: "0.9rem",
                     transition: "color 0.3s ease",
                   }}
                 >
-                  {user.email}
+                  {user?.display_name || user?.email}
                 </Text>
-              )}
-            </span>
+                {user?.display_name && (
+                  <Text
+                    type="secondary"
+                    style={{
+                      display: "block",
+                      fontSize: "0.75rem",
+                      color: colors.secondaryTextColor,
+                      transition: "color 0.3s ease",
+                    }}
+                  >
+                    {user.email}
+                  </Text>
+                )}
+              </span>
+            )}
           </button>
         </Dropdown>
       </Space>

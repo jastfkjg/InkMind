@@ -15,6 +15,7 @@ class NovelCreate(BaseModel):
     background: str = ""
     genre: str = Field(default="", max_length=128)
     writing_style: str = ""
+    create_first_chapter: bool = False
 
 
 class NovelUpdate(BaseModel):
@@ -38,4 +39,16 @@ class NovelOut(BaseModel):
 
     @field_serializer("created_at", "updated_at")
     def serialize_dt(self, v: datetime) -> str:
+        return _utc_dt(v).isoformat()
+
+
+class NovelListResponse(NovelOut):
+    chapter_count: int = 0
+    total_words: int = 0
+    last_chapter_id: int | None = None
+    last_chapter_title: str | None = None
+    last_edited_at: datetime
+
+    @field_serializer("last_edited_at")
+    def serialize_last_edited(self, v: datetime) -> str:
         return _utc_dt(v).isoformat()

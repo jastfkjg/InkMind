@@ -124,7 +124,7 @@ export function readStoredLineWidth(): LineWidthId {
   } catch {
     /* ignore */
   }
-  return "full";
+  return "lg";
 }
 
 export function readStoredFocusMode(): boolean {

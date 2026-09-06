@@ -68,6 +68,14 @@ export type Novel = {
   updated_at: string;
 };
 
+export type NovelListItem = Novel & {
+  chapter_count: number;
+  total_words: number;
+  last_chapter_id: number | null;
+  last_chapter_title: string | null;
+  last_edited_at: string;
+};
+
 export type Chapter = {
   id: number;
   novel_id: number;

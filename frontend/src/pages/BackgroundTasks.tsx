@@ -8,7 +8,6 @@ import {
   Typography,
   Spin,
   Alert,
-  Statistic,
   Row,
   Col,
   Tag,
@@ -87,16 +86,6 @@ export default function BackgroundTasksPage() {
       append_chapter: "tasks_type_append",
     };
     return map[type] ? t(map[type]) : type;
-  };
-
-  const getTaskTypeColor = (type: string) => {
-    const map: Record<string, string> = {
-      single_chapter: "blue",
-      batch_chapters: "cyan",
-      rewrite_chapter: "orange",
-      append_chapter: "green",
-    };
-    return map[type] || "default";
   };
 
   const translateProgressMessage = (msg: string | null): string => {
@@ -210,13 +199,16 @@ export default function BackgroundTasksPage() {
 
   const columns = [
     {
-      title: t("tasks_table_type"),
+      title: t("tasks_table_task"),
       dataIndex: "task_type" as const,
       key: "task_type",
-      render: (type: string) => (
-        <Tag color={getTaskTypeColor(type)}>{getTaskTypeLabel(type)}</Tag>
+      render: (type: string, record: TaskWithProgress) => (
+        <div className="task-identity">
+          <Text ellipsis title={record.title || `#${record.id}`}>{record.title || `#${record.id}`}</Text>
+          <Text type="secondary">{getTaskTypeLabel(type)}</Text>
+        </div>
       ),
-      width: 120,
+      width: 180,
     },
     {
       title: t("tasks_table_status"),
@@ -336,7 +328,7 @@ export default function BackgroundTasksPage() {
   ];
 
   return (
-    <Layout
+    <Layout className="management-page"
       style={{
         minHeight: "100vh",
         background: bgColor,
@@ -395,96 +387,10 @@ export default function BackgroundTasksPage() {
           />
         )}
 
-        <Row gutter={[24, 24]} style={{ marginBottom: "1.5rem" }}>
-          <Col xs={24} sm={6}>
-            <Card
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: colors.isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                background: cardBg,
-                transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-              }}
-            >
-              <Statistic
-                title={
-                  <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    {t("tasks_stat_running")}
-                  </Text>
-                }
-                value={runningCount}
-                valueStyle={{ color: "#1677ff", fontFamily: "ui-monospace, monospace" }}
-                prefix={<PlayCircleOutlined spin />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={6}>
-            <Card
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: colors.isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                background: cardBg,
-                transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-              }}
-            >
-              <Statistic
-                title={
-                  <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    {t("tasks_stat_completed")}
-                  </Text>
-                }
-                value={completedCount}
-                valueStyle={{ color: "#52c41a", fontFamily: "ui-monospace, monospace" }}
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={6}>
-            <Card
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: colors.isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                background: cardBg,
-                transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-              }}
-            >
-              <Statistic
-                title={
-                  <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    {t("tasks_stat_failed")}
-                  </Text>
-                }
-                value={failedCount}
-                valueStyle={{ color: "#ff4d4f", fontFamily: "ui-monospace, monospace" }}
-                prefix={<CloseCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={6}>
-            <Card
-              style={{
-                borderRadius: 16,
-                border: "none",
-                boxShadow: colors.isDark ? "0 4px 6px rgba(0, 0, 0, 0.3)" : "0 4px 6px rgba(28, 25, 23, 0.06)",
-                background: cardBg,
-                transition: "background-color 0.3s ease, box-shadow 0.3s ease",
-              }}
-            >
-              <Statistic
-                title={
-                  <Text type="secondary" style={{ fontSize: "0.9rem", color: secondaryTextColor }}>
-                    {t("tasks_stat_total")}
-                  </Text>
-                }
-                value={tasks.length}
-                valueStyle={{ color: primaryColor, fontFamily: "ui-monospace, monospace" }}
-                prefix={<HistoryOutlined />}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <div className="tasks-summary" aria-label={t("tasks_summary")}>
+          {[["tasks_stat_running", runningCount], ["tasks_stat_completed", completedCount], ["tasks_stat_failed", failedCount], ["tasks_stat_total", tasks.length]].map(([label, value]) => <div key={label}><span>{t(String(label))}</span><strong>{value}</strong></div>)}
+        </div>
+
 
         <Card
           style={{
@@ -536,7 +442,10 @@ export default function BackgroundTasksPage() {
             ) : (
               <Table
                 columns={columns}
-                dataSource={tasks}
+                dataSource={[...tasks].sort((a, b) => {
+                  const priority = { running: 0, pending: 1, paused: 2, failed: 3, completed: 4, cancelled: 5 };
+                  return priority[a.status] - priority[b.status] || Date.parse(b.created_at) - Date.parse(a.created_at);
+                })}
                 rowKey="id"
                 pagination={{
                   pageSize: 20,

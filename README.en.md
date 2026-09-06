@@ -22,65 +22,40 @@
 
 ## Features
 
-InkMind is designed for long-form fiction, web novels, and story-driven writing. Its core goal is to keep settings, prose, AI assistance, and confirmation flows in one low-distraction writing experience.
+### Focused Writing
 
-### A Writing-First Workflow
+- **Novels and chapters**: search by title or genre, sort by recent edits, and return to where you left off.
+- **A comfortable editor**: chapter search, adjustable typography, and light and dark themes. Focus mode hides navigation and AI tools; press `Esc` to return.
+- **Autosave and version history**: track save status, recover local drafts, and review or restore earlier chapter versions. See [Saving and recovery](#saving-and-recovery).
+- **Characters and memos**: organize character profiles, worldbuilding, foreshadowing, and ideas alongside your prose.
+- **Export**: export completed chapters for backup, review, or publishing.
 
-1. **Pick up where you left off** — search novels by title or genre, sort by recent edits, and continue writing with one click.
-2. **Write with fewer distractions** — search chapters, adjust typography, and enter focus mode to hide global navigation and AI controls. Press `Esc` to return.
-3. **Know your save state** — autosave shows pending, saving, saved, or retry states. In-app navigation and logout wait for pending edits to save.
-4. **Bring in AI when needed** — open generation, rewriting, continuation, checks, or the assistant from the editor. Tool panels and the assistant minimize each other to reduce overlap.
+### AI Writing Assistance
 
-The browser remembers the last chapter, cursor selection, and scroll position per account and novel. Unsynced drafts offer an explicit recovery choice when reopened; see [Saving and recovery](#saving-and-recovery) for limitations.
+Chat with the AI assistant about your novel using context from settings, chapters, characters, and memos. Ask it to continue a chapter or check for issues, follow its progress, and stop tasks when needed.
 
-### AI Assistant
-
-The AI Assistant is InkMind's primary intelligent writing entry point. It appears as a floating panel across the novel list and writing workspace, supports continuous conversations around the current novel, and can actively read novel settings, chapters, characters, and memo context.
-
-- **Context-aware**: reads novel state, chapter details, character profiles, and writing memos to reduce repeated background explanation.
-- **Natural-language driven**: accepts instructions like "write a chapter", "continue the current chapter", "check this chapter", and "save as an official chapter".
-- **Traceable execution**: shows stages such as reading context, drafting summary, generating prose, quality checking, and saving chapters.
-- **Human-in-the-loop confirmation**: asks the user for choices or missing details when needed; generated content can be edited before being applied.
-- **Interruptible tasks**: long-running tasks can be stopped before they continue in the wrong direction or consume more quota.
-- **Chapter persistence**: generated and confirmed content can be saved directly into the current novel's chapter list.
-
-### Writing and Creation
-
-- **Novel management**: manage title, genre, writing style, and background.
-- **Chapter writing**: add, delete, search, and edit chapters; review and restore historical versions.
-- **Character system**: manage names, profiles, and notes; record appearance, relationships, and story roles in the profile.
-- **Memo system**: record worldbuilding, foreshadowing, ideas, setting notes, and todos.
-- **Novel export**: export completed chapters for backup, review, or publishing.
-
-### AI Writing Tools
-
-| Capability | Description |
+| Capability | Use |
 | --- | --- |
-| AI Assistant | Floating intelligent writing panel for continuous conversation, context reading, task orchestration, and chapter saving |
-| AI Generation | Generate chapter summaries, titles, and prose from novel settings, characters, and previous chapters |
-| AI Rewrite | Rewrite the current chapter according to custom instructions |
-| AI Continuation | Continue writing from the end of the current chapter |
-| AI Check | Analyze chapter issues and provide concrete revision directions |
-| Selection Expand / Polish | Expand, polish, or adjust selected paragraphs |
-| Preview Confirmation | When generation preview is enabled, review a generated chapter before confirming it; not a universal confirmation step for every AI operation |
-| Auto Audit | Automatically evaluate generated content quality and detect issues |
+| Chapter generation | Create summaries, titles, and prose using novel settings, characters, and previous chapters |
+| Rewriting and continuation | Rewrite chapters to your instructions or continue from the end of the text |
+| Selection expansion and polishing | Add detail, polish, or adjust selected paragraphs |
+| Quality checks | Find chapter issues and suggest revisions, with optional automatic evaluation after generation |
+| Generation preview | When enabled, review generated chapters before confirming and saving |
 
-### Models and Management
+### Models and Usage
 
-- **Multi-model support**: OpenAI, Anthropic, Qwen, DeepSeek, MiniMax, Kimi / Moonshot, and GLM.
-- **Multiple Agent modes**: Flexible Agent, ReAct, and direct LLM calls, configurable per user.
-- **Custom model configuration**: use built-in providers or user-level custom API keys, base URLs, and model names.
-- **Token usage tracking**: records call counts, input/output tokens, quota usage, and model source.
-- **Background tasks**: submit supported writing operations in background mode and monitor them from the tasks page.
-- **Admin console**: admins can inspect users, quota, and usage logs.
+- Supports OpenAI, Anthropic, Qwen, DeepSeek, MiniMax, Kimi / Moonshot, and GLM.
+- Configure custom API keys, base URLs, model names, and Agent modes.
+- Track calls, input/output tokens, quota usage, and model sources.
+- Run supported writing tasks in the background and monitor progress. Web deployments also provide user, quota, and usage-log administration.
 
 ## Preview
 
-Captured from the current frontend using fictional novels and an isolated in-memory fixture. No real accounts, manuscripts, API keys, or production usage are shown. Screenshots use the Chinese interface; the app also supports English.
+Available in Chinese and English, with light and dark themes and layouts for desktop and mobile.
 
 ### Continue writing
 
-Search, sort, and return to your work; export and deletion remain in the More menu.
+Search and sort your novels, continue writing, or export and manage works from the More menu.
 
 ![Novel library with search, sorting, and Continue writing actions](images/readme/library.jpg)
 
@@ -93,7 +68,7 @@ Chapter search, inline save status, and compact AI commands keep the prose in vi
 <details>
 <summary>AI tools and dark focus mode</summary>
 
-Open AI commands only when needed. This screenshot shows the generation form, not a real model response.
+Open AI tools from the editor to generate chapters using your novel’s context.
 
 ![On-demand AI generation panel beside the editor](images/readme/ai-tools.jpg)
 
@@ -115,65 +90,34 @@ Hide navigation and AI controls in focus mode; adjust line width for comfortable
 
 </details>
 
-Capture sizes: desktop 1440 × 900, mobile 390 × 844. See [screenshot reproduction notes](images/readme/README.md).
-
-## Tech Stack
-
-| Layer | Technology |
-| --- | --- |
-| Backend | Python 3.12+ · FastAPI · Uvicorn · SQLAlchemy 2.0 · Pydantic 2 |
-| Frontend | React 18 · TypeScript · Vite 6 · React Router 7 · Ant Design 6 · Axios |
-| Database | SQLite (default) |
-| Authentication | JWT · passlib/bcrypt |
-| AI Integration | OpenAI SDK · Anthropic SDK · OpenAI-compatible APIs |
-| Observability | OpenTelemetry · Prometheus metrics |
-| Desktop | Electron · electron-builder · PyInstaller |
-| Web deployment | Docker · Docker Compose · Nginx |
-
 ## Quick Start
 
 ### Local macOS Desktop App
 
 **Download:** [Latest Release](https://github.com/jastfkjg/InkMind/releases/latest) · [Apple Silicon installer](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-arm64.dmg) · [Intel installer](https://github.com/jastfkjg/InkMind/releases/latest/download/InkMind-mac-x64.dmg). Fixed download links become available after the first Release is published; check its notes for signing status.
 
-The desktop icon pairs a terracotta rounded tile with an ivory pen nib, transparent edges, and multiple macOS resolutions. See the [icon maintenance notes](desktop/assets/README.md).
+The desktop app requires no registration or login. Works are stored locally and do not sync with Web deployments. The installer includes the Python backend, so no additional runtime is needed.
 
-Desktop provides no built-in models and ignores model credentials from `.env` and the launch environment. Add your API key and service URL under AI Settings → Custom LLM Management, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Missing or deleted configurations stay unconfigured without falling back to built-ins.
+To set up AI, add your API key and service URL under **AI Settings → Custom LLM Management**, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Desktop provides no built-in models and does not read model credentials from `.env`.
 
-The desktop app starts a FastAPI service bound only to the loopback interface and stores its SQLite database in the macOS application data directory. It uses one automatic local author, has no registration or login flow, and does not sync writing with the Web deployment. Prose, settings, characters, memos, versions, and usage records stay on this Mac. Configured AI features still send requests to the selected model provider.
+Prose, settings, characters, memos, versions, and usage records stay on this Mac. When using an online model, AI requests are sent to your selected provider.
 
-Start the desktop development environment from the repository root:
+For backup and troubleshooting, see the [desktop guide](docs/DESKTOP.en.md).
 
-```bash
-./start-desktop.sh
-```
-
-Build installable DMG and ZIP artifacts:
-
-```bash
-cd desktop
-npm install
-npm run package:mac
-```
-
-Artifacts are written to `desktop/release/`. PyInstaller bundles Python and the backend dependencies. Local builds target the current machine's CPU architecture. Pushing a `vX.Y.Z` tag matching `desktop/package.json` automatically builds Apple Silicon / Intel DMG and ZIP installers, adds checksums, and publishes a GitHub Release. Without signing credentials these are non-notarized early-access builds; standard trusted distribution requires Developer ID signing and Apple notarization.
-
-See the [desktop development and release guide](docs/DESKTOP.en.md) for architecture, data paths, backup, packaging checks, and troubleshooting.
-
-### Requirements
+### Run from Source
 
 - Python 3.12+
-- Node.js 20+ for local development; the frontend Docker image builds with Node 20
+- Node.js 20+
 - npm 9+
 
-### 1. Clone the Project
+#### 1. Clone the Project
 
 ```bash
 git clone https://github.com/jastfkjg/InkMind.git
 cd InkMind
 ```
 
-### 2. Prepare the Backend
+#### 2. Prepare the Backend
 
 ```bash
 cd backend
@@ -210,9 +154,9 @@ Health check:
 curl http://localhost:8000/health
 ```
 
-### 3. Prepare the Frontend
+#### 3. Prepare the Frontend
 
-Open a new terminal:
+Open a new terminal at the repository root:
 
 ```bash
 cd frontend
@@ -228,11 +172,12 @@ Default URLs:
 
 The Vite development server proxies `/api/*` to the backend and strips the `/api` prefix.
 
-### 4. One-command Development Startup
+#### 4. One-command Development Startup
 
-The project also includes a development startup script. Install backend and frontend dependencies first:
+After installing dependencies, activate the backend virtual environment and run from the repository root:
 
 ```bash
+source backend/.venv/bin/activate
 ./start-dev.sh
 ```
 
@@ -305,114 +250,52 @@ Stop services:
 docker compose down
 ```
 
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Backend | Python 3.12+ · FastAPI · Uvicorn · SQLAlchemy 2.0 · Pydantic 2 |
+| Frontend | React 18 · TypeScript · Vite 6 · React Router 7 · Ant Design 6 · Axios |
+| Database | SQLite (default) |
+| Authentication | JWT · passlib/bcrypt |
+| AI Integration | OpenAI SDK · Anthropic SDK · OpenAI-compatible APIs |
+| Observability | OpenTelemetry · Prometheus metrics |
+| Desktop | Electron · electron-builder · PyInstaller |
+| Web deployment | Docker · Docker Compose · Nginx |
+
 ## Development Guide
 
-### Build and Regression Checks
-
-Run in `frontend/`:
+Test and build the frontend:
 
 ```bash
+cd frontend
 npm ci
 npm test
 npm run build
 ```
 
-The unit tests cover draft storage, account/novel isolation, concurrent save coalescing, and retry after failure. The [browser regression guide](frontend/tests/README.md) includes an isolated fixture and a checklist for navigation, AI previews, version restoration, and responsive layouts. These checks do not replace real backend or model integration tests.
+Start desktop development from the repository root:
 
-To explore the interface without a database or API key, start the fixture with `node tests/ui-fixture.mjs --demo` and follow the guide's separate Vite command. This is a local UI sample, not a complete offline application.
-
-### Main Routes
-
-Frontend:
-
-| Path | Page |
-| --- | --- |
-| `/` | Novel list |
-| `/login` / `/register` | Login and registration |
-| `/settings` | AI settings |
-| `/usage` | Token usage |
-| `/tasks` | Background tasks |
-| `/novels/:novelId/write` | Chapter writing |
-| `/novels/:novelId/settings` | Novel settings |
-| `/novels/:novelId/people` | Character management |
-| `/novels/:novelId/memos` | Memos |
-| Global floating panel inside novels | AI Assistant with current-novel context and writing task orchestration |
-| `/admin/users` | User management |
-| `/admin/logs` | Usage logs |
-
-Backend route prefixes:
-
-| Prefix | Description |
-| --- | --- |
-| `/auth` | Registration, login, current user |
-| `/novels` | Novel management |
-| `/chapters` | Chapter management |
-| `/characters` | Character management |
-| `/memos` | Memos |
-| `/usage` | Token usage |
-| `/background-tasks` | Background tasks |
-| `/workflow` | Writing workflow |
-| `/novels/{novel_id}/agent` | AI Assistant sessions, SSE chat, user confirmation, interruption, and result application |
-| `/custom-llms` | User custom models |
-| `/admin` | Admin console |
-| `/meta` | Metadata |
-
-### Project Structure
-
-```text
-InkMind/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI entry, CORS, route registration, SQLite auto-migration
-│   │   ├── config.py            # Pydantic Settings configuration
-│   │   ├── database.py          # SQLAlchemy engine and sessions
-│   │   ├── models.py            # ORM models
-│   │   ├── routers/             # API routes
-│   │   ├── schemas/             # Request/response models
-│   │   ├── services/            # Chapter generation, evaluation, versions, export, task logic
-│   │   ├── llm/                 # Multi-model integration, streaming, token counting
-│   │   ├── agent/               # AI Assistant orchestration, tool calls, task queue
-│   │   ├── workflow/            # Writing workflow engine
-│   │   └── observability/       # OpenTelemetry and metrics
-│   ├── scripts/                 # Helper scripts
-│   ├── requirements.txt
-│   └── env.example
-├── frontend/
-│   ├── src/
-│   │   ├── api/                 # Axios client
-│   │   ├── components/          # Shared components, writing components, AI Assistant panel
-│   │   ├── context/             # Auth, theme, and navigation contexts
-│   │   ├── i18n/                # Chinese and English copy
-│   │   ├── pages/               # Page components
-│   │   ├── styles/              # Theme, base styles, page styles
-│   │   ├── types/               # TypeScript types
-│   │   └── App.tsx              # Route entry
-│   ├── tests/                   # Save regression tests and local UI fixture
-│   ├── package.json
-│   └── vite.config.ts
-├── desktop/                     # Electron main process, preload, and macOS packaging
-│   ├── main.ts                  # Local API lifecycle, window, and session bridge
-│   ├── preload.ts               # Restricted desktop API
-│   └── scripts/                 # PyInstaller backend build
-├── docs/
-│   ├── DESKTOP.md               # Chinese desktop guide
-│   └── DESKTOP.en.md            # Desktop architecture, data, and release guide
-├── images/                      # README screenshots
-├── docker-compose.yml
-├── start-desktop.sh             # Desktop development entry point
-├── start-dev.sh
-├── DESIGN.md                    # Visual system and UI guidelines
-├── AGENTS.md                    # Collaboration and engineering conventions
-├── README.en.md
-└── README.md
+```bash
+./start-desktop.sh
 ```
 
-### Internationalization and Theme
+Build macOS installers:
 
-- Frontend copy lives in `frontend/src/i18n/`.
-- Add both Chinese and English translation keys for new visible text.
-- Theme and visual variables live in `frontend/src/styles/`; `DESIGN.md` is the source of truth for visual rules.
-- UI changes should be checked in light mode, dark mode, wide desktop, and mobile layouts.
+```bash
+cd desktop
+npm install
+npm run package:mac
+```
+
+| Directory | Contents |
+| --- | --- |
+| `backend/app/` | APIs, data models, AI integrations, and writing services |
+| `frontend/src/` | Pages, components, themes, and translations |
+| `desktop/` | Electron app and packaging scripts |
+| `docs/` | Desktop architecture, backup, and deployment documentation |
+
+See [DESIGN.md](DESIGN.md) for visual guidelines and the [desktop guide](docs/DESKTOP.en.md) for packaging and releases.
 
 ## FAQ
 
@@ -432,7 +315,7 @@ The desktop app does not show a login page. If it cannot enter the novel library
 
 ### AI features say no model is configured
 
-Check that `backend/.env` contains the API key for the selected provider and that `DEFAULT_LLM_PROVIDER` matches it. You can also configure user-level custom models in the app's AI settings.
+On desktop, add a custom model in AI Settings and check the model selections for both the assistant and text generation. On Web, configure a custom model in AI Settings or check that the API key in `backend/.env` matches `DEFAULT_LLM_PROVIDER`.
 
 ### CORS errors
 

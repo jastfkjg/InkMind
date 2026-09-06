@@ -8,7 +8,7 @@ import {
   SaveOutlined, ArrowLeftOutlined, SettingOutlined, RobotOutlined,
   CheckCircleOutlined, SafetyOutlined, EyeOutlined, GoldOutlined,
   GlobalOutlined, ThunderboltOutlined, QuestionCircleOutlined,
-  PlusOutlined, DeleteOutlined, EditOutlined, CheckOutlined, SwapOutlined,
+  PlusOutlined, DeleteOutlined, EditOutlined, SwapOutlined,
   LinkOutlined,
 } from "@ant-design/icons";
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
@@ -63,6 +63,8 @@ export default function AiSettings() {
   const colors = useHeaderTheme();
   const { goBackSmart } = useNavigation();
   const [form] = Form.useForm();
+  const [settingsSection, setSettingsSection] = useState("connections");
+  const autoAuditEnabled = Form.useWatch("enable_auto_audit", form);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -107,17 +109,22 @@ export default function AiSettings() {
     setGenModel(selected.generationModel);
     setAgentProviderValue(selected.agentProvider);
     setAgentModel(selected.agentModel);
+  }, [user, providerInfo]);
 
+  useEffect(() => {
+    if (!user) return;
     form.setFieldsValue({
       agent_mode: user.agent_mode || "flexible",
       max_llm_iterations: user.max_llm_iterations || 10,
       max_tokens_per_task: user.max_tokens_per_task || 50000,
       enable_auto_audit: user.enable_auto_audit ?? true,
       preview_before_save: user.preview_before_save ?? true,
-      auto_audit_min_score: user.auto_audit_min_score || 60,
+      auto_audit_min_score: user.auto_audit_min_score ?? 60,
       ai_language: user.ai_language || null,
     });
-  }, [user, providerInfo, form]);
+  // Switching a model must not discard edits in another settings section.
+  }, [user?.id, user?.agent_mode, user?.max_llm_iterations, user?.max_tokens_per_task,
+    user?.enable_auto_audit, user?.preview_before_save, user?.auto_audit_min_score, user?.ai_language, form]);
 
   const getModelsForProviderValue = useCallback(
     (pv: string): string[] => {
@@ -383,18 +390,14 @@ export default function AiSettings() {
   const bgLinear = colors.bgLinear;
   const bgRadial = colors.bgRadial;
   const textColor = colors.textColor;
-  const cardBg = colors.cardBg;
   const secondaryTextColor = colors.secondaryTextColor;
   const innerCardBg = colors.isDark
     ? "linear-gradient(180deg, #1e1d1b 0%, #181715 100%)"
     : "linear-gradient(180deg, #faf9f5 0%, #f5f0e8 100%)";
   const primaryColor = colors.primaryColor;
-  const summaryCardBg = colors.isDark
-    ? "linear-gradient(135deg, #2a2520 0%, #1e1d1b 100%)"
-    : "linear-gradient(135deg, #f5efe6 0%, #efe9de 100%)";
+
 
   const genDecoded = genProviderValue ? decodeProviderValue(genProviderValue) : null;
-  const genIsCustom = genDecoded?.kind === "custom";
   const genCurrentModels = genProviderValue ? getModelsForProviderValue(genProviderValue) : [];
 
   const genProviderLabel = genDecoded
@@ -424,7 +427,7 @@ export default function AiSettings() {
   const agentCurrentModel = agentProviderValue ? agentModel : "";
 
   return (
-    <Layout
+    <Layout className="settings-page"
       style={{
         minHeight: "100vh",
         background: bgColor,
@@ -481,297 +484,19 @@ export default function AiSettings() {
           />
         )}
 
-        {/* ===== Current AI Configuration Summary ===== */}
-        <Card
-          style={{
-            borderRadius: 16,
-            border: `1px solid ${colors.isDark ? "#3a3530" : "#e6dfd8"}`,
-            background: summaryCardBg,
-            marginBottom: "1.5rem",
-            boxShadow: colors.isDark
-              ? "0 2px 8px rgba(0,0,0,0.3)"
-              : "0 2px 8px rgba(28,25,23,0.08)",
-          }}
-          bodyStyle={{ padding: "1.25rem 1.5rem" }}
-        >
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}
-          >
-            <CheckOutlined style={{ color: primaryColor, fontSize: "1.1rem" }} />
-            <Text strong style={{ color: textColor, fontSize: "1rem" }}>
-              {t("ai_settings_current_config")}
-            </Text>
-          </div>
-          <Row gutter={[24, 12]}>
-            <Col xs={24} md={12}>
-              <div
-                style={{
-                  padding: "0.75rem 1rem",
-                  borderRadius: 8,
-                  background: colors.isDark
-                    ? "rgba(255,255,255,0.04)"
-                    : "rgba(255,255,255,0.6)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}
-                >
-                  <ThunderboltOutlined style={{ color: primaryColor, fontSize: "0.9rem" }} />
-                  <Text
-                    type="secondary"
-                    style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
-                  >
-                    {t("ai_settings_agent_ai")}
-                  </Text>
-                  {agentIsCustom ? (
-                    <Tag
-                      color="orange"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: "0.7rem",
-                        lineHeight: "1.4",
-                        padding: "0 4px",
-                      }}
-                    >
-                      {t("ai_settings_custom_tag")}
-                    </Tag>
-                  ) : agentProviderValue ? (
-                    <Tag
-                      color="blue"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: "0.7rem",
-                        lineHeight: "1.4",
-                        padding: "0 4px",
-                      }}
-                    >
-                      {t("ai_settings_builtin_tag")}
-                    </Tag>
-                  ) : null}
-                </div>
-                <Text strong style={{ color: textColor, fontSize: "1rem" }}>
-                  {agentProviderLabel || t("ai_settings_not_configured")}
-                </Text>
-                <Text
-                  style={{ color: secondaryTextColor, fontSize: "0.85rem", marginLeft: 8 }}
-                >
-                  {agentCurrentModel}
-                </Text>
-              </div>
-            </Col>
-            <Col xs={24} md={12}>
-              <div
-                style={{
-                  padding: "0.75rem 1rem",
-                  borderRadius: 8,
-                  background: colors.isDark
-                    ? "rgba(255,255,255,0.04)"
-                    : "rgba(255,255,255,0.6)",
-                }}
-              >
-                <div
-                  style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}
-                >
-                  <RobotOutlined style={{ color: primaryColor, fontSize: "0.9rem" }} />
-                  <Text
-                    type="secondary"
-                    style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
-                  >
-                    {t("ai_settings_generation_ai")}
-                  </Text>
-                  {genIsCustom ? (
-                    <Tag
-                      color="orange"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: "0.7rem",
-                        lineHeight: "1.4",
-                        padding: "0 4px",
-                      }}
-                    >
-                      {t("ai_settings_custom_tag")}
-                    </Tag>
-                  ) : genProviderValue ? (
-                    <Tag
-                      color="blue"
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: "0.7rem",
-                        lineHeight: "1.4",
-                        padding: "0 4px",
-                      }}
-                    >
-                      {t("ai_settings_builtin_tag")}
-                    </Tag>
-                  ) : null}
-                </div>
-                <Text strong style={{ color: textColor, fontSize: "1rem" }}>
-                  {genProviderLabel || t("ai_settings_not_configured")}
-                </Text>
-                <Text
-                  style={{ color: secondaryTextColor, fontSize: "0.85rem", marginLeft: 8 }}
-                >
-                  {genModel || "-"}
-                </Text>
-              </div>
-            </Col>
-          </Row>
-        </Card>
-
-        <Card
-          style={{
-            borderRadius: 16,
-            border: "none",
-            boxShadow: colors.isDark
-              ? "0 4px 6px rgba(0,0,0,0.3)"
-              : "0 4px 6px rgba(28,25,23,0.06)",
-            background: cardBg,
-          }}
-          title={
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <SettingOutlined style={{ color: primaryColor, fontSize: "1.25rem" }} />
-              <Title
-                level={4}
-                style={{
-                  margin: 0,
-                  fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                  color: textColor,
-                }}
-              >
-                {t("ai_settings_title")}
-              </Title>
-            </div>
-          }
-          extra={
-            <Text type="secondary" style={{ color: secondaryTextColor }}>
-              {t("ai_settings_subtitle")}
-            </Text>
-          }
-        >
-          <Form form={form} name="aiSettings" onFinish={onFinish} layout="vertical">
-            {/* ===== AI 助手 (Agent) ===== */}
-            <Card
-              type="inner"
-              title={
-                <Space>
-                  <ThunderboltOutlined style={{ color: primaryColor }} />
-                  <span style={{ color: textColor }}>{t("ai_settings_agent_ai")}</span>
-                </Space>
-              }
-              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
-            >
-              <Paragraph style={{ color: secondaryTextColor, marginBottom: "1rem" }}>
-                {t("ai_settings_agent_ai_desc")}
-              </Paragraph>
-              <Row gutter={24}>
-                <Col xs={24} md={12}>
-                  <div style={{ marginBottom: 8 }}>
-                    <Text strong style={{ color: textColor }}>
-                      {t("ai_settings_provider")}
-                    </Text>
-                  </div>
-                  <Spin spinning={agentSaving} size="small">
-                    <Select
-                      size="large"
-                      style={{ width: "100%" }}
-                      value={agentProviderValue || undefined}
-                      placeholder={t("ai_settings_provider_placeholder")}
-                      notFoundContent={t("ai_settings_add_provider_hint")}
-                      onChange={handleAgentProviderChange}
-                      disabled={agentSaving}
-                      suffixIcon={
-                        agentSaving ? (
-                          <Spin size="small" />
-                        ) : (
-                          <SwapOutlined style={{ color: secondaryTextColor }} />
-                        )
-                      }
-                    >
-                      {providerInfo?.agent_builtin && (
-                        <Option value="builtin:anthropic">
-                          <Space>
-                            {t("ai_settings_agent_builtin_proxy")}
-                            <Tag
-                              color="blue"
-                              style={{
-                                fontSize: "0.65rem",
-                                lineHeight: "1.3",
-                                padding: "0 3px",
-                                verticalAlign: "middle",
-                              }}
-                            >
-                              {t("ai_settings_builtin_tag")}
-                            </Tag>
-                          </Space>
-                        </Option>
-                      )}
-                      {providerInfo?.custom_llms.filter((cl) => !isDesktopApp || cl.provider === "anthropic").map((cl) => (
-                        <Option key={`custom:${cl.id}`} value={`custom:${cl.id}`}>
-                          <Space>
-                            {cl.provider_label}
-                            <Tag
-                              color="orange"
-                              style={{
-                                fontSize: "0.65rem",
-                                lineHeight: "1.3",
-                                padding: "0 3px",
-                                verticalAlign: "middle",
-                              }}
-                            >
-                              {t("ai_settings_custom_tag")}
-                            </Tag>
-                          </Space>
-                        </Option>
-                      ))}
-                    </Select>
-                  </Spin>
-                </Col>
-                <Col xs={24} md={12}>
-                  <div style={{ marginBottom: 8 }}>
-                    <Text strong style={{ color: textColor }}>
-                      {t("ai_settings_model")}
-                    </Text>
-                  </div>
-                  <Spin spinning={agentSaving} size="small">
-                    {agentIsCustom && agentCurrentModels.length > 0 ? (
-                      <Select
-                        size="large"
-                        style={{ width: "100%" }}
-                        value={agentModel || undefined}
-                        onChange={handleAgentModelChange}
-                        disabled={agentSaving}
-                        placeholder={t("ai_settings_model_placeholder")}
-                      >
-                        {agentCurrentModels.map((m) => (
-                          <Option key={m} value={m}>
-                            {m}
-                          </Option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <Input
-                        size="large"
-                        style={{ height: 44 }}
-                        value={agentCurrentModel}
-                        placeholder={t("ai_settings_model_placeholder")}
-                        readOnly
-                        disabled
-                      />
-                    )}
-                  </Spin>
-                </Col>
-              </Row>
-              <div style={{ marginTop: "0.75rem" }}>
-                <Text
-                  type="secondary"
-                  style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
-                >
-                  {isDesktopApp && !agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
-                </Text>
-              </div>
-            </Card>
-
-            {/* ===== 正文生成 ===== */}
+        <div className="settings-connection-summary">
+          <span>{t("ai_settings_generation_ai")}<strong>{genProviderLabel || t("ai_settings_not_configured")} · {genModel || "—"}</strong></span>
+          <span>{t("ai_settings_agent_ai")}<strong>{agentProviderLabel || t("ai_settings_not_configured")} · {agentCurrentModel || "—"}</strong></span>
+        </div>
+        <div className="settings-section-nav" role="group" aria-label={t("settings_sections")}>
+          {(["connections", "preferences", "advanced"] as const).map((key) => <button key={key} aria-pressed={settingsSection === key} onClick={() => setSettingsSection(key)}>{t(`settings_section_${key}`)}</button>)}
+        </div>
+        <Card className="settings-form-card">
+          <Form form={form} name="aiSettings" onFinish={onFinish} layout="vertical" onFinishFailed={({ errorFields }) => {
+            const name = String(errorFields[0]?.name[0] || "");
+            setSettingsSection(["agent_mode", "max_llm_iterations", "max_tokens_per_task"].includes(name) ? "advanced" : "preferences");
+          }}>
+            <section hidden={settingsSection !== "connections"} aria-label={t("settings_section_connections")}><p className="settings-section-hint">{t("settings_hint_connections")}</p>{/* ===== 正文生成 ===== */}
             <Card
               type="inner"
               title={
@@ -896,6 +621,128 @@ export default function AiSettings() {
                   style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
                 >
                   {isDesktopApp && !genProviderValue ? t("ai_settings_add_provider_hint") : t("ai_settings_switch_hint")}
+                </Text>
+              </div>
+            </Card>
+
+            {/* ===== AI 助手 (Agent) ===== */}
+            <Card
+              type="inner"
+              title={
+                <Space>
+                  <ThunderboltOutlined style={{ color: primaryColor }} />
+                  <span style={{ color: textColor }}>{t("ai_settings_agent_ai")}</span>
+                </Space>
+              }
+              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
+            >
+              <Paragraph style={{ color: secondaryTextColor, marginBottom: "1rem" }}>
+                {t("ai_settings_agent_ai_desc")}
+              </Paragraph>
+              <Row gutter={24}>
+                <Col xs={24} md={12}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text strong style={{ color: textColor }}>
+                      {t("ai_settings_provider")}
+                    </Text>
+                  </div>
+                  <Spin spinning={agentSaving} size="small">
+                    <Select
+                      size="large"
+                      style={{ width: "100%" }}
+                      value={agentProviderValue || undefined}
+                      placeholder={t("ai_settings_provider_placeholder")}
+                      notFoundContent={t("ai_settings_add_provider_hint")}
+                      onChange={handleAgentProviderChange}
+                      disabled={agentSaving}
+                      suffixIcon={
+                        agentSaving ? (
+                          <Spin size="small" />
+                        ) : (
+                          <SwapOutlined style={{ color: secondaryTextColor }} />
+                        )
+                      }
+                    >
+                      {providerInfo?.agent_builtin && (
+                        <Option value="builtin:anthropic">
+                          <Space>
+                            {t("ai_settings_agent_builtin_proxy")}
+                            <Tag
+                              color="blue"
+                              style={{
+                                fontSize: "0.65rem",
+                                lineHeight: "1.3",
+                                padding: "0 3px",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              {t("ai_settings_builtin_tag")}
+                            </Tag>
+                          </Space>
+                        </Option>
+                      )}
+                      {providerInfo?.custom_llms.filter((cl) => !isDesktopApp || cl.provider === "anthropic").map((cl) => (
+                        <Option key={`custom:${cl.id}`} value={`custom:${cl.id}`}>
+                          <Space>
+                            {cl.provider_label}
+                            <Tag
+                              color="orange"
+                              style={{
+                                fontSize: "0.65rem",
+                                lineHeight: "1.3",
+                                padding: "0 3px",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              {t("ai_settings_custom_tag")}
+                            </Tag>
+                          </Space>
+                        </Option>
+                      ))}
+                    </Select>
+                  </Spin>
+                </Col>
+                <Col xs={24} md={12}>
+                  <div style={{ marginBottom: 8 }}>
+                    <Text strong style={{ color: textColor }}>
+                      {t("ai_settings_model")}
+                    </Text>
+                  </div>
+                  <Spin spinning={agentSaving} size="small">
+                    {agentIsCustom && agentCurrentModels.length > 0 ? (
+                      <Select
+                        size="large"
+                        style={{ width: "100%" }}
+                        value={agentModel || undefined}
+                        onChange={handleAgentModelChange}
+                        disabled={agentSaving}
+                        placeholder={t("ai_settings_model_placeholder")}
+                      >
+                        {agentCurrentModels.map((m) => (
+                          <Option key={m} value={m}>
+                            {m}
+                          </Option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <Input
+                        size="large"
+                        style={{ height: 44 }}
+                        value={agentCurrentModel}
+                        placeholder={t("ai_settings_model_placeholder")}
+                        readOnly
+                        disabled
+                      />
+                    )}
+                  </Spin>
+                </Col>
+              </Row>
+              <div style={{ marginTop: "0.75rem" }}>
+                <Text
+                  type="secondary"
+                  style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
+                >
+                  {isDesktopApp && !agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
                 </Text>
               </div>
             </Card>
@@ -1044,7 +891,143 @@ export default function AiSettings() {
               })}
             </Card>
 
-            {/* ===== Agent Mode ===== */}
+            </section>
+<section hidden={settingsSection !== "preferences"} aria-label={t("settings_section_preferences")}><p className="settings-section-hint">{t("settings_hint_preferences")}</p>{/* ===== Preview ===== */}
+            <Card
+              type="inner"
+              title={
+                <Space>
+                  <EyeOutlined style={{ color: primaryColor }} />
+                  <span style={{ color: textColor }}>
+                    {t("ai_settings_preview_confirm")}
+                  </span>
+                </Space>
+              }
+              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
+            >
+              <Form.Item
+                name="preview_before_save"
+                label={
+                  <Text strong style={{ color: textColor }}>
+                    {t("ai_settings_preview_confirm")}
+                  </Text>
+                }
+                valuePropName="checked"
+              >
+                <Switch
+                  checkedChildren={<CheckCircleOutlined />}
+                  unCheckedChildren={t("ai_settings_switch_off")}
+                />
+              </Form.Item>
+              <Alert
+                message={t("ai_settings_preview_confirm_recommended")}
+                description={
+                  <Paragraph style={{ margin: 0, color: secondaryTextColor }}>
+                    {t("ai_settings_preview_confirm_note")}
+                  </Paragraph>
+                }
+                type="info"
+                showIcon
+                icon={<EyeOutlined />}
+              />
+            </Card>
+
+{/* ===== Quality & Safety ===== */}
+            <Card
+              type="inner"
+              title={
+                <Space>
+                  <SafetyOutlined style={{ color: primaryColor }} />
+                  <span style={{ color: textColor }}>
+                    {t("ai_settings_quality_safety")}
+                  </span>
+                </Space>
+              }
+              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
+            >
+              <Row gutter={24}>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="enable_auto_audit"
+                    label={
+                      <Text strong style={{ color: textColor }}>
+                        {t("ai_settings_auto_audit")}
+                      </Text>
+                    }
+                    valuePropName="checked"
+                  >
+                    <Switch
+                      checkedChildren={<CheckCircleOutlined />}
+                      unCheckedChildren={t("ai_settings_switch_off")}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name="auto_audit_min_score"
+                    label={
+                      <Text strong style={{ color: textColor }}>
+                        {t("ai_settings_auto_audit_min_score")}
+                      </Text>
+                    }
+                    rules={[{ type: "number", min: 0, max: 100 }]}
+                  >
+                    <InputNumber
+                      min={0}
+                      max={100}
+                      size="large"
+                      style={{ width: "100%", height: 44 }}
+                      addonAfter={t("common_points")}
+                      disabled={!autoAuditEnabled}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* ===== AI Language ===== */}
+            <Card
+              type="inner"
+              title={
+                <Space>
+                  <GlobalOutlined style={{ color: primaryColor }} />
+                  <span style={{ color: textColor }}>
+                    {t("ai_settings_ai_language")}
+                  </span>
+                </Space>
+              }
+              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
+            >
+              <Form.Item
+                name="ai_language"
+                label={
+                  <Text strong style={{ color: textColor }}>
+                    {t("ai_settings_ai_language")}
+                  </Text>
+                }
+              >
+                <Select size="large" style={{ width: "100%" }}>
+                  <Option value={null}>
+                    <Text strong style={{ color: textColor }}>
+                      {t("ai_settings_ai_language_follow_ui")}
+                    </Text>
+                  </Option>
+                  <Option value="zh">
+                    <Text strong style={{ color: textColor }}>
+                      中文
+                    </Text>
+                  </Option>
+                  <Option value="en">
+                    <Text strong style={{ color: textColor }}>
+                      English
+                    </Text>
+                  </Option>
+                </Select>
+              </Form.Item>
+            </Card>
+
+            </section>
+<section hidden={settingsSection !== "advanced"} aria-label={t("settings_section_advanced")}><p className="settings-section-hint">{t("settings_hint_advanced")}</p>{/* ===== Agent Mode ===== */}
             <Card
               type="inner"
               title={
@@ -1153,141 +1136,9 @@ export default function AiSettings() {
               </Row>
             </Card>
 
-            {/* ===== Quality & Safety ===== */}
-            <Card
-              type="inner"
-              title={
-                <Space>
-                  <SafetyOutlined style={{ color: primaryColor }} />
-                  <span style={{ color: textColor }}>
-                    {t("ai_settings_quality_safety")}
-                  </span>
-                </Space>
-              }
-              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
-            >
-              <Row gutter={24}>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="enable_auto_audit"
-                    label={
-                      <Text strong style={{ color: textColor }}>
-                        {t("ai_settings_auto_audit")}
-                      </Text>
-                    }
-                    valuePropName="checked"
-                  >
-                    <Switch
-                      checkedChildren={<CheckCircleOutlined />}
-                      unCheckedChildren={t("ai_settings_switch_off")}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Form.Item
-                    name="auto_audit_min_score"
-                    label={
-                      <Text strong style={{ color: textColor }}>
-                        {t("ai_settings_auto_audit_min_score")}
-                      </Text>
-                    }
-                    rules={[{ type: "number", min: 0, max: 100 }]}
-                  >
-                    <InputNumber
-                      min={0}
-                      max={100}
-                      size="large"
-                      style={{ width: "100%", height: 44 }}
-                      addonAfter={t("common_points")}
-                      disabled={!form.getFieldValue("enable_auto_audit")}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Card>
-
-            {/* ===== AI Language ===== */}
-            <Card
-              type="inner"
-              title={
-                <Space>
-                  <GlobalOutlined style={{ color: primaryColor }} />
-                  <span style={{ color: textColor }}>
-                    {t("ai_settings_ai_language")}
-                  </span>
-                </Space>
-              }
-              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
-            >
-              <Form.Item
-                name="ai_language"
-                label={
-                  <Text strong style={{ color: textColor }}>
-                    {t("ai_settings_ai_language")}
-                  </Text>
-                }
-              >
-                <Select size="large" style={{ width: "100%" }}>
-                  <Option value={null}>
-                    <Text strong style={{ color: textColor }}>
-                      {t("ai_settings_ai_language_follow_ui")}
-                    </Text>
-                  </Option>
-                  <Option value="zh">
-                    <Text strong style={{ color: textColor }}>
-                      中文
-                    </Text>
-                  </Option>
-                  <Option value="en">
-                    <Text strong style={{ color: textColor }}>
-                      English
-                    </Text>
-                  </Option>
-                </Select>
-              </Form.Item>
-            </Card>
-
-            {/* ===== Preview ===== */}
-            <Card
-              type="inner"
-              title={
-                <Space>
-                  <EyeOutlined style={{ color: primaryColor }} />
-                  <span style={{ color: textColor }}>
-                    {t("ai_settings_preview_confirm")}
-                  </span>
-                </Space>
-              }
-              style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
-            >
-              <Form.Item
-                name="preview_before_save"
-                label={
-                  <Text strong style={{ color: textColor }}>
-                    {t("ai_settings_preview_confirm")}
-                  </Text>
-                }
-                valuePropName="checked"
-              >
-                <Switch
-                  checkedChildren={<CheckCircleOutlined />}
-                  unCheckedChildren={t("ai_settings_switch_off")}
-                />
-              </Form.Item>
-              <Alert
-                message={t("ai_settings_preview_confirm_recommended")}
-                description={
-                  <Paragraph style={{ margin: 0, color: secondaryTextColor }}>
-                    {t("ai_settings_preview_confirm_note")}
-                  </Paragraph>
-                }
-                type="info"
-                showIcon
-                icon={<EyeOutlined />}
-              />
-            </Card>
-
-            <Form.Item style={{ marginBottom: 0, marginTop: "1rem" }}>
+            </section>
+            <p className="settings-section-hint">{t("settings_preferences_save_hint")}</p>
+            <Form.Item className="settings-save-row" style={{ marginBottom: 0, marginTop: "1rem" }}>
               <Button
                 type="primary"
                 htmlType="submit"

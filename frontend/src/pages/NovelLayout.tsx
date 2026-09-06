@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import {
+  App as AntApp,
   Layout,
   Tabs,
   Button,
@@ -172,12 +173,14 @@ export default function NovelLayout() {
         className={writeTabActive ? "novel-content novel-content--write" : "novel-content"}
         style={{
           padding: writeTabActive ? "0.75rem 1rem 1rem" : "1rem",
-          maxWidth: writeTabActive ? 1280 : 1200,
+          maxWidth: writeTabActive ? 1600 : 1200,
           margin: "0 auto",
           width: "100%",
         }}
       >
-        <Outlet context={{ novel, setNovel }} />
+        <AntApp component={false}>
+          <Outlet context={{ novel, setNovel }} />
+        </AntApp>
       </Content>
     </Layout>
   );

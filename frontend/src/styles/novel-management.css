@@ -1,0 +1,94 @@
+/* Shared by browser and Electron. Keep these rules independent of Ant Card internals. */
+.novel-content:has(.novel-management-page) { padding: 28px 32px 48px !important; }
+.novel-management-page { width: 100%; max-width: 1080px; margin: 0 auto; color: var(--ink); }
+.novel-page-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.novel-page-heading__title { display: flex; align-items: center; gap: 12px; }
+.novel-page-heading h1 { margin: 0; font-family: var(--font-ui); font-size: 23px; font-weight: 600; line-height: 1.4; }
+.novel-page-heading p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.novel-page-count { color: var(--muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.novel-page-heading__action { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.novel-page-heading__action .ant-btn-text { color: var(--muted); }
+.novel-add-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 500; }
+.novel-add-link:hover { color: #fff; background: var(--accent-active); }
+.novel-back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; min-height: 36px; }
+.novel-back-link:hover { color: var(--ink); }
+.novel-management-page .ant-btn { height: 36px; font-size: 14px; box-shadow: none; }
+.novel-management-page > .ant-alert { margin-bottom: 16px; }
+.novel-form-surface, .novel-collection { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+.novel-form-surface { padding: 28px 32px 0; }
+.novel-form-surface[hidden] { display: none; }
+.novel-form-section { display: grid; grid-template-columns: 156px minmax(0, 1fr); gap: 32px; padding-bottom: 28px; }
+.novel-form-section + .novel-form-section { padding-top: 28px; border-top: 1px solid var(--border); }
+.novel-form-section__heading h2 { margin: 2px 0 8px; font-family: var(--font-ui); font-size: 15px; font-weight: 600; line-height: 1.6; }
+.novel-form-section__heading p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.8; }
+.novel-form-section__fields { min-width: 0; }
+.novel-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.novel-management-page .ant-form-item { margin-bottom: 20px; }
+.novel-form-section__fields > .ant-form-item:last-child, .novel-form-grid > .ant-form-item { margin-bottom: 0; }
+.novel-management-page .ant-form-item-label { padding-bottom: 8px; }
+.novel-management-page .ant-form-item-label > label { font-size: 14px; color: var(--ink); }
+.novel-management-page input.ant-input, .novel-management-page .ant-input-affix-wrapper { min-height: 40px; font-size: 14px; border-radius: 8px; }
+.novel-management-page .ant-input-affix-wrapper > input.ant-input { min-height: auto; }
+.novel-management-page textarea.ant-input { font-size: 14px; line-height: 1.85; padding: 10px 12px; border-radius: 8px; resize: vertical; }
+.novel-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--border); padding: 18px 0 20px; }
+.novel-form-footer p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.novel-form-footer__actions { display: flex; gap: 10px; flex-shrink: 0; margin-left: auto; }
+.novel-management-loading { min-height: 240px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+.novel-collection-tools { display: flex; align-items: center; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.novel-collection-tools .ant-input-affix-wrapper { max-width: 360px; }
+.novel-collection-tools > span { color: var(--muted); font-size: 13px; }
+.novel-entry-list { list-style: none; margin: 0; padding: 0 24px; }
+.novel-entry { display: flex; align-items: flex-start; gap: 16px; padding: 22px 0; }
+.novel-entry + .novel-entry { border-top: 1px solid var(--border-soft); }
+.novel-entry__avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--bg-hover); color: var(--accent-active); font-family: var(--font-serif); font-size: 18px; }
+.theme--dark .novel-entry__avatar { color: var(--accent-soft); }
+.novel-entry__body { flex: 1; min-width: 0; }
+.novel-entry__heading { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; margin-bottom: 7px; }
+.novel-entry__heading h2 { margin: 0; font-size: inherit; min-width: 0; }
+.novel-entry__heading a { color: var(--ink); font-weight: 600; font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.novel-entry__heading a:hover { color: var(--accent-active); }
+.theme--dark .novel-entry__heading a:hover { color: var(--accent-soft); }
+.novel-entry time { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.novel-entry__preview { color: var(--muted); font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
+.novel-entry__notes { margin: 6px 0 0; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.novel-entry__actions { display: flex; align-items: center; gap: 8px; padding-top: 2px; flex-shrink: 0; }
+.novel-entry__edit { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 13px; color: var(--ink-soft); padding: 0 8px; border-radius: 6px; }
+.novel-entry__edit:hover { background: var(--bg-hover); color: var(--ink); }
+.novel-entry__actions .ant-btn { width: 32px; height: 32px; }
+.novel-collection-empty { display: flex; flex-direction: column; align-items: center; padding: 42px 24px; text-align: center; }
+.novel-collection-empty__icon { display: grid; place-items: center; width: 48px; height: 48px; background: var(--bg-hover); color: var(--muted); border-radius: 12px; font-size: 23px; margin-bottom: 16px; }
+.novel-collection-empty h2 { margin: 0; font-size: 17px; font-weight: 500; line-height: 1.6; }
+.novel-collection-empty p { color: var(--muted); margin: 8px 0 20px; font-size: 14px; line-height: 1.8; max-width: 460px; }
+.novel-search-empty { padding: 40px 24px; color: var(--muted); text-align: center; }
+.novel-ai-tools {
+  --write-canvas: var(--card); --write-surface: var(--bg-hover); --write-surface-soft: var(--bg-deep);
+  --write-ink: var(--ink); --write-body: var(--ink-soft); --write-muted: var(--muted);
+  --write-hairline: var(--border); --write-hairline-soft: var(--border-soft);
+  --write-accent: var(--accent); --write-accent-active: var(--accent-active);
+  margin-top: 16px; color: var(--muted); font-size: 13px;
+}
+.novel-ai-tools > summary { cursor: pointer; width: fit-content; }
+.novel-ai-tools .write-ai-rail { position: static; transform: none; width: auto; margin-top: 12px; padding: 0; display: flex; flex-direction: row; gap: 8px; border: 0; border-radius: 0; box-shadow: none; background: transparent; overflow: visible; }
+.novel-ai-tools .write-rail-btn { width: auto; min-height: 34px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; box-shadow: none; }
+.novel-ai-tools .write-rail-stack { flex-direction: row; gap: 4px; }
+.novel-ai-tools .write-rail-ai, .novel-ai-tools .write-rail-name { font-size: 12px; font-weight: 500; }
+.novel-ai-tools .write-ai-drawer { position: relative; inset: auto; width: 100%; max-height: 560px; margin-top: 12px; border-radius: 8px; box-shadow: none; z-index: auto; }
+.novel-ai-tools .write-ai-drawer-head { flex-shrink: 0; }
+.novel-ai-tools .write-ai-drawer-body { min-height: 0; }
+.novel-ai-tools .input, .novel-ai-tools .textarea { color: var(--ink); border-color: var(--border); background: var(--bg-deep); font-size: 14px; }
+.novel-ai-tools .textarea::placeholder { color: var(--muted); opacity: 1; }
+.novel-management-page a:focus-visible, .novel-ai-tools > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 1050px) {
+  .novel-content:has(.novel-management-page) { padding: 24px !important; }
+  .novel-form-surface { padding: 24px 24px 0; }
+  .novel-form-section { grid-template-columns: 132px minmax(0, 1fr); gap: 24px; }
+}
+@media (max-width: 760px) {
+  .novel-content:has(.novel-management-page) { padding: 20px 16px !important; }
+  .novel-form-section { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .novel-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .novel-page-heading, .novel-form-footer { align-items: flex-start; flex-wrap: wrap; }
+  .novel-entry__heading { display: block; }
+  .novel-entry { gap: 10px; flex-wrap: wrap; }
+  .novel-entry__actions { margin-left: auto; }
+}

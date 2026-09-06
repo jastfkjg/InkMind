@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate, useBlocker } from "react-router-dom";
-import { Modal } from "antd";
+import { useParams, useNavigate, useBlocker, useOutletContext, useSearchParams } from "react-router-dom";
+import { Dropdown, Modal } from "antd";
 import {
+  ReadOutlined,
+  MoreOutlined,
   CheckCircleOutlined,
   EditOutlined,
   ForwardOutlined,
@@ -36,11 +38,16 @@ import { useAuth } from "@/context/AuthContext";
 import { useNavigation } from "@/context/NavigationContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
-import type { Chapter, ChapterVersion, ChapterVersionDiff } from "@/types";
+import type { Chapter, ChapterVersion, ChapterVersionDiff, LlmProvidersResponse, Novel } from "@/types";
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 import EditorSettings, { useEditorSettings } from "@/components/write/EditorSettings";
 import ChapterSidebar from "@/components/write/ChapterSidebar";
+import GenerationReview from "@/components/write/GenerationReview";
+import ReferencePanel from "@/components/write/ReferencePanel";
+import { llmSelection } from "@/utils/llmSelection";
+import { isNovelSetupComplete } from "@/utils/novelSetup";
+import { isDesktopApp } from "@/api/client";
 import SelectionFloatMenu from "@/components/write/SelectionFloatMenu";
 import type { AiTool, SelectionAiMode, GenerateTab } from "@/components/write/types";
 import { draftKey, readDraft, readPosition, sameSnapshot, sessionKey, singleFlight, type WritingDraft, type WritingPosition } from "@/utils/writeSession";
@@ -63,6 +70,9 @@ function estimateTextareaRows(value: string, charsPerLine = 62, minRows = 3, max
 export default function NovelWrite() {
   const { novelId } = useParams();
   const id = Number(novelId);
+  const { novel } = useOutletContext<{ novel: Novel | null }>();
+  const [searchParams] = useSearchParams();
+  const requestedChapterId = Number(searchParams.get("chapter")) || null;
   const nav = useNavigate();
   const { user } = useAuth();
   const { registerLeaveGuard } = useNavigation();
@@ -164,10 +174,14 @@ export default function NovelWrite() {
   const [editorChapterId, setEditorChapterId] = useState<number | null>(null);
   const [recoveryDraft, setRecoveryDraft] = useState<WritingDraft | null>(null);
   const restorePositionRef = useRef<WritingPosition | null>(null);
+  const [referenceOpen, setReferenceOpen] = useState(false);
+  const [providerMeta, setProviderMeta] = useState<LlmProvidersResponse | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [previewResult, setPreviewResult] = useState<ChapterPreviewResult | null>(null);
+  const [reviewRejected, setReviewRejected] = useState<Set<number>>(new Set());
+  const [reviewMetadata, setReviewMetadata] = useState(true);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
 
@@ -199,12 +213,13 @@ export default function NovelWrite() {
   const handleDrawerClose = useCallback(() => setRightTool(null), []);
   const handleOpenSmartWriterPrompt = useCallback((prompt: string) => {
     setRightTool(null);
+    setReferenceOpen(false);
     window.dispatchEvent(new CustomEvent("inkmind:assistant-open", {
       detail: { novelId: id, prompt },
     }));
   }, [id]);
   const handleCommandPanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (rightTool === "versions") return;
+    if (rightTool === "versions" || window.innerWidth >= 1180) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = commandPanelRef.current?.getBoundingClientRect();
@@ -223,6 +238,7 @@ export default function NovelWrite() {
   }, [rightTool]);
 
   const handleSelectionPanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 1180) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = selectionPanelRef.current?.getBoundingClientRect();
@@ -252,6 +268,7 @@ export default function NovelWrite() {
   }, []);
 
   const handleEvaluatePanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth >= 1180) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = evaluatePanelRef.current?.getBoundingClientRect();
@@ -284,7 +301,7 @@ export default function NovelWrite() {
   const showSingleInspireCta = !summary.trim();
   const showBatchInspireCta = !batchSummary.trim();
 
-  const wordCount = content.replace(/\s/g, "").length;
+  const wordCount = Array.from(content.replace(/\s/g, "")).length;
   const wordCountText = t("write_version_word_count").replace("{count}", String(wordCount));
   const summaryRows = useMemo(() => estimateTextareaRows(summary, narrow ? 32 : 78, 3, 9), [summary, narrow]);
 
@@ -357,7 +374,7 @@ export default function NovelWrite() {
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
-      const shouldPreserve = Boolean(target?.closest(".ai-assistant-panel, .ai-assistant-float-btn"));
+      const shouldPreserve = Boolean(target?.closest(".ai-assistant-panel, .ai-assistant-float-btn, .write-assistant-trigger"));
       preserveSelectionForAssistantRef.current = shouldPreserve;
       if (shouldPreserve && selectionRangeRef.current) {
         const preserved = selectionRangeRef.current;
@@ -436,6 +453,7 @@ export default function NovelWrite() {
     if (focusMode) {
       setSidebarOpen(false);
       setRightTool(null);
+      setReferenceOpen(false);
     }
   }, [focusMode]);
 
@@ -448,14 +466,14 @@ export default function NovelWrite() {
     const handler = (event: Event) => {
       const open = Boolean((event as CustomEvent<{ open: boolean }>).detail?.open);
       setAssistantOpen(open);
-      if (open) setRightTool(null);
+      if (open) { setRightTool(null); setReferenceOpen(false); }
     };
     window.addEventListener("inkmind:assistant-visibility", handler);
     return () => window.removeEventListener("inkmind:assistant-visibility", handler);
   }, []);
 
   useEffect(() => {
-    if (rightTool) window.dispatchEvent(new Event("inkmind:assistant-minimize"));
+    if (rightTool) { setReferenceOpen(false); window.dispatchEvent(new Event("inkmind:assistant-minimize")); }
   }, [rightTool]);
 
   useEffect(() => {
@@ -513,9 +531,10 @@ export default function NovelWrite() {
         if (cancelled || novelIdRef.current !== id) return;
         setChapters(list);
         setLlmOptions(meta.builtin.map((p) => p.id));
+        setProviderMeta(meta);
         if (list.length > 0) {
           const previous = user ? readPosition(localStorage, sessionKey(user.id, id)) : null;
-          setActiveId(list.find((chapter) => chapter.id === previous?.chapterId)?.id ?? list[0].id);
+          setActiveId(list.find((chapter) => chapter.id === requestedChapterId)?.id ?? list.find((chapter) => chapter.id === previous?.chapterId)?.id ?? list[0].id);
         } else {
           setActiveId(null);
         }
@@ -533,7 +552,7 @@ export default function NovelWrite() {
     return () => {
       cancelled = true;
     };
-  }, [id, user?.id]);
+  }, [id, user?.id, requestedChapterId]);
 
   useEffect(() => {
     const handler = async (e: Event) => {
@@ -1062,7 +1081,7 @@ export default function NovelWrite() {
   useEffect(() => registerLeaveGuard(beforeLeave), [registerLeaveGuard, beforeLeave]);
 
   const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-    currentLocation.pathname !== nextLocation.pathname &&
+    (currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search) &&
     (hasUnsavedChanges || isPreviewMode || saveStatus === "saving" || busy || previewLoading || versionActionLoading || Boolean(recoveryDraft))
   );
   const navigationPendingRef = useRef(false);
@@ -1285,7 +1304,7 @@ export default function NovelWrite() {
       return;
     }
     if (!activeId) return;
-    if (hasBody) {
+    if (hasBody && user?.preview_before_save === false) {
       const ok = await confirmAction(t("write_confirm_regenerate"));
       if (!ok) return;
     }
@@ -1316,6 +1335,8 @@ export default function NovelWrite() {
 
       if (result.preview) {
         setIsPreviewMode(true);
+        setReviewRejected(new Set());
+        setReviewMetadata(true);
         setPreviewResult(result.preview);
         setTitle(result.preview.title);
         setContent(normalizeBodyParagraphIndent(result.preview.content));
@@ -1359,9 +1380,9 @@ export default function NovelWrite() {
     try {
       const ch = await confirmChapterGeneration(nid, {
         chapter_id: activeId,
-        title: previewResult.title,
-        content: previewResult.content,
-        summary: previewResult.summary,
+        title,
+        content,
+        summary,
       });
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
@@ -1690,10 +1711,16 @@ export default function NovelWrite() {
     }
   }
 
+  const assistantDockRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) window.dispatchEvent(new Event("inkmind:assistant-dock-ready"));
+  }, []);
+
   if (loading) {
     return <p className="muted">{t("write_loading_chapters")}</p>;
   }
 
+  const modelSelection = user && providerMeta ? llmSelection(user, providerMeta, isDesktopApp) : null;
+  const generationModelLabel = modelSelection?.generationModel || t("ai_settings_not_configured");
   const drawerOpen = Boolean(rightTool && activeId !== null);
   const drawerTitle = rightTool
     ? ({
@@ -1743,6 +1770,7 @@ export default function NovelWrite() {
       {isPreviewMode && (
         <div className="write-notice" role="status">
           <span>{t("write_resolve_preview")}</span>
+          <button type="button" className="btn btn-ghost" onClick={() => setRightTool("generate")}>{t("review_title")}</button>
           <button type="button" className="btn btn-primary" disabled={previewLoading} onClick={() => void onConfirmPreview()}>{t("write_confirm_save")}</button>
           <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={onCancelPreview}>{t("common_cancel")}</button>
         </div>
@@ -1757,7 +1785,7 @@ export default function NovelWrite() {
         />
       ) : null}
 
-      <div className={`write-workspace${sidebarOpen ? " write-workspace--sidebar-open" : ""}`}>
+      <div className="write-workspace-toolbar">
         <EditorSettings
           settings={editorSettings}
           sidebarToolsRef={sidebarToolsRef}
@@ -1765,6 +1793,16 @@ export default function NovelWrite() {
           onToggleSidebar={handleToggleSidebar}
           onDrawerClose={handleDrawerClose}
         />
+        {!focusMode && <div className="write-workspace-toolbar__actions">
+          <button className={`btn btn-ghost${referenceOpen ? " is-active" : ""}`} aria-label={t("reference_title")} aria-expanded={referenceOpen} onClick={() => {
+            setReferenceOpen((v) => !v); setRightTool(null); window.dispatchEvent(new Event("inkmind:assistant-minimize"));
+          }}><ReadOutlined />{t("reference_title")}</button>
+          <button className={`btn btn-ghost write-assistant-trigger${assistantOpen ? " is-active" : ""}`} aria-label={t("write_ai_quick_ask")} aria-expanded={assistantOpen} onClick={() => assistantOpen ? window.dispatchEvent(new Event("inkmind:assistant-minimize")) : handleOpenSmartWriterPrompt("")}><RobotOutlined />{t("write_ai_quick_ask")}</button>
+        </div>}
+      </div>
+      <div className={`write-stage${!focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) ? " write-stage--with-panel" : ""}`}>
+      <div className={`write-workspace${sidebarOpen ? " write-workspace--sidebar-open" : ""}`}>
+
 
         <ChapterSidebar
           chapters={chapters}
@@ -1858,7 +1896,7 @@ export default function NovelWrite() {
                         <span className="write-ai-quickbar__label">{t("write_ai_quickbar_title")}</span>
                         <button
                           type="button"
-                          className={`write-ai-quickbtn${rightTool === "generate" ? " is-active" : ""}`}
+                          className={`write-ai-quickbtn${!hasBody ? " is-primary" : ""}${rightTool === "generate" ? " is-active" : ""}`}
                           disabled={!hasLlm || busy}
                           onClick={() => setRightTool("generate")}
                         >
@@ -1876,7 +1914,7 @@ export default function NovelWrite() {
                         </button>
                         <button
                           type="button"
-                          className={`write-ai-quickbtn${rightTool === "append" ? " is-active" : ""}`}
+                          className={`write-ai-quickbtn${hasBody ? " is-primary" : ""}${rightTool === "append" ? " is-active" : ""}`}
                           disabled={!hasLlm || busy}
                           onClick={() => setRightTool("append")}
                         >
@@ -1892,14 +1930,9 @@ export default function NovelWrite() {
                           <CheckCircleOutlined aria-hidden="true" />
                           {evaluateBusy ? t("write_evaluating") : t("write_ai_quick_check")}
                         </button>
-                        <button
-                          type="button"
-                          className="write-ai-quickbtn write-ai-quickbtn--assistant"
-                          onClick={() => handleOpenSmartWriterPrompt(t("smart_writer_recommend_next_step_prompt"))}
-                        >
-                          <RobotOutlined aria-hidden="true" />
-                          {t("write_ai_quick_ask")}
-                        </button>
+                        <Dropdown trigger={["click"]} menu={{ items: [
+                          { key: "naming", label: t("write_ai_naming"), onClick: () => setRightTool("naming"), disabled: !hasLlm || busy },
+                        ] }}><button type="button" className="write-ai-quickbtn" aria-label={t("dashboard_more")}><MoreOutlined /></button></Dropdown>
                       </div>
                       <button
                         type="button"
@@ -1948,9 +1981,7 @@ export default function NovelWrite() {
                 ) : null}
               </>
             ) : (
-              <p className="muted write-empty-hint">
-                {focusMode ? t("write_select_or_create_chapter") : t("write_select_chapter_or_new")}
-              </p>
+              <div className="write-empty-start"><h2>{t("write_empty_title")}</h2><p className="muted">{t("write_empty_desc")}</p><button className="btn btn-primary" onClick={() => void onAddChapter()}>{t("write_new_chapter")}</button></div>
             )}
           </div>
         </div>
@@ -1978,8 +2009,25 @@ export default function NovelWrite() {
               {t("write_close")}
             </button>
           </div>
+          {rightTool !== "versions" && <div className="write-operation-context">
+            <span>{t("write_operation_scope")}: {rightTool === "naming" ? t("write_scope_reference") : rightTool === "generate" && generateTab === "batch" ? t("write_batch_chapters") : t(rightTool === "append" ? "write_scope_append" : "write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
+            <span>{t("ai_settings_model")}: {generationModelLabel}</span>
+            <small>{rightTool === "generate" && generateMode === "foreground" && generateTab === "single" && user?.preview_before_save !== false ? t("write_preview_behavior") : rightTool === "naming" ? t("write_naming_behavior") : t("write_direct_behavior")}</small>
+            {novel && !isNovelSetupComplete(novel) && <small>{t("write_setup_optional")} <button className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("reference_title")}</button></small>}
+          </div>}
           <div className="write-ai-drawer-body">
-            {rightTool === "generate" && activeId ? (
+            {rightTool === "generate" && isPreviewMode && previewResult && <GenerationReview
+              original={preGenerateSnapshotRef.current} proposal={{ ...previewResult, content: normalizeBodyParagraphIndent(previewResult.content) }}
+              rejected={reviewRejected} useMetadata={reviewMetadata} disabled={previewLoading}
+              onReview={(rejected, next) => {
+                const editor = bodyTextareaRef.current;
+                const scrollTop = editor?.scrollTop ?? 0;
+                setReviewRejected(rejected); setContent(next);
+                requestAnimationFrame(() => { if (editor?.isConnected) editor.scrollTop = scrollTop; });
+              }}
+              onMetadata={(value) => { setReviewMetadata(value); const source = value ? previewResult : preGenerateSnapshotRef.current; setTitle(source.title); setSummary(source.summary); }}
+            />}
+            {rightTool === "generate" && activeId && !isPreviewMode ? (
               <div className="write-ai-section">
                 {isLatestChapter ? (
                   <div className="write-generate-tabs" role="tablist" aria-label={t("write_gen_mode")}>
@@ -2101,7 +2149,7 @@ export default function NovelWrite() {
                       disabled={busy}
                       onClick={generateMode === "background" ? () => void onGenerateBackground() : onGenerate}
                     >
-                      {busy ? t("write_generating") : hasBody ? t("write_regenerate_overwrite") : generateMode === "background" ? t("write_submit_background") : t("write_generate")}
+                      {busy ? t("write_generating") : generateMode === "background" ? t("write_submit_background") : user?.preview_before_save !== false ? t("write_generate_preview") : hasBody ? t("write_regenerate_overwrite") : t("write_generate")}
                     </button>
 
                     {generateMode === "foreground" && busy && currentProgress ? (
@@ -2519,7 +2567,7 @@ export default function NovelWrite() {
         </div>
       )}
 
-      {!focusMode && !assistantOpen && !rightTool && !selectionPanel && evaluateResult && evaluatePanelPosition ? (
+      {!focusMode && !assistantOpen && !referenceOpen && !rightTool && !selectionPanel && evaluateResult && evaluatePanelPosition ? (
         <div
           ref={evaluatePanelRef}
           className={`write-evaluate-panel${evaluatePanelDragging ? " is-dragging" : ""}`}
@@ -2585,7 +2633,7 @@ export default function NovelWrite() {
         />
       ) : null}
 
-      {!focusMode && !assistantOpen && !rightTool && selectionPanel && selectionPanelPosition ? (
+      {!focusMode && !assistantOpen && !referenceOpen && !rightTool && selectionPanel && selectionPanelPosition ? (
         <div
           ref={selectionPanelRef}
           className={`write-selection-result-float${selectionPanelDragging ? " is-dragging" : ""}`}
@@ -2606,7 +2654,9 @@ export default function NovelWrite() {
               {t("write_selection_exit")}
             </button>
           </div>
+          <div className="write-operation-context"><span>{t("write_operation_scope")}: {t("write_scope_selection")}</span><span>{t("ai_settings_model")}: {generationModelLabel}</span></div>
           <div className="write-selection-result-float__body">
+            <details className="selection-original"><summary>{t("review_original")}</summary><p>{content.slice(selectionPanel.start, selectionPanel.end)}</p></details>
             {selectionPanel.streaming || (busy ? t("write_generating") : "")}
           </div>
           <div className="write-selection-result-float__actions">
@@ -2642,6 +2692,9 @@ export default function NovelWrite() {
           </div>
         </div>
       ) : null}
+      <div ref={assistantDockRef} id="write-assistant-dock" className="write-assistant-dock" hidden={!assistantOpen || focusMode} />
+      {novel && user && <ReferencePanel key={`${user.id}:${id}`} novel={novel} userId={user.id} open={referenceOpen && !focusMode} onClose={() => setReferenceOpen(false)} />}
+      </div>
     </div>
   );
 }

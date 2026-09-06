@@ -12,4 +12,6 @@ or send requests to a model provider. No extra test framework is required.
 
 Coverage includes chapter-relative context for direct generation, ReAct/Flexible
 tools and workflows; append/insertion boundaries; Chinese/English character-name
-recall; chapter timestamp serialization; and HTTP version comparison/detail routes.
+recall; chapter timestamp serialization; HTTP version comparison/detail routes;
+library word/chapter summaries and ownership isolation; and opt-in first-chapter
+creation without changing existing API clients.

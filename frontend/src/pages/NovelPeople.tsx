@@ -1,63 +1,37 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import {
-  Card,
-  List,
-  Button,
-  Typography,
-  Empty,
-  Spin,
-  Alert,
-  Tag,
-  Space,
-  Tooltip,
-  Modal,
-  message,
-  Avatar,
-} from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  UserOutlined,
-  TeamOutlined,
-  InfoCircleOutlined,
-} from "@ant-design/icons";
+import { Alert, Button, Dropdown, Input, Modal, App as AntApp } from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, MoreOutlined, TeamOutlined } from "@ant-design/icons";
 import { apiErrorMessage, deleteCharacter, fetchCharacters } from "@/api/client";
 import type { Character } from "@/types";
 import { useI18n } from "@/i18n";
-const { Title, Text } = Typography;
-const { confirm } = Modal;
+import { CollectionEmpty, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
+import { relativeEditTime } from "@/utils/relativeTime";
+
 export default function NovelPeople() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const { message: messageApi } = AntApp.useApp();
   const { novelId } = useParams();
   const id = Number(novelId);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  async function load() {
+  const [query, setQuery] = useState("");
+  const [modal, modalContextHolder] = Modal.useModal();
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErr("");
     try {
-      const chars = await fetchCharacters(id);
-      setCharacters(chars);
+      setCharacters(await fetchCharacters(id));
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => {
-    (async () => {
-      try {
-        await load();
-      } catch (e) {
-        setErr(apiErrorMessage(e));
-      } finally {
-        setLoading(false);
-      }
-    })();
   }, [id]);
+  useEffect(() => { void load(); }, [load]);
   function showDeleteConfirm(char: Character) {
-    confirm({
+    modal.confirm({
       title: t("people_delete_character_title"),
       content: t("people_delete_character_confirm").replace("{name}", char.name),
       okText: t("people_delete"),
@@ -67,158 +41,60 @@ export default function NovelPeople() {
         try {
           await deleteCharacter(id, char.id);
           setCharacters((prev) => prev.filter((c) => c.id !== char.id));
-          message.success(t("people_character_deleted").replace("{name}", char.name));
+          messageApi.success(t("people_character_deleted").replace("{name}", char.name));
         } catch (e) {
           setErr(apiErrorMessage(e));
-          message.error(t("people_delete_failed"));
+          messageApi.error(t("people_delete_failed"));
         }
       },
     });
   }
+  const search = query.trim().toLocaleLowerCase();
+  const visible = characters.filter(item => [item.name, item.profile, item.notes].join(" ").toLocaleLowerCase().includes(search));
+  const addAction = <Link className="novel-add-link" to={`/novels/${id}/people/new`}><PlusOutlined />{t("people_create_character")}</Link>;
   return (
-    <div style={{ padding: "0.5rem" }}>
-      {err && (
-        <Alert
-          message={t("operation_failed_title")}
-          description={err}
-          type="error"
-          showIcon
-          style={{ marginBottom: "1rem" }}
-        />
-      )}
-      <Card
-        style={{
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-        }}
-        title={
-          <Space>
-            <TeamOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-              }}
-            >
-              {t("people_title")}
-            </Title>
-            <Tag color="blue">{t("people_character_count").replace("{count}", String(characters.length))}</Tag>
-          </Space>
-        }
-        extra={
-          <Link to={`/novels/${id}/people/new`}>
-            <Button type="primary" icon={<PlusOutlined />} size="large">
-              {t("people_create_character")}
-            </Button>
-          </Link>
-        }
-      >
-        <Spin spinning={loading}>
-          {characters.length === 0 ? (
-            <Empty
-              description={
-                <div>
-                  <Title level={5} style={{ marginBottom: "0.5rem" }}>
-                    {t("people_no_characters")}
-                  </Title>
-                  <Text type="secondary">
-                    {t("people_no_characters_desc")}
-                  </Text>
-                </div>
-              }
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              style={{ padding: "3rem 0" }}
-            />
-          ) : (
-            <List
-              dataSource={characters}
-              renderItem={(char) => (
-                <List.Item
-                  key={char.id}
-                  actions={[
-                    <Tooltip title={t("people_edit_character")} key="edit">
-                      <Link to={`/novels/${id}/people/${char.id}/edit`}>
-                        <Button
-                          type="text"
-                          icon={<EditOutlined />}
-                          style={{ color: "var(--accent)" }}
-                        >
-                          {t("people_edit")}
-                        </Button>
-                      </Link>
-                    </Tooltip>,
-                    <Tooltip title={t("people_delete_character")} key="delete">
-                      <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => showDeleteConfirm(char)}
-                      >
-                        {t("people_delete")}
-                      </Button>
-                    </Tooltip>,
-                  ]}
-                  style={{
-                    padding: "1rem 0",
-                  }}
-                >
-                  <List.Item.Meta
-                    avatar={
-                      <Avatar
-                        size={48}
-                        icon={<UserOutlined />}
-                        style={{
-                          background: "linear-gradient(135deg, #cc785c 0%, #a9583e 100%)",
-                          fontSize: "1.25rem",
-                        }}
-                      >
-                        {char.name?.charAt(0)}
-                      </Avatar>
-                    }
-                    title={
-                      <Text
-                        strong
-                        style={{
-                          fontSize: "1.05rem",
-                          fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                        }}
-                      >
-                        {char.name}
-                      </Text>
-                    }
-                    description={
-                      <div>
-                        {char.profile && (
-                          <Text type="secondary" style={{ fontSize: "0.9rem" }}>
-                            <InfoCircleOutlined
-                              style={{ marginRight: "0.25rem", color: "var(--muted)" }}
-                            />
-                            {char.profile.slice(0, 80)}
-                            {char.profile.length > 80 ? "…" : ""}
-                          </Text>
-                        )}
-                        {char.notes && (
-                          <div style={{ marginTop: "0.25rem" }}>
-                            <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                              ({char.notes.slice(0, 60)}
-                              {char.notes.length > 60 ? "…" : ""})
-                            </Text>
-                          </div>
-                        )}
-                        {!char.profile && !char.notes && (
-                          <Tag color="default">{t("people_no_settings")}</Tag>
-                        )}
+    <ManagementPage title={t("people_title")} description={t("management_people_hint")}
+      count={loading ? undefined : t("people_character_count").replace("{count}", String(characters.length))}
+      action={characters.length > 0 ? addAction : undefined}>
+      {modalContextHolder}
+      {err && <Alert title={t("operation_failed_title")} description={err} type="error" showIcon
+        action={<Button size="small" onClick={() => void load()}>{t("management_retry")}</Button>} />}
+      <div className="novel-collection">
+        {loading ? <ManagementLoading label={t("common_loading")} /> : characters.length === 0 ? (
+          !err && <CollectionEmpty icon={<TeamOutlined />} title={t("people_no_characters")} description={t("people_no_characters_desc")} action={addAction} />
+        ) : (
+          <>
+            <div className="novel-collection-tools">
+              <Input type="search" aria-label={t("management_people_search")} placeholder={t("management_people_search")}
+                prefix={<SearchOutlined />} allowClear value={query} onChange={e => setQuery(e.target.value)} />
+              {search && <span role="status">{t("management_search_count").replace("{count}", String(visible.length))}</span>}
+            </div>
+            {visible.length === 0 ? <div className="novel-search-empty" role="status">{t("management_no_results")}</div> : (
+              <ul className="novel-entry-list">
+                {visible.map(item => (
+                  <li className="novel-entry" key={item.id}>
+                    <span className="novel-entry__avatar" aria-hidden="true">{Array.from(item.name)[0] || <TeamOutlined />}</span>
+                    <div className="novel-entry__body">
+                      <div className="novel-entry__heading">
+                        <h2><Link to={`/novels/${id}/people/${item.id}/edit`}>{item.name}</Link></h2>
+                        <time dateTime={item.updated_at} title={new Date(item.updated_at).toLocaleString(language)}>{relativeEditTime(item.updated_at, language)}</time>
                       </div>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          )}
-        </Spin>
-      </Card>
-    </div>
+                      <p className="novel-entry__preview">{item.profile || t("people_no_settings")}</p>
+                      {item.notes && <p className="novel-entry__notes">{t("peopleform_other_notes")}：{item.notes}</p>}
+                    </div>
+                    <div className="novel-entry__actions">
+                      <Link className="novel-entry__edit" to={`/novels/${id}/people/${item.id}/edit`} aria-label={t("people_edit") + " " + (item.name)}><EditOutlined />{t("people_edit")}</Link>
+                      <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "delete", label: t("people_delete"), icon: <DeleteOutlined />, danger: true, onClick: () => showDeleteConfirm(item) }] }}>
+                        <Button type="text" icon={<MoreOutlined />} aria-label={t("management_more_actions") + " " + (item.name)} />
+                      </Dropdown>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </div>
+    </ManagementPage>
   );
 }

@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response, StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -19,7 +20,7 @@ from app.schemas.ai import (
     NovelNamingIn,
 )
 from app.schemas.export import NovelExportPdfIn
-from app.schemas.novel import NovelCreate, NovelOut, NovelUpdate
+from app.schemas.novel import NovelCreate, NovelListResponse, NovelOut, NovelUpdate
 from app.services.novel_export_pdf import build_novel_pdf_bytes, safe_export_pdf_stem
 from app.observability.otel_ai import ai_span
 from app.services.novel_ai import (
@@ -35,9 +36,38 @@ log = logging.getLogger(__name__)
 _STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
-@router.get("", response_model=list[NovelOut])
-def list_novels(user: CurrentUser, db: Annotated[Session, Depends(get_db)]) -> list[Novel]:
-    return db.query(Novel).filter(Novel.user_id == user.id).order_by(Novel.updated_at.desc()).all()
+@router.get("", response_model=list[NovelListResponse])
+def list_novels(user: CurrentUser, db: Annotated[Session, Depends(get_db)]) -> list[NovelListResponse]:
+    # Count non-whitespace characters, matching the editor. Keep chapter bodies in
+    # SQLite instead of transferring every manuscript to the library page.
+    body = func.coalesce(Chapter.content, "")
+    for whitespace in " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff":
+        body = func.replace(body, whitespace, "")
+    stats = (
+        db.query(Chapter.novel_id, func.count(Chapter.id).label("chapter_count"),
+                 func.sum(func.length(body)).label("total_words"))
+        .join(Novel, Novel.id == Chapter.novel_id).filter(Novel.user_id == user.id)
+        .group_by(Chapter.novel_id).subquery()
+    )
+    recent = (
+        db.query(Chapter.novel_id, Chapter.id, Chapter.title, Chapter.updated_at,
+                 func.row_number().over(partition_by=Chapter.novel_id,
+                    order_by=(Chapter.updated_at.desc(), Chapter.id.desc())).label("rank"))
+        .join(Novel, Novel.id == Chapter.novel_id).filter(Novel.user_id == user.id).subquery()
+    )
+    rows = (db.query(Novel, stats.c.chapter_count, stats.c.total_words,
+                     recent.c.id, recent.c.title, recent.c.updated_at)
+            .outerjoin(stats, stats.c.novel_id == Novel.id)
+            .outerjoin(recent, (recent.c.novel_id == Novel.id) & (recent.c.rank == 1))
+            .filter(Novel.user_id == user.id).all())
+    result = []
+    for novel, count, words, chapter_id, chapter_title, edited_at in rows:
+        result.append(NovelListResponse(
+            **NovelOut.model_validate(novel).model_dump(), chapter_count=count or 0,
+            total_words=words or 0, last_chapter_id=chapter_id, last_chapter_title=chapter_title,
+            last_edited_at=max(novel.updated_at, edited_at) if edited_at else novel.updated_at,
+        ))
+    return sorted(result, key=lambda item: (item.last_edited_at, item.id), reverse=True)
 
 
 @router.post("", response_model=NovelOut, status_code=status.HTTP_201_CREATED)
@@ -54,6 +84,9 @@ def create_novel(
         writing_style=body.writing_style,
     )
     db.add(n)
+    if body.create_first_chapter:
+        db.flush()
+        db.add(Chapter(novel_id=n.id, title="", summary="", content="", sort_order=0))
     db.commit()
     db.refresh(n)
     return n

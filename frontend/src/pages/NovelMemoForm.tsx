@@ -1,28 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Spin,
-  Alert,
-  Typography,
-  Space,
-  message,
-} from "antd";
-import {
-  SaveOutlined,
-  ArrowLeftOutlined,
-  FileTextOutlined,
-  QuestionCircleOutlined,
-} from "@ant-design/icons";
-import { apiErrorMessage, createMemo, fetchMemos, updateMemo } from "@/api/client";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Form, Input, Button, Alert, App as AntApp } from "antd";
+import { SaveOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { useI18n } from "@/i18n";
-const { Title, Text } = Typography;
+import { FormSection, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
+import { apiErrorMessage, createMemo, fetchMemos, updateMemo } from "@/api/client";
 const { TextArea } = Input;
 export default function NovelMemoForm() {
   const { t } = useI18n();
+  const { message: messageApi } = AntApp.useApp();
   const { novelId, memoId } = useParams();
   const id = Number(novelId);
   const mid = memoId ? Number(memoId) : NaN;
@@ -60,214 +46,47 @@ export default function NovelMemoForm() {
     try {
       if (isEdit) {
         await updateMemo(id, mid, { title: values.title, body: values.body });
-        message.success(t("memoform_updated"));
+        messageApi.success(t("memoform_updated"));
       } else {
         await createMemo(id, { title: values.title, body: values.body });
-        message.success(t("memoform_created"));
+        messageApi.success(t("memoform_created"));
       }
       nav(`/novels/${id}/memos`);
     } catch (e) {
       setErrorMsg(apiErrorMessage(e));
-      message.error(t("memoform_save_failed"));
+      messageApi.error(t("memoform_save_failed"));
     } finally {
       setSaving(false);
     }
   }
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: "1rem",
-          maxWidth: 900,
-          margin: "0 auto",
-        }}
-      >
-        <Card
-          style={{
-            borderRadius: 16,
-            border: "none",
-            boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "4rem 2rem",
-            }}
-          >
-            <Spin size="large" />
-            <Text
-              type="secondary"
-              style={{ marginLeft: "1rem", fontSize: "1rem" }}
-            >
-              {t("memoform_loading_memo")}
-            </Text>
-          </div>
-        </Card>
-      </div>
-    );
-  }
   return (
-    <div
-      style={{
-        padding: "1rem",
-        maxWidth: 900,
-        margin: "0 auto",
-      }}
-    >
-      <Card
-        style={{
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-        }}
-        title={
-          <Space>
-            <FileTextOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-              }}
-            >
-              {isEdit ? t("memoform_edit_memo") : t("memoform_new_memo")}
-            </Title>
-          </Space>
-        }
-        extra={
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => nav(`/novels/${id}/memos`)}
-          >
-            {t("memoform_back_to_list")}
-          </Button>
-        }
-      >
-        <Form
-          form={form}
-          name="memoForm"
-          onFinish={onFinish}
-          layout="vertical"
-          initialValues={{
-            title: "",
-            body: "",
-          }}
-        >
-          {errorMsg && (
-            <Alert
-              message={t("operation_failed_title")}
-              description={errorMsg}
-              type="error"
-              showIcon
-              style={{ marginBottom: "1.5rem" }}
-            />
-          )}
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <FileTextOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("memoform_memo_info")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Form.Item
-              name="title"
-              label={
-                <Space>
-                  <span>{t("memoform_memo_title")}</span>
-                  <Text type="secondary" style={{ fontSize: "0.85rem" }}>
-                    {t("memoform_title_optional")}
-                  </Text>
-                  <Text
-                    type="secondary"
-                    style={{ fontSize: "0.8rem", cursor: "help" }}
-                  >
-                    <QuestionCircleOutlined /> {t("memoform_title_tooltip")}
-                  </Text>
-                </Space>
-              }
-            >
-              <Input
-                placeholder={t("memoform_title_placeholder")}
-                size="large"
-                prefix={<FileTextOutlined style={{ color: "var(--muted)" }} />}
-                style={{ height: 44 }}
-              />
-            </Form.Item>
-            <Form.Item
-              name="body"
-              label={
-                <Space>
-                  <span>{t("memoform_memo_content")}</span>
-                  <span style={{ color: "var(--error)" }}>*</span>
-                  <Text
-                    type="secondary"
-                    style={{ fontSize: "0.8rem", cursor: "help" }}
-                  >
-                    <QuestionCircleOutlined /> {t("memoform_content_tooltip")}
-                  </Text>
-                </Space>
-              }
-              rules={[{ required: true, message: t("memoform_content_required") }]}
-            >
-              <TextArea
-                rows={14}
-                placeholder={t("memoform_content_placeholder")}
-                style={{
-                  minHeight: 280,
-                  lineHeight: 1.8,
-                  fontSize: "1rem",
-                  fontFamily: '"Noto Serif SC", Georgia, serif',
-                }}
-              />
-            </Form.Item>
-          </Card>
-          <Alert
-            message={t("memoform_tip_title")}
-            description={t("memoform_tip_content")}
-            type="info"
-            showIcon
-            style={{ marginBottom: "1.5rem" }}
-          />
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Space>
-              <Button
-                type="primary"
-                htmlType="submit"
-                icon={<SaveOutlined />}
-                loading={saving}
-                size="large"
-                style={{
-                  height: 44,
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  paddingLeft: 32,
-                  paddingRight: 32,
-                }}
-              >
-                {isEdit ? t("memoform_save_changes") : t("memoform_add_memo")}
-              </Button>
-              <Button
-                size="large"
-                onClick={() => nav(`/novels/${id}/memos`)}
-                disabled={saving}
-                style={{ height: 44 }}
-              >
-                {t("memoform_cancel")}
-              </Button>
-            </Space>
+    <ManagementPage title={t(isEdit ? "memoform_edit_memo" : "memoform_new_memo")}
+      description={t("management_memos_hint")}
+      action={<Link className="novel-back-link" to={`/novels/${id}/memos`}><ArrowLeftOutlined />{t("memoform_back_to_list")}</Link>}>
+      {errorMsg && <Alert title={t("memoform_operation_failed")} description={errorMsg} type="error" showIcon />}
+      {loading && <ManagementLoading label={t("memoform_loading_memo")} />}
+      <Form hidden={loading} form={form} name="memoForm" onFinish={onFinish} layout="vertical"
+        className="novel-form-surface" initialValues={{ title: "", body: "" }}>
+        <FormSection title={t("memoform_memo_info")} description={t("management_memo_title_hint")}>
+          <Form.Item name="title" label={`${t("memoform_memo_title")} ${t("memoform_title_optional")}`}>
+            <Input placeholder={t("memoform_title_placeholder")} />
           </Form.Item>
-        </Form>
-      </Card>
-    </div>
+        </FormSection>
+        <FormSection title={t("management_memo_content_heading")} description={t("management_memo_content_hint")}>
+          <Form.Item name="body" label={t("memoform_memo_content")}
+            rules={[{ required: true, message: t("memoform_content_required") }]}>
+            <TextArea rows={10} placeholder={t("memoform_content_placeholder")} />
+          </Form.Item>
+        </FormSection>
+        <footer className="novel-form-footer">
+          <div className="novel-form-footer__actions">
+            <Button onClick={() => nav(`/novels/${id}/memos`)}>{t("memoform_cancel")}</Button>
+            <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>
+              {t(isEdit ? "memoform_save_changes" : "memoform_add_memo")}
+            </Button>
+          </div>
+        </footer>
+      </Form>
+    </ManagementPage>
   );
 }

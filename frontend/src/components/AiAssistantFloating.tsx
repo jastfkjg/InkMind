@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import { useCallback, useEffect, useLayoutEffect, useState, useRef } from "react";
 import {
   BookOutlined,
@@ -390,9 +392,19 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   const { t } = useI18n();
 
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  const writingPage = /\/novels\/\d+\/write$/.test(location.pathname);
+  const managementPage = /\/novels\/\d+\/(settings|people|memos)(\/|$)/.test(location.pathname);
+  const [dockTarget, setDockTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const syncDock = () => setDockTarget(writingPage ? document.getElementById("write-assistant-dock") : null);
+    syncDock();
+    window.addEventListener("inkmind:assistant-dock-ready", syncDock);
+    return () => window.removeEventListener("inkmind:assistant-dock-ready", syncDock);
+  }, [writingPage, novelId]);
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("inkmind:assistant-visibility", { detail: { open: isOpen } }));
-  }, [isOpen]);
+  }, [isOpen, location.pathname]);
   useEffect(() => {
     const minimize = () => setIsOpen(false);
     window.addEventListener("inkmind:assistant-minimize", minimize);
@@ -705,7 +717,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
     setAgentSteps([]);
     setPendingQuestion(null);
     setAttachments([]);
-    setEditorSelection(null);
+    setEditorSelection((selection) => selection?.novelId === activeNovelId ? selection : null);
     setStatus("idle");
   }, [isOpen, activeNovelId]);
 
@@ -1292,19 +1304,21 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   }, [shouldOpenChapterMenuFromInput]);
 
   const handlePanelResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>, mode: PanelResizeMode) => {
+    if (dockTarget && window.innerWidth >= 1180) return;
     event.preventDefault();
     event.stopPropagation();
     resizeRef.current = { startX: event.clientX, startY: event.clientY, startRect: panelRect, mode };
     setIsPanelResizing(true);
-  }, [panelRect]);
+  }, [panelRect, dockTarget]);
 
   const handlePanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (dockTarget && window.innerWidth >= 1180) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, label, a")) return;
     event.preventDefault();
     dragRef.current = { startX: event.clientX, startY: event.clientY, startRect: panelRect };
     setIsPanelDragging(true);
-  }, [panelRect]);
+  }, [panelRect, dockTarget]);
 
   const handleIconPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -1316,7 +1330,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
 
   return (
     <>
-      {!isOpen && (
+      {!isOpen && !writingPage && !managementPage && (
         <button
           type="button"
           className={`ai-assistant-float-btn${isIconDragging ? " ai-assistant-float-btn--dragging" : ""}`}
@@ -1335,7 +1349,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
         </button>
       )}
 
-      {isOpen && (
+      {isOpen && createPortal(
         <div
           className={`ai-assistant-panel${isPanelResizing ? " ai-assistant-panel--resizing" : ""}${isPanelDragging ? " ai-assistant-panel--dragging" : ""}`}
           style={{
@@ -1753,7 +1767,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
               </div>
             </div>
           </div>
-        </div>
+        </div>, dockTarget ?? document.body
       )}
     </>
   );

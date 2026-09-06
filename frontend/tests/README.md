@@ -1,6 +1,6 @@
 # Writing UI regression checks
 
-Run `npm test` for storage validation, user/novel isolation, concurrent save coalescing and failed-save retry tests. These tests use the project's existing esbuild dependency; no additional test framework is required.
+Run `npm test` for storage validation, user/novel isolation, concurrent save coalescing, failed-save retry and paragraph-level preview acceptance tests. These tests use the project's existing esbuild dependency; no additional test framework is required.
 
 ## Isolated browser fixture
 
@@ -16,7 +16,7 @@ VITE_API_URL=http://127.0.0.1:18991 npm run dev -- --host 127.0.0.1 --port 5198 
 
 Open `http://127.0.0.1:5198`. Sign in with `writer@example.invalid` and any nonempty test password. The fixture stores everything in memory and never connects to a real database or model. Stop both processes after testing. Never expose the fixture beyond localhost.
 
-The fixture's `/__test/control` endpoint accepts JSON `{ "failSaves": true, "delay": 2500 }` to simulate failures and latency. Reset with `{ "failSaves": false, "delay": 0 }`. `/__test/state` exposes the in-memory chapters and PATCH log for verification. These endpoints exist only in the fixture, not the application.
+The fixture's `/__test/control` endpoint accepts JSON `{ "failSaves": true, "failMemos": true, "delay": 2500 }` to simulate failures and latency. Reset with `{ "failSaves": false, "failMemos": false, "delay": 0 }`. `/__test/state` exposes the in-memory chapters, user settings, memos, PATCH log and preview confirmations for verification. These endpoints exist only in the fixture, not the application.
 
 ## Smoke checklist
 
@@ -35,6 +35,22 @@ The fixture validates frontend behavior only. Real model streaming, database per
 
 ## README screenshot profile
 
-Run `node tests/ui-fixture.mjs --demo` instead of the default fixture command to load the fictional novel “山海来信” with four chapters and readable sample prose. The other two library cards are display-only; use “山海来信” for editor interactions. All demo data is held in memory and resets when the process restarts. Default smoke-test data and failure controls are unchanged when `--demo` is omitted.
+Run `node tests/ui-fixture.mjs --demo` instead of the default fixture command to load the fictional novel “山海来信” with four chapters and readable sample prose. The other two works start without chapters and support testing the empty state. All demo data is held in memory and resets when the process restarts. Default smoke-test data and failure controls are unchanged when `--demo` is omitted.
 
 The same Vite command and test login above apply. Use a fresh browser profile if earlier smoke tests left local drafts or editor preferences. See [capture notes](../../images/readme/README.md) for exact screenshot states. This fixture covers selected UI flows only: it is not a complete backend, offline mode, or evidence of live model behavior.
+
+The fixture also supports character and memo create/update/delete flows. `failSaves` covers work settings and character saves; `failMemos` covers memo creation and updates. For management-page checks, verify required fields, failed-save input retention and retry, content search, deletion cancellation, and empty states. Inspect settings, lists, and edit forms at 1440px in the browser and at the Electron minimum width of 940px, with both themes and languages.
+
+## Desktop workspace browser scripts
+
+The files in `tests/browser/` export Playwright CLI `run-code` functions. Run from the repository root with a logged-in fixture browser at 1440 × 900, in Chinese:
+
+```bash
+playwright-cli -s=inkmind-ui-work run-code --filename=frontend/tests/browser/library-checks.js
+```
+
+- `library-checks.js` creates an isolated work and checks first-chapter creation, search/list progress, delayed and failed saves, resume, export opening and deletion cancellation.
+- `review-checks.js` requires a fresh `--demo` fixture, chapter 901 open, and the Generate panel open. It checks partial acceptance, title/summary choice, failed confirmation retry and cancel. Run once per fixture reset.
+- `reference-checks.js` requires demo chapter 901, light theme, and the References panel open on People. It checks search, memo draft/retry, mutually exclusive panels, docking at 1440/1280/1180px, dark theme and focus mode.
+
+Scripts write optional screenshots to `/tmp`, modify only the in-memory fixture and return a PASS result when all assertions succeed. Real model/provider execution and Electron packaging are separate integration checks. Mobile-specific changes are outside this desktop iteration.

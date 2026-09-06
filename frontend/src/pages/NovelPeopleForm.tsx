@@ -1,35 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Spin,
-  Alert,
-  Tag,
-  Typography,
-  Space,
-  Tooltip as AntdTooltip,
-  message,
-  Row,
-  Col,
-} from "antd";
-import {
-  SaveOutlined,
-  CloseOutlined,
-  ArrowLeftOutlined,
-  UserOutlined,
-  InfoCircleOutlined,
-  QuestionCircleOutlined,
-} from "@ant-design/icons";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Form, Input, Button, Alert, App as AntApp } from "antd";
+import { SaveOutlined, ArrowLeftOutlined } from "@ant-design/icons";
+import { useI18n } from "@/i18n";
+import { FormSection, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
 import NovelAiNamingAskDock from "@/components/NovelAiNamingAskDock";
 import { apiErrorMessage, createCharacter, fetchCharacters, updateCharacter } from "@/api/client";
-import { useI18n } from "@/i18n";
-const { Title, Text } = Typography;
 const { TextArea } = Input;
 export default function NovelPeopleForm() {
   const { t } = useI18n();
+  const { message: messageApi } = AntApp.useApp();
   const { novelId, characterId } = useParams();
   const id = Number(novelId);
   const cid = characterId ? Number(characterId) : NaN;
@@ -76,14 +56,14 @@ export default function NovelPeopleForm() {
           profile: values.profile || "",
           notes: values.notes || "",
         });
-        message.success(t("peopleform_saved"));
+        messageApi.success(t("peopleform_saved"));
       } else {
         await createCharacter(id, {
           name: values.name,
           profile: values.profile || "",
           notes: values.notes || "",
         });
-        message.success(t("peopleform_added"));
+        messageApi.success(t("peopleform_added"));
       }
       nav(`/novels/${id}/people`);
     } catch (e) {
@@ -92,263 +72,42 @@ export default function NovelPeopleForm() {
       setSaving(false);
     }
   };
-  if (loading) {
-    return (
-      <div
-        style={{
-          padding: "2rem",
-          maxWidth: 900,
-          margin: "0 auto",
-        }}
-      >
-        <Card
-          style={{
-            borderRadius: 16,
-            border: "none",
-            boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "4rem 2rem",
-            }}
-          >
-            <Spin size="large" />
-            <Text
-              type="secondary"
-              style={{ marginLeft: "1rem", fontSize: "1rem" }}
-            >
-              {t("peopleform_loading_character")}
-            </Text>
-          </div>
-        </Card>
-      </div>
-    );
-  }
   return (
-    <div
-      style={{
-        padding: "1rem",
-        maxWidth: 900,
-        margin: "0 auto",
-      }}
-    >
-      <Card
-        style={{
-          borderRadius: 16,
-          border: "none",
-          boxShadow: "0 4px 6px rgba(28, 25, 23, 0.06)",
-        }}
-        title={
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <UserOutlined style={{ color: "var(--accent)", fontSize: "1.25rem" }} />
-            <Title
-              level={4}
-              style={{
-                margin: 0,
-                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-              }}
-            >
-              {isEdit ? t("peopleform_edit_character") : t("peopleform_new_character")}
-            </Title>
-            <Tag color={isEdit ? "blue" : "green"}>
-              {isEdit ? t("peopleform_edit_mode") : t("peopleform_new_mode")}
-            </Tag>
-          </div>
-        }
-        extra={
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => nav(`/novels/${id}/people`)}
-          >
-            {t("peopleform_back_to_list")}
-          </Button>
-        }
-      >
-        {errorMsg && (
-          <Alert
-            message={t("operation_failed_title")}
-            description={errorMsg}
-            type="error"
-            showIcon
-            style={{ marginBottom: "1.5rem" }}
-          />
-        )}
-        <Form
-          form={form}
-          name="characterForm"
-          onFinish={onFinish}
-          layout="vertical"
-          initialValues={{
-            name: "",
-            profile: "",
-            notes: "",
-          }}
-        >
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <InfoCircleOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("peopleform_basic_info")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Form.Item
-              name="name"
-              label={
-                <Space>
-                  <span>{t("peopleform_character_name")}</span>
-                  <AntdTooltip title={t("peopleform_name_tooltip")}>
-                    <QuestionCircleOutlined
-                      style={{ color: "var(--muted)", cursor: "help" }}
-                    />
-                  </AntdTooltip>
-                  <span style={{ color: "var(--error)" }}>*</span>
-                </Space>
-              }
-              rules={[{ required: true, message: t("peopleform_name_required") }]}
-            >
-              <Input
-                placeholder={t("peopleform_name_placeholder")}
-                size="large"
-                prefix={<UserOutlined style={{ color: "var(--muted)" }} />}
-                style={{ height: 44 }}
-              />
-            </Form.Item>
-          </Card>
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <UserOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("peopleform_character_profile")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Form.Item
-              name="profile"
-              label={
-                <Space>
-                  <span>{t("peopleform_personality")}</span>
-                  <AntdTooltip title={t("peopleform_personality_tooltip")}>
-                    <QuestionCircleOutlined
-                      style={{ color: "var(--muted)", cursor: "help" }}
-                    />
-                  </AntdTooltip>
-                  <Tag color="default">{t("peopleform_optional")}</Tag>
-                </Space>
-              }
-            >
-              <TextArea
-                rows={5}
-                placeholder={t("peopleform_personality_placeholder")}
-                style={{
-                  minHeight: 120,
-                  lineHeight: 1.8,
-                }}
-              />
-            </Form.Item>
-          </Card>
-          <Card
-            type="inner"
-            title={
-              <Space>
-                <InfoCircleOutlined style={{ color: "var(--accent)" }} />
-                <span>{t("peopleform_additional_info")}</span>
-              </Space>
-            }
-            style={{
-              marginBottom: "1.5rem",
-              background: "transparent",
-              borderRadius: 12,
-            }}
-          >
-            <Form.Item
-              name="notes"
-              label={
-                <Space>
-                  <span>{t("peopleform_other_notes")}</span>
-                  <AntdTooltip title={t("peopleform_notes_tooltip")}>
-                    <QuestionCircleOutlined
-                      style={{ color: "var(--muted)", cursor: "help" }}
-                    />
-                  </AntdTooltip>
-                  <Tag color="default">{t("peopleform_optional")}</Tag>
-                </Space>
-              }
-            >
-              <TextArea
-                rows={3}
-                placeholder={t("peopleform_notes_placeholder")}
-                style={{
-                  minHeight: 80,
-                  lineHeight: 1.8,
-                }}
-              />
-            </Form.Item>
-          </Card>
-          <Alert
-            message={t("peopleform_tip_title")}
-            description={t("peopleform_tip_content")}
-            type="info"
-            showIcon
-            style={{ marginBottom: "1.5rem" }}
-          />
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  loading={saving}
-                  size="large"
-                  block
-                  style={{
-                    height: 44,
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  {isEdit ? t("peopleform_save_changes") : t("peopleform_add_character")}
-                </Button>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Button
-                  icon={<CloseOutlined />}
-                  onClick={() => nav(`/novels/${id}/people`)}
-                  disabled={saving}
-                  size="large"
-                  block
-                  style={{
-                    height: 44,
-                    fontSize: "1rem",
-                  }}
-                >
-                  {t("peopleform_cancel")}
-                </Button>
-              </Col>
-            </Row>
+    <ManagementPage title={t(isEdit ? "peopleform_edit_character" : "peopleform_new_character")}
+      description={t("management_people_hint")}
+      action={<Link className="novel-back-link" to={`/novels/${id}/people`}><ArrowLeftOutlined />{t("peopleform_back_to_list")}</Link>}>
+      {errorMsg && <Alert title={t("peopleform_save_failed")} description={errorMsg} type="error" showIcon />}
+      {loading && <ManagementLoading label={t("peopleform_loading_character")} />}
+      <Form hidden={loading} form={form} name="characterForm" onFinish={onFinish} layout="vertical"
+        className="novel-form-surface" initialValues={{ name: "", profile: "", notes: "" }}>
+        <FormSection title={t("peopleform_basic_info")} description={t("management_character_name_hint")}>
+          <Form.Item name="name" label={t("peopleform_character_name")} tooltip={t("peopleform_name_tooltip")}
+            rules={[{ required: true, message: t("peopleform_name_required") }]}>
+            <Input placeholder={t("peopleform_name_placeholder")} />
           </Form.Item>
-        </Form>
-      </Card>
-      <div style={{ marginTop: "1rem" }}>
-        <NovelAiNamingAskDock novelId={id} />
-      </div>
-    </div>
+          <details className="novel-ai-tools">
+            <summary>{t("management_ai_inspiration")}</summary>
+            <NovelAiNamingAskDock novelId={id} />
+          </details>
+        </FormSection>
+        <FormSection title={t("peopleform_character_profile")} description={t("management_character_profile_hint")}>
+          <Form.Item name="profile" label={t("peopleform_personality")} tooltip={t("peopleform_personality_tooltip")}>
+            <TextArea rows={5} placeholder={t("peopleform_personality_placeholder")} />
+          </Form.Item>
+          <Form.Item name="notes" label={t("peopleform_other_notes")} tooltip={t("peopleform_notes_tooltip")}>
+            <TextArea rows={3} placeholder={t("management_character_notes_placeholder")} />
+          </Form.Item>
+        </FormSection>
+        <footer className="novel-form-footer">
+          <p>{t("management_character_save_hint")}</p>
+          <div className="novel-form-footer__actions">
+            <Button onClick={() => nav(`/novels/${id}/people`)}>{t("peopleform_cancel")}</Button>
+            <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>
+              {t(isEdit ? "peopleform_save_changes" : "peopleform_add_character")}
+            </Button>
+          </div>
+        </footer>
+      </Form>
+    </ManagementPage>
   );
 }

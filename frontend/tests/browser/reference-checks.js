@@ -1,0 +1,54 @@
+async (page) => {
+  if (!page.url().startsWith('http://127.0.0.1:5198/')) throw new Error('Use the isolated UI fixture only');
+  const check = (value, message) => { if (!value) throw new Error(message); };
+  const state = async () => (await page.request.get('http://127.0.0.1:18991/__test/state')).json();
+  const control = async (data) => page.request.post('http://127.0.0.1:18991/__test/control', { data });
+  const panel = page.getByRole('complementary', { name: '创作资料', exact: true });
+  const original = await page.getByRole('textbox', { name: '章节正文' }).inputValue();
+  await panel.getByRole('searchbox').fill('林照');
+  await panel.getByText('林照', { exact: true }).click();
+  await panel.getByText('年轻的修信师，沿着失落的邮路寻找父亲。', { exact: true }).waitFor();
+  await panel.getByRole('searchbox').fill('不存在的资料');
+  check(await panel.locator('.reference-entry').count() === 0, 'Reference search must filter entries');
+  await panel.getByRole('button', { name: '备忘', exact: true }).click();
+  await panel.getByText('快速记一条备忘', { exact: true }).click();
+  await panel.getByRole('textbox', { name: '标题（可选）', exact: true }).fill('测试伏笔');
+  await panel.getByRole('textbox', { name: '备忘内容', exact: true }).fill('第二章再次提到邮袋上的盐。');
+  await panel.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '创作资料', exact: true }).click();
+  check(await panel.getByRole('textbox', { name: '备忘内容', exact: true }).inputValue() === '第二章再次提到邮袋上的盐。', 'Closing panel must retain note draft');
+  const count = (await state()).memos.length;
+  await control({ failMemos: true });
+  await panel.getByRole('button', { name: '保存备忘', exact: true }).click();
+  await panel.getByRole('alert').filter({ hasText: '测试备忘保存失败' }).waitFor();
+  check((await state()).memos.length === count, 'Failed note must not be created');
+  await control({ failMemos: false });
+  await panel.getByRole('button', { name: '保存备忘', exact: true }).click();
+  await panel.getByText('备忘已保存', { exact: true }).waitFor();
+  check((await state()).memos.length === count + 1, 'Successful retry creates one note');
+  check((await state()).memos.at(-1).novel_id === 901, 'Note must belong to current work');
+  check(await page.getByRole('textbox', { name: '章节正文' }).inputValue() === original, 'References must not alter manuscript');
+  await page.getByRole('button', { name: '问助手', exact: true }).click();
+  await page.locator('#write-assistant-dock .ai-assistant-panel').waitFor();
+  check(!await panel.isVisible(), 'Only one side panel should be visible');
+  for (const width of [1440, 1280, 1180]) {
+    await page.setViewportSize({ width, height: 900 });
+    const editor = await page.locator('.write-editor-card').boundingBox();
+    const assistant = await page.locator('#write-assistant-dock').boundingBox();
+    check(editor.x + editor.width <= assistant.x, `Dock overlaps editor at ${width}px`);
+    check(assistant.x + assistant.width <= width, `Dock overflows at ${width}px`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole('button', { name: '夜间', exact: true }).click();
+  await page.screenshot({ path: '/tmp/inkmind-assistant-dark.png' });
+  await page.getByRole('button', { name: '专注模式', exact: true }).click();
+  await page.getByRole('banner').waitFor({ state: 'hidden' });
+  check(!await page.locator('.ai-assistant-panel').isVisible(), 'Focus mode must hide assistant');
+  check(await page.getByRole('textbox', { name: '章节正文' }).isVisible(), 'Editor must remain visible in focus mode');
+  await page.screenshot({ path: '/tmp/inkmind-focus-new.png' });
+  await page.keyboard.press('Escape');
+  await page.getByRole('banner').waitFor();
+  await page.locator('.ai-assistant-header__close').click();
+  await page.getByRole('button', { name: '日间', exact: true }).click();
+  return 'PASS: reference search, note draft and retry, manuscript preservation, assistant docking at 1440/1280/1180px, dark mode and focus';
+}
