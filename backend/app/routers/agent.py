@@ -1,6 +1,7 @@
 """Agent 编排器 API 路由。
 
 使用 ClaudeOrchestrator（claude-agent-sdk）作为唯一编排器：
+- 有自定义 Anthropic 兼容连接 → 使用该连接的鉴权方式与模型映射
 - 有 ANTHROPIC_API_KEY → 直接连接 Anthropic API
 - 有 DEEPSEEK_API_KEY → 连接 DeepSeek Anthropic 端点（https://api.deepseek.com/anthropic）
 - 两者都没有 → 返回 503 错误

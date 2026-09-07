@@ -12,6 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import Settings, settings
 from app.database import Base, get_db
 from app.deps import get_current_user, get_optional_user
+from app.agent.claude_orchestrator import _build_claude_cli_env
 from app.llm.providers import get_llm, get_llm_from_user_config, resolve_llm_for_user, resolve_agent_llm_for_user
 from app.models import User, UserCustomLLM
 from app.routers import auth, custom_llms, meta
@@ -114,11 +115,11 @@ class DesktopModelsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(resolve_agent_llm_for_user(self.user, self.db), {
             "api_key": "user-test-key", "base_url": "https://user.invalid",
-            "model": "user-agent-model", "source": "custom",
+            "model": "user-agent-model", "claude_auth_mode": "auto", "source": "custom",
         })
         with patch("app.llm.providers.get_llm_from_user_config") as factory:
             resolve_llm_for_user(self.user, "qwen", db=self.db)
-            factory.assert_called_once_with("anthropic", "user-test-key", "https://user.invalid", "user-model", protocol="anthropic")
+            factory.assert_called_once_with("anthropic", "user-test-key", "https://user.invalid", "user-model", protocol="anthropic", claude_auth_mode="auto")
         self.assertEqual(self.client.delete(f"/custom-llms/{custom_id}").status_code, 204)
         with self.assertRaises(ValueError):
             resolve_llm_for_user(self.user, None, db=self.db)
@@ -147,6 +148,19 @@ class DesktopModelsTest(unittest.TestCase):
             with patch("app.llm.providers.QwenLLM") as factory:
                 get_llm("qwen")
                 factory.assert_called_once()
+
+    def test_web_builtin_agent_falls_back_to_deepseek_anthropic(self) -> None:
+        with patch.multiple(
+            settings, desktop_mode=False, anthropic_api_key=None,
+            anthropic_base_url=None, deepseek_api_key="deepseek-key",
+        ):
+            self.assertEqual(resolve_agent_llm_for_user(self.user, self.db), {
+                "api_key": "deepseek-key",
+                "base_url": "https://api.deepseek.com/anthropic",
+                "model": "deepseek-v4-flash",
+                "claude_auth_mode": "auth_token",
+                "source": "builtin",
+            })
 
     def test_custom_client_uses_user_key_and_explicit_endpoint(self) -> None:
         with patch.dict("os.environ", {"OPENAI_BASE_URL": "https://server.invalid"}):
@@ -198,6 +212,46 @@ class DesktopModelsTest(unittest.TestCase):
                 self.assertIsNone(resolve_agent_llm_for_user(self.user, self.db)["api_key"])
         self.assertEqual(self.client.patch("/auth/me", json={"agent_custom_llm_id": custom_id}).status_code, 400)
 
+    def test_claude_auth_mode_is_saved_and_returned(self) -> None:
+        response = self.client.post("/custom-llms", json={
+            "provider": "deepseek", "protocol": "anthropic",
+            "claude_auth_mode": "auth_token", "api_key": "synthetic-key",
+            "base_url": "https://api.deepseek.com/anthropic",
+            "default_model": "deepseek-v4-pro",
+        })
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["claude_auth_mode"], "auth_token")
+        custom_id = response.json()["id"]
+        response = self.client.patch(
+            f"/custom-llms/{custom_id}", json={"claude_auth_mode": "api_key"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["claude_auth_mode"], "api_key")
+
+    def test_claude_cli_env_supports_provider_specific_authentication(self) -> None:
+        fixtures = (
+            ("https://api.anthropic.com", "api_key", "ANTHROPIC_API_KEY"),
+            ("https://api.kimi.com/coding/", "auto", "ANTHROPIC_API_KEY"),
+            ("https://api.deepseek.com/anthropic", "auto", "ANTHROPIC_AUTH_TOKEN"),
+            ("https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic", "auto", "ANTHROPIC_AUTH_TOKEN"),
+            ("https://gateway.example.invalid/anthropic", "api_key", "ANTHROPIC_API_KEY"),
+        )
+        for base_url, mode, expected_key in fixtures:
+            with self.subTest(base_url=base_url, mode=mode):
+                env = _build_claude_cli_env({
+                    "api_key": "fixture-secret", "base_url": base_url,
+                    "model": "fixture-model", "claude_auth_mode": mode,
+                })
+                other_key = "ANTHROPIC_AUTH_TOKEN" if expected_key == "ANTHROPIC_API_KEY" else "ANTHROPIC_API_KEY"
+                self.assertEqual(env[expected_key], "fixture-secret")
+                self.assertEqual(env[other_key], "")
+                for name in (
+                    "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL",
+                    "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+                    "ANTHROPIC_DEFAULT_OPUS_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL",
+                ):
+                    self.assertEqual(env[name], "fixture-model")
+
     def test_protocol_validation_and_legacy_defaults(self) -> None:
         for brand, protocol in (("qwen", "openai"), ("anthropic", "anthropic")):
             response = self.client.post("/custom-llms", json={"provider": brand, "api_key": "synthetic-key"})
@@ -219,8 +273,8 @@ class DesktopModelsTest(unittest.TestCase):
             main._migrate_sqlite()
             main._migrate_sqlite()
         with self.engine.connect() as conn:
-            self.assertEqual(conn.execute(text("SELECT protocol, api_key FROM user_custom_llms ORDER BY id")).all(),
-                             [("openai", "synthetic-qwen"), ("anthropic", "synthetic-anthropic")])
+            self.assertEqual(conn.execute(text("SELECT protocol, claude_auth_mode, api_key FROM user_custom_llms ORDER BY id")).all(),
+                             [("openai", "auto", "synthetic-qwen"), ("anthropic", "auto", "synthetic-anthropic")])
 
 
 if __name__ == "__main__":

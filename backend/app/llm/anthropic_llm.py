@@ -2,6 +2,7 @@ import anthropic
 from collections.abc import Iterator
 
 from app.config import settings
+from app.llm.anthropic_auth import resolve_claude_auth_mode
 from app.llm.base import LLMProvider
 from app.llm.llm_errors import LLMRequestError, wrap_anthropic_error
 
@@ -13,10 +14,17 @@ class AnthropicLLM(LLMProvider):
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        auth_mode: str | None = None,
     ) -> None:
-        client_kwargs: dict = {"api_key": api_key or settings.anthropic_api_key}
-        if base_url or settings.anthropic_base_url:
-            client_kwargs["base_url"] = base_url or settings.anthropic_base_url
+        credential = api_key or settings.anthropic_api_key
+        effective_base_url = base_url or settings.anthropic_base_url
+        client_kwargs: dict = {}
+        if resolve_claude_auth_mode(effective_base_url, auth_mode) == "auth_token":
+            client_kwargs["auth_token"] = credential
+        else:
+            client_kwargs["api_key"] = credential
+        if effective_base_url:
+            client_kwargs["base_url"] = effective_base_url
         self._client = anthropic.Anthropic(**client_kwargs)
         self._model = model or settings.anthropic_model
 

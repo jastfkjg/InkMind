@@ -38,6 +38,7 @@ export type BuiltinProviderInfo = {
 export type CustomLlmInfo = {
   default_model: string | null;
   protocol: "openai" | "anthropic";
+  claude_auth_mode: "auto" | "api_key" | "auth_token";
   id: number;
   provider: string;
   provider_label: string;

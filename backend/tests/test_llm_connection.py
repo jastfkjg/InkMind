@@ -90,7 +90,7 @@ class ConnectionTests(unittest.TestCase):
         self.user.agent_model = "saved-agent-model"
         with patch("app.services.llm_connection.AnthropicLLM") as factory:
             self.assertEqual(self.check("agent"), {"status": "ok"})
-            factory.assert_called_once_with(api_key="fixture-secret", base_url="https://fixture.invalid", model="saved-agent-model")
+            factory.assert_called_once_with(api_key="fixture-secret", base_url="https://fixture.invalid", model="saved-agent-model", auth_mode="auto")
             factory.return_value.check_connection.assert_called_once_with()
 
     def test_generation_uses_saved_custom_selection(self) -> None:
@@ -99,7 +99,7 @@ class ConnectionTests(unittest.TestCase):
         self.user.preferred_llm_model = "saved-writing-model"
         with patch("app.llm.providers.get_llm_from_user_config") as factory:
             self.assertEqual(self.check(), {"status": "ok"})
-            factory.assert_called_once_with("anthropic", "fixture-secret", "https://fixture.invalid", "saved-writing-model", protocol="anthropic")
+            factory.assert_called_once_with("anthropic", "fixture-secret", "https://fixture.invalid", "saved-writing-model", protocol="anthropic", claude_auth_mode="auto")
             factory.return_value.check_connection.assert_called_once_with()
 
     def test_desktop_without_custom_selection_is_unconfigured(self) -> None:
@@ -178,6 +178,29 @@ class ConnectionTests(unittest.TestCase):
 
 
 class SDKConnectionTests(unittest.TestCase):
+    def test_anthropic_client_uses_the_selected_header_mode(self) -> None:
+        with patch("app.llm.anthropic_llm.anthropic.Anthropic") as sdk, \
+                patch.object(settings, "anthropic_api_key", "official-secret"), \
+                patch.object(settings, "anthropic_base_url", None):
+            AnthropicLLM(model="fixture")
+            sdk.assert_called_once_with(api_key="official-secret")
+        with patch("app.llm.anthropic_llm.anthropic.Anthropic") as sdk:
+            AnthropicLLM(
+                api_key="bearer-secret", base_url="https://api.deepseek.com/anthropic",
+                model="fixture", auth_mode="auto",
+            )
+            sdk.assert_called_once_with(
+                auth_token="bearer-secret", base_url="https://api.deepseek.com/anthropic"
+            )
+        with patch("app.llm.anthropic_llm.anthropic.Anthropic") as sdk:
+            AnthropicLLM(
+                api_key="header-secret", base_url="https://api.kimi.com/coding/",
+                model="fixture", auth_mode="auto",
+            )
+            sdk.assert_called_once_with(
+                api_key="header-secret", base_url="https://api.kimi.com/coding/"
+            )
+
     def test_sdk_checks_use_only_model_list_with_bounded_timeout_and_no_retry(self) -> None:
         for factory, sdk_constructor in ((OpenAICompatibleLLM, "app.llm.openai_llm.OpenAI"), (AnthropicLLM, "app.llm.anthropic_llm.anthropic.Anthropic")):
             with patch(sdk_constructor) as sdk:

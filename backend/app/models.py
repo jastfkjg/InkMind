@@ -38,6 +38,9 @@ class UserCustomLLM(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(64))
     protocol: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    claude_auth_mode: Mapped[str] = mapped_column(
+        String(32), default="auto", server_default="auto"
+    )
     default_model: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
     api_key: Mapped[str] = mapped_column(String(512))

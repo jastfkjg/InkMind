@@ -45,6 +45,7 @@ def check_saved_llm_connection(user: User, db: Session, target: str) -> Connecti
             provider = AnthropicLLM(
                 api_key=configuration["api_key"], base_url=configuration["base_url"],
                 model=configuration["model"],
+                auth_mode=configuration["claude_auth_mode"],
             )
     except ValueError:
         return "unconfigured"
@@ -106,7 +107,8 @@ def probe_saved_connection(user: User, db: Session, target: str, mode: ProbeMode
             config = resolve_agent_llm_for_user(user, db)
             if not config["api_key"] or (mode == "model" and not config["model"]):
                 raise ValueError
-            provider = MeteredLLM(AnthropicLLM(api_key=config["api_key"], base_url=config["base_url"], model=config["model"]),
+            provider = MeteredLLM(AnthropicLLM(api_key=config["api_key"], base_url=config["base_url"], model=config["model"],
+                                               auth_mode=config["claude_auth_mode"]),
                                   db, user.id, provider=custom.provider if user.agent_use_custom else "anthropic", source=config["source"], action="模型测试")
     except ValueError:
         return LLMProbeResponse(mode=mode, status="unconfigured")

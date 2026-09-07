@@ -551,6 +551,7 @@ export async function listCustomLLMs(): Promise<CustomLlmInfo[]> {
 
 export async function createCustomLLM(payload: {
   protocol?: "openai" | "anthropic";
+  claude_auth_mode?: "auto" | "api_key" | "auth_token";
   default_model?: string | null;
   provider: string;
   api_key: string;
@@ -565,7 +566,8 @@ export async function updateCustomLLM(
   payload: {
     provider?: string;
     protocol?: "openai" | "anthropic";
-  default_model?: string | null;
+    claude_auth_mode?: "auto" | "api_key" | "auth_token";
+    default_model?: string | null;
     api_key?: string;
     base_url?: string | null;
   }
@@ -1331,6 +1333,7 @@ export async function probeSavedLlm(target: "generation" | "agent", mode: LlmPro
 }
 export async function probeDraftLlm(payload: {
   provider: string; protocol: "openai" | "anthropic"; base_url: string;
+  claude_auth_mode?: "auto" | "api_key" | "auth_token";
   default_model?: string; api_key?: string; custom_llm_id?: number; mode: LlmProbeMode;
 }): Promise<LlmProbeResult> {
   const { data } = await api.post<LlmProbeResult>("/custom-llms/probe", payload, { timeout: 35000 });

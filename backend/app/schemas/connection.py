@@ -30,6 +30,7 @@ class LLMProbeRequest(BaseModel):
 class LLMDraftProbeRequest(BaseModel):
     provider: str
     protocol: Literal["openai", "anthropic"]
+    claude_auth_mode: Literal["auto", "api_key", "auth_token"] = "auto"
     base_url: str
     default_model: str = ""
     api_key: str | None = None

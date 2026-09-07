@@ -14,6 +14,7 @@ import {
 } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
 import {
   fetchNovels,
@@ -413,6 +414,8 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   const [novels, setNovels] = useState<Novel[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedNovelId, setSelectedNovelId] = useState<number | undefined>(novelId);
+  const { user } = useAuth();
+  const [loadedHistoryKey, setLoadedHistoryKey] = useState("");
   const [session, setSession] = useState<AgentSession | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [agentSteps, setAgentSteps] = useState<SseAgentStepData[]>([]);
@@ -449,6 +452,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   const [isChapterMenuOpen, setIsChapterMenuOpen] = useState(false);
   const [editorSelection, setEditorSelection] = useState<EditorSelectionContext | null>(null);
   const activeNovelId = selectedNovelId ?? novelId;
+  const historyKey = user?.id && activeNovelId ? `${SESSION_KEY}_${user.id}_${activeNovelId}` : "";
   const activeNovel = novels.find((item) => item.id === activeNovelId);
   const activeNovelTitle = activeNovel?.title || (activeNovelId ? t("common_untitled") : t("agent_select_work"));
 
@@ -710,16 +714,37 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   }, [novelId]);
 
   useEffect(() => {
-    if (!isOpen || !activeNovelId) return;
-    const stored = loadJson<{ session_id: string; novel_id: number } | null>(`${SESSION_KEY}_${activeNovelId}`, null);
-    setSession(stored?.session_id && stored.novel_id === activeNovelId ? stored as AgentSession : null);
-    setMessages([]);
+    activeRunIdRef.current += 1;
+    activeCloseRef.current?.();
+    activeAbortRef.current?.abort();
+    activeCloseRef.current = null;
+    activeAbortRef.current = null;
+    const stored = historyKey ? loadJson<{ session: AgentSession | null; messages: AgentMessage[] } | null>(historyKey, null) : null;
+    setSession(stored?.session && stored.session.novel_id === activeNovelId ? stored.session : null);
+    setMessages(Array.isArray(stored?.messages) ? stopStreamingMessages(stored.messages).map(message => ({
+      ...message, actionButtons: undefined,
+      taskSections: message.taskSections?.map(section => ({ ...section, saving: false })),
+    })) : []);
+    setLoadedHistoryKey(historyKey);
+    setIsLoading(false);
     setAgentSteps([]);
     setPendingQuestion(null);
     setAttachments([]);
     setEditorSelection((selection) => selection?.novelId === activeNovelId ? selection : null);
     setStatus("idle");
-  }, [isOpen, activeNovelId]);
+  }, [historyKey, activeNovelId]);
+
+  useEffect(() => {
+    if (historyKey && loadedHistoryKey === historyKey) {
+      saveJson(historyKey, { session, messages: messages.map(({ actionButtons: _actions, ...message }) => message) });
+    }
+  }, [historyKey, loadedHistoryKey, session, messages]);
+
+  useEffect(() => () => {
+    activeRunIdRef.current += 1;
+    activeCloseRef.current?.();
+    activeAbortRef.current?.abort();
+  }, []);
 
   const ensureSession = useCallback(async () => {
     if (session) return session;
@@ -729,14 +754,13 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
   const createNewSession = useCallback(async () => {
     const s = await createAgentSession(activeNovelId!);
     setSession(s);
-    saveJson(`${SESSION_KEY}_${activeNovelId}`, s);
     return s;
   }, [activeNovelId]);
 
   const resetSession = useCallback(() => {
     setSession(null);
-    try { localStorage.removeItem(`${SESSION_KEY}_${activeNovelId}`); } catch { /* ignore */ }
-  }, [activeNovelId]);
+    try { localStorage.removeItem(historyKey); } catch { /* ignore */ }
+  }, [historyKey]);
 
   const focusComposer = useCallback(() => {
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -1175,12 +1199,12 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
     setEditorSelection(null);
     setStatus("idle");
     setSession(null);
-    try { localStorage.removeItem(`${SESSION_KEY}_${activeNovelId}`); } catch { /* ignore */ }
+    try { localStorage.removeItem(historyKey); } catch { /* ignore */ }
     if (sessionToInterrupt) {
       try { await interruptAgentSession(activeNovelId, sessionToInterrupt.session_id); } catch { /* ignore */ }
     }
     window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, [activeNovelId, session]);
+  }, [activeNovelId, session, historyKey]);
 
   const handleNovelSelect = useCallback((nextId: number) => {
     if (!Number.isFinite(nextId) || isLoading) return;

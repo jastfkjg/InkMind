@@ -43,8 +43,10 @@ class CustomWritingTests(DatabaseCase):
                 self.assertEqual(response.status_code, 200, response.text)
                 self.assertIn('"summary":', response.text)
                 self.assertNotIn('"error":', response.text)
-                factory.assert_called_once_with("qwen", "fixture-only", "https://fixture.invalid/v1",
-                                                "deepseek-v4-pro", protocol="openai")
+                factory.assert_called_once_with(
+                    "qwen", "fixture-only", "https://fixture.invalid/v1",
+                    "deepseek-v4-pro", protocol="openai", claude_auth_mode="auto",
+                )
 
     def test_chapter_routes_pass_custom_preflight(self) -> None:
         routes = [("generate", {"chapter_id": 99999, "summary": "概要"}), ("generate-sse", {"chapter_id": 99999, "summary": "概要"}),

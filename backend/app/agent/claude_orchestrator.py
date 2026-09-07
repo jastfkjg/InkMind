@@ -51,6 +51,7 @@ from app.agent.task_queue import get_task_queue
 from app.config import settings
 from app.database import SessionLocal
 from app.language import Language
+from app.llm.anthropic_auth import resolve_claude_auth_mode
 from app.llm.metered_llm import LLMUsageAccumulator
 from app.llm.sse_stream import SseEvent, SseStreamBuilder, sse_agent_step, sse_error
 from app.llm.token_counter import count_tokens
@@ -511,6 +512,41 @@ async def _stream_task_display_text(
         await asyncio.sleep(0.006)
 
 
+_CLAUDE_MODEL_ENV_NAMES = (
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
+
+
+def _build_claude_cli_env(agent_config: dict[str, str | None]) -> dict[str, str]:
+    """Build an isolated Claude CLI environment for the selected connection."""
+    api_key = (agent_config.get("api_key") or "").strip()
+    base_url = (agent_config.get("base_url") or "").strip()
+    model = (agent_config.get("model") or "").strip()
+
+    # Empty values intentionally mask credentials/model mappings inherited by
+    # the Electron or backend process from another provider configuration.
+    env = {
+        "ANTHROPIC_API_KEY": "",
+        "ANTHROPIC_AUTH_TOKEN": "",
+        "ANTHROPIC_BASE_URL": base_url,
+        **{name: "" for name in _CLAUDE_MODEL_ENV_NAMES},
+    }
+    auth_mode = resolve_claude_auth_mode(
+        base_url, agent_config.get("claude_auth_mode")
+    )
+    if api_key:
+        env["ANTHROPIC_AUTH_TOKEN" if auth_mode == "auth_token" else "ANTHROPIC_API_KEY"] = api_key
+    if model:
+        for name in _CLAUDE_MODEL_ENV_NAMES:
+            env[name] = model
+    return env
+
+
 def _build_agent_options(novel_id: int, session_id: str = "", user: User | None = None) -> ClaudeAgentOptions:
     from claude_agent_sdk.types import HookMatcher
     from app.llm.providers import resolve_agent_llm_for_user
@@ -522,11 +558,7 @@ def _build_agent_options(novel_id: int, session_id: str = "", user: User | None 
     finally:
         db.close()
 
-    env_overrides: dict[str, str] = {}
-    if agent_config["api_key"]:
-        env_overrides["ANTHROPIC_API_KEY"] = agent_config["api_key"]
-    if agent_config["base_url"]:
-        env_overrides["ANTHROPIC_BASE_URL"] = agent_config["base_url"]
+    env_overrides = _build_claude_cli_env(agent_config)
 
     options_kwargs: dict[str, Any] = {
         "system_prompt": _ORCHESTRATOR_SYSTEM_PROMPT,
@@ -539,8 +571,7 @@ def _build_agent_options(novel_id: int, session_id: str = "", user: User | None 
         "hooks": {"PreToolUse": [HookMatcher(matcher=None, hooks=[_pre_tool_use_hook])]},
         "stderr": lambda line: log.warning("Claude CLI stderr: %s", line),
     }
-    if env_overrides:
-        options_kwargs["env"] = env_overrides
+    options_kwargs["env"] = env_overrides
     if settings.claude_cli_path:
         options_kwargs["cli_path"] = settings.claude_cli_path
     if agent_config.get("model"):
@@ -697,6 +728,7 @@ class ClaudeOrchestrator:
                     timeout=_SDK_CONNECT_TIMEOUT_SECONDS,
                 )
                 session.sdk_client = client
+                yield builder.build_tool_result_step("agent_connect", "连接已建立")
             else:
                 client = session.sdk_client
 
@@ -710,6 +742,8 @@ class ClaudeOrchestrator:
                 client.query(user_message),
                 timeout=_SDK_QUERY_TIMEOUT_SECONDS,
             )
+
+            yield builder.build_tool_result_step("agent_query", "请求已发送，等待模型响应")
 
             full_text = ""
             msg_id = str(uuid.uuid4())
@@ -774,6 +808,9 @@ class ClaudeOrchestrator:
 
             try:
                 while True:
+                    if (not waiting_for_user and session.pending_question is None
+                            and time.monotonic() - last_activity_at > _SDK_IDLE_TIMEOUT_SECONDS):
+                        raise asyncio.TimeoutError("模型长时间未返回有效响应")
                     emitted_task_event = False
                     async for event in emit_pending_task_stream_events():
                         emitted_task_event = True
@@ -814,8 +851,7 @@ class ClaudeOrchestrator:
                             and session.pending_question is None
                             and time.monotonic() - last_activity_at > _SDK_IDLE_TIMEOUT_SECONDS
                         ):
-                            yield builder.build_error("Agent 长时间没有返回响应，请稍后重试。")
-                            break
+                            raise asyncio.TimeoutError("模型长时间未返回有效响应")
                         continue
 
                     if message is None:
@@ -826,7 +862,8 @@ class ClaudeOrchestrator:
                         break
 
                     waiting_for_user = session.pending_question is not None
-                    last_activity_at = time.monotonic()
+                    if isinstance(message, (AssistantMessage, UserMessage, ResultMessage)):
+                        last_activity_at = time.monotonic()
                     session.touch()
 
                     if isinstance(message, dict) and "_error" in message:
@@ -1016,7 +1053,14 @@ class ClaudeOrchestrator:
         except Exception as e:
             log.exception("ClaudeOrchestrator chat error")
             if isinstance(e, asyncio.TimeoutError):
-                yield builder.build_error("Agent 连接或发送请求超时，请检查 Claude/Anthropic 配置后重试。")
+                failed_client = session.sdk_client
+                session.sdk_client = None
+                yield builder.build_error("AI 助手等待响应超时，请检查助手模型连接后重试。")
+                if failed_client is not None:
+                    try:
+                        await asyncio.wait_for(failed_client.disconnect(), timeout=5.0)
+                    except Exception:
+                        log.warning("Timed out SDK client cleanup failed")
             else:
                 yield builder.build_error(f"Agent 调用失败: {e}")
             yield builder.build_status("idle")

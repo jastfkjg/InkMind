@@ -155,6 +155,7 @@ def get_llm_from_user_config(
     base_url: str | None = None,
     model: str | None = None,
     protocol: str | None = None,
+    claude_auth_mode: str | None = None,
 ) -> LLMProvider:
     if not api_key.strip():
         raise ValueError("请在 AI 设置中为自定义 LLM 配置 API Key")
@@ -165,7 +166,12 @@ def get_llm_from_user_config(
         if settings.desktop_mode:
             base_url = base_url or "https://api.anthropic.com"
             model = model or _PROVIDER_DEFAULTS["anthropic"]["model"]
-        return AnthropicLLM(api_key=api_key, base_url=base_url, model=model)
+        return AnthropicLLM(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            auth_mode=claude_auth_mode,
+        )
     defaults = _PROVIDER_DEFAULTS.get(name, _PROVIDER_DEFAULTS["openai"])
     effective_base_url = base_url or defaults.get("base_url")
     if settings.desktop_mode and not effective_base_url:
@@ -221,6 +227,7 @@ def resolve_llm_for_user(
                     custom_llm.base_url,
                     getattr(user, "preferred_llm_model", None) or custom_llm.default_model,
                     protocol=custom_llm.effective_protocol,
+                    claude_auth_mode=custom_llm.claude_auth_mode or "auto",
                 )
                 uid = getattr(user, "id", None)
                 if uid is not None:
@@ -265,13 +272,37 @@ def resolve_agent_llm_for_user(user: object | None, db: Session | None = None) -
                     "api_key": custom_llm.api_key,
                     "base_url": custom_llm.base_url or ("https://api.anthropic.com" if settings.desktop_mode else None),
                     "model": getattr(user, "agent_model", None) or custom_llm.default_model,
+                    "claude_auth_mode": custom_llm.claude_auth_mode or "auto",
                     "source": "custom",
                 }
     if settings.desktop_mode or getattr(user, "agent_use_custom", False):
-        return {"api_key": None, "base_url": None, "model": None, "source": "custom"}
+        return {
+            "api_key": None,
+            "base_url": None,
+            "model": None,
+            "claude_auth_mode": "auto",
+            "source": "custom",
+        }
+    if settings.anthropic_api_key:
+        return {
+            "api_key": settings.anthropic_api_key,
+            "base_url": settings.anthropic_base_url,
+            "model": getattr(user, "agent_model", None) or settings.anthropic_model or None,
+            "claude_auth_mode": "auto" if settings.anthropic_base_url else "api_key",
+            "source": "builtin",
+        }
+    if settings.deepseek_api_key:
+        return {
+            "api_key": settings.deepseek_api_key,
+            "base_url": "https://api.deepseek.com/anthropic",
+            "model": getattr(user, "agent_model", None) or _PROVIDER_DEFAULTS["deepseek"]["model"],
+            "claude_auth_mode": "auth_token",
+            "source": "builtin",
+        }
     return {
-        "api_key": settings.anthropic_api_key,
-        "base_url": settings.anthropic_base_url,
-        "model": getattr(user, "agent_model", None) or settings.anthropic_model or None,
+        "api_key": None,
+        "base_url": None,
+        "model": None,
+        "claude_auth_mode": "auto",
         "source": "builtin",
     }

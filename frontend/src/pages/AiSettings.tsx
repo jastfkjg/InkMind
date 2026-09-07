@@ -4,6 +4,7 @@ import {
   message, Row, Col, Select, Switch, Input, Tooltip, Modal, Tag, Spin,
   Popconfirm,
 } from "antd";
+import type { FormInstance } from "antd";
 import {
   SaveOutlined, ArrowLeftOutlined, SettingOutlined, RobotOutlined,
   CheckCircleOutlined, SafetyOutlined, EyeOutlined, GoldOutlined,
@@ -36,6 +37,7 @@ const { Option } = Select;
 const { Password } = Input;
 
 type AgentMode = "flexible" | "react" | "direct";
+type ClaudeAuthMode = "auto" | "api_key" | "auth_token";
 
 const ALL_PROVIDERS = [
   { value: "openai", label: "OpenAI", defaultUrl: "https://api.openai.com/v1" },
@@ -49,6 +51,31 @@ const ALL_PROVIDERS = [
 
 function isMasked(value: string | null | undefined): boolean {
   return !!value && value.includes("***");
+}
+
+function ClaudeAuthModeField({ form }: { form: FormInstance }) {
+  const { t } = useI18n();
+  return (
+    <Form.Item noStyle shouldUpdate={(previous, current) => previous.protocol !== current.protocol}>
+      {() => form.getFieldValue("protocol") === "anthropic" ? (
+        <Form.Item
+          name="claude_auth_mode"
+          label={t("ai_settings_claude_auth_mode")}
+          extra={t("ai_settings_claude_auth_mode_hint")}
+          rules={[{ required: true }]}
+        >
+          <Select
+            size="large"
+            options={[
+              { value: "auto", label: t("ai_settings_claude_auth_auto") },
+              { value: "api_key", label: t("ai_settings_claude_auth_api_key") },
+              { value: "auth_token", label: t("ai_settings_claude_auth_token") },
+            ]}
+          />
+        </Form.Item>
+      ) : null}
+    </Form.Item>
+  );
 }
 
 type ProviderValue =
@@ -284,6 +311,7 @@ export default function AiSettings() {
       await createCustomLLM({
         provider: values.provider,
         protocol: values.protocol,
+        claude_auth_mode: values.claude_auth_mode,
         default_model: values.default_model.trim(),
         api_key: values.api_key.trim(),
         base_url: values.base_url?.trim() || null,
@@ -307,7 +335,11 @@ export default function AiSettings() {
     const values = await editForm.validateFields();
     setEditSaving(true);
     try {
-      const payload: { default_model?: string; provider?: string; protocol?: "openai" | "anthropic"; api_key?: string; base_url?: string | null } = { protocol: values.protocol, default_model: values.default_model.trim() };
+      const payload: { default_model?: string; provider?: string; protocol?: "openai" | "anthropic"; claude_auth_mode?: ClaudeAuthMode; api_key?: string; base_url?: string | null } = {
+        protocol: values.protocol,
+        claude_auth_mode: values.claude_auth_mode,
+        default_model: values.default_model.trim(),
+      };
       if (values.provider) payload.provider = values.provider;
       if (values.api_key && !isMasked(values.api_key)) {
         payload.api_key = values.api_key.trim();
@@ -345,6 +377,7 @@ export default function AiSettings() {
     editForm.setFieldsValue({
       provider: custom.provider,
       protocol: custom.protocol,
+      claude_auth_mode: custom.claude_auth_mode || "auto",
       default_model: custom.default_model || "",
       api_key: custom.api_key || "",
       base_url: custom.base_url || "",
@@ -356,6 +389,7 @@ export default function AiSettings() {
     addForm.setFieldsValue({
       provider: "openai",
       protocol: "openai",
+      claude_auth_mode: "auto",
       default_model: "",
       api_key: "",
       base_url: ALL_PROVIDERS[0].defaultUrl,
@@ -1114,6 +1148,7 @@ export default function AiSettings() {
               options={[{ value: "openai", label: t("ai_settings_protocol_openai") },
                 { value: "anthropic", label: t("ai_settings_protocol_anthropic") }]} />
           </Form.Item>
+          <ClaudeAuthModeField form={addForm} />
           <Form.Item
             name="api_key"
             label={t("ai_settings_api_key")}
@@ -1189,6 +1224,7 @@ export default function AiSettings() {
               options={[{ value: "openai", label: t("ai_settings_protocol_openai") },
                 { value: "anthropic", label: t("ai_settings_protocol_anthropic") }]} />
           </Form.Item>
+          <ClaudeAuthModeField form={editForm} />
           <Form.Item
             name="api_key"
             label={t("ai_settings_api_key")}

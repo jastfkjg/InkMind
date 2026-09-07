@@ -22,6 +22,7 @@ router = APIRouter(prefix="/custom-llms", tags=["custom-llms"])
 class CustomLLMCreate(BaseModel):
     provider: str
     protocol: Literal["openai", "anthropic"] | None = None
+    claude_auth_mode: Literal["auto", "api_key", "auth_token"] = "auto"
     api_key: str
     default_model: str | None = None
     base_url: str | None = None
@@ -37,6 +38,7 @@ class CustomLLMCreate(BaseModel):
 class CustomLLMUpdate(BaseModel):
     provider: str | None = None
     protocol: Literal["openai", "anthropic"] | None = None
+    claude_auth_mode: Literal["auto", "api_key", "auth_token"] | None = None
     api_key: str | None = None
     default_model: str | None = None
     base_url: str | None = None
@@ -54,6 +56,7 @@ class CustomLLMOut(BaseModel):
     provider: str
     provider_label: str
     protocol: Literal["openai", "anthropic"]
+    claude_auth_mode: Literal["auto", "api_key", "auth_token"]
     api_key: str | None
     base_url: str | None
     default_base_url: str | None
@@ -72,6 +75,7 @@ class CustomLLMOut(BaseModel):
             id=obj.id,
             provider=provider,
             protocol=obj.effective_protocol,
+            claude_auth_mode=obj.claude_auth_mode or "auto",
             default_model=obj.default_model,
             provider_label=_PROVIDER_LABELS.get(provider, provider),
             api_key=_mask_key(obj.api_key),
@@ -113,6 +117,7 @@ def create_custom_llm(body: CustomLLMCreate, user: CurrentUser, db: Session = De
         user_id=user.id,
         provider=provider,
         protocol=protocol,
+        claude_auth_mode=body.claude_auth_mode,
         default_model=body.default_model,
         api_key=body.api_key.strip(),
         base_url=effective_base_url,
@@ -141,6 +146,8 @@ def update_custom_llm(item_id: int, body: CustomLLMUpdate, user: CurrentUser, db
         # Persist the previous protocol before changing the brand of legacy records.
         item.protocol = item.effective_protocol
         item.provider = provider
+    if body.claude_auth_mode is not None:
+        item.claude_auth_mode = body.claude_auth_mode
     if "default_model" in body.model_fields_set:
         item.default_model = body.default_model
     if body.api_key is not None:
@@ -187,7 +194,8 @@ def probe_custom_llm(body: LLMDraftProbeRequest, user: CurrentUser, db: Session 
         raise HTTPException(status_code=400, detail="不支持的供应商")
     try:
         provider = get_llm_from_user_config(body.provider, key, body.base_url.strip(),
-                                            body.default_model.strip() or None, protocol=body.protocol)
+                                            body.default_model.strip() or None, protocol=body.protocol,
+                                            claude_auth_mode=body.claude_auth_mode)
     except (ValueError, TypeError):
         return LLMProbeResponse(mode=body.mode, status="endpoint")
     metered = MeteredLLM(provider, db, user.id, provider=body.provider, source="custom", action="模型测试")

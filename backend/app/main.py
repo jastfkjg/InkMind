@@ -30,6 +30,7 @@ def _migrate_sqlite() -> None:
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                         provider VARCHAR(64) NOT NULL,
+                        claude_auth_mode VARCHAR(32) NOT NULL DEFAULT 'auto',
                         api_key VARCHAR(512) NOT NULL,
                         base_url VARCHAR(512),
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -42,6 +43,8 @@ def _migrate_sqlite() -> None:
                 conn.execute(text("UPDATE user_custom_llms SET protocol = CASE WHEN provider = 'anthropic' THEN 'anthropic' ELSE 'openai' END"))
             if "default_model" not in custom_columns:
                 conn.execute(text("ALTER TABLE user_custom_llms ADD COLUMN default_model VARCHAR(256)"))
+            if "claude_auth_mode" not in custom_columns:
+                conn.execute(text("ALTER TABLE user_custom_llms ADD COLUMN claude_auth_mode VARCHAR(32) NOT NULL DEFAULT 'auto'"))
             cols_users = {c["name"] for c in insp.get_columns("users")}
             if "preferred_llm_provider" not in cols_users:
                 conn.execute(
