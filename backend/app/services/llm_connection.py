@@ -1,3 +1,4 @@
+from time import perf_counter
 import anthropic
 import openai
 from sqlalchemy.orm import Session
@@ -61,11 +62,16 @@ def check_saved_llm_connection(user: User, db: Session, target: str) -> Connecti
 def probe_provider(provider: LLMProvider, mode: ProbeMode) -> "LLMProbeResponse":
     from app.schemas.connection import LLMProbeResponse
     from app.llm.metered_llm import TokenQuotaExceededError
+    started = perf_counter()
+
+    def result(**values: object) -> LLMProbeResponse:
+        return LLMProbeResponse(**values, elapsed_ms=round((perf_counter() - started) * 1000, 1))
+
     try:
         if mode == "models":
-            return LLMProbeResponse(mode=mode, status="ok", models=provider.list_models())
+            return result(mode=mode, status="ok", models=provider.list_models())
         provider.test_model()
-        return LLMProbeResponse(mode=mode, status="ok")
+        return result(mode=mode, status="ok")
     except Exception as error:
         code = getattr(error, "status_code", None)
         status = _error_status(error)
@@ -82,7 +88,7 @@ def probe_provider(provider: LLMProvider, mode: ProbeMode) -> "LLMProbeResponse"
                 status = "endpoint"
             elif code in (400, 422):
                 status = "request"
-        return LLMProbeResponse(mode=mode, status=status, http_status=code)
+        return result(mode=mode, status=status, http_status=code)
 
 
 def probe_saved_connection(user: User, db: Session, target: str, mode: ProbeMode) -> "LLMProbeResponse":

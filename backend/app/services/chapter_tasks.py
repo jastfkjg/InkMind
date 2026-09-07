@@ -1,7 +1,7 @@
 import logging
 
 from app.database import SessionLocal
-from app.llm.providers import list_available_providers, resolve_llm_for_user
+from app.llm.providers import has_generation_configuration, resolve_llm_for_user
 from app.models import Chapter, User
 from app.services.chapter_llm import summarize_chapter_body
 
@@ -16,7 +16,7 @@ def regenerate_chapter_summary_task(chapter_id: int, novel_id: int, user_id: int
         chapter = db.get(Chapter, chapter_id)
         if not user or not chapter or chapter.novel_id != novel_id:
             return
-        if not list_available_providers():
+        if not has_generation_configuration(user, db):
             return
         try:
             llm = resolve_llm_for_user(user, None, db=db, action="自动摘要")

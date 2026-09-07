@@ -25,7 +25,7 @@ from app.language import Language
 from app.llm.llm_errors import LLMRequestError
 from app.llm.ndjson_stream import ndjson_line
 from app.llm.sse_stream import SseStreamBuilder, convert_ndjson_chunk_to_sse
-from app.llm.providers import list_available_providers, resolve_llm_for_user
+from app.llm.providers import has_generation_configuration, resolve_llm_for_user
 from app.models import Chapter, Novel
 from app.observability.otel_ai import ai_span
 from app.routers.novels import _get_owned_novel
@@ -163,10 +163,10 @@ def create_workflow(
     Returns:
         工作流状态信息
     """
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
 
     novel = _get_owned_novel(db, user.id, novel_id)
@@ -259,10 +259,10 @@ def execute_phase(
     Returns:
         阶段执行结果
     """
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
 
     novel = _get_owned_novel(db, user.id, novel_id)
@@ -329,10 +329,10 @@ def execute_phase_stream(
     Returns:
         流式输出，NDJSON 格式
     """
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
 
     novel = _get_owned_novel(db, user.id, novel_id)
@@ -400,10 +400,10 @@ def execute_phase_sse(
     Returns:
         SSE 事件流
     """
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
 
     novel = _get_owned_novel(db, user.id, novel_id)

@@ -31,3 +31,23 @@
 .ops-page .ops-metric-card .ant-card-body { min-height: 126px; padding: 20px 24px; }
 .ops-page .ops-metric-card, .ops-page .ops-panel { box-shadow: none; }
 .ops-page .ops-panel h4.ant-typography, .management-page .ant-card-head h4.ant-typography { font-size: 20px; }
+
+.role-model-field { min-width: 0; }
+.llm-probe-inline { margin-top: 8px; font-size: 12px; }
+.llm-probe-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.llm-probe-actions .ant-btn { font-size: 12px; }
+.llm-probe-note { color: var(--muted); font-size: 12px; }
+.llm-probe-result { margin-top: 8px; overflow-wrap: anywhere; color: var(--muted); }
+.llm-probe-result .is-success { color: var(--ink); }
+.llm-probe-result .is-warning { color: var(--accent-active); }
+.llm-probe-result details { margin-top: 4px; font-size: 12px; }
+.llm-probe-result summary { cursor: pointer; width: fit-content; }
+.llm-probe-result p { margin: 6px 0; line-height: 1.6; }
+
+.custom-llm-identity { flex-wrap: wrap; max-width: 100%; }
+.custom-llm-identity > .ant-typography { flex: 0 0 auto; max-width: 100%; }
+.custom-llm-identity .ant-tag { margin: 0; }
+.custom-llm-actions { max-width: 100%; }
+.custom-llm-details { margin-top: 8px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.custom-llm-details summary { cursor: pointer; width: fit-content; }
+.custom-llm-details p { margin: 4px 0; }

@@ -133,7 +133,6 @@ export default function NovelWrite() {
     height: number;
   } | null>(null);
 
-  const [llmOptions, setLlmOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [summaryInspireBusy, setSummaryInspireBusy] = useState(false);
@@ -534,7 +533,6 @@ export default function NovelWrite() {
         const [list, meta] = await Promise.all([fetchChapters(id), fetchLlmProviders()]);
         if (cancelled || novelIdRef.current !== id) return;
         setChapters(list);
-        setLlmOptions(meta.builtin.map((p) => p.id));
         setProviderMeta(meta);
         if (list.length > 0) {
           const previous = user ? readPosition(localStorage, sessionKey(user.id, id)) : null;
@@ -715,7 +713,8 @@ export default function NovelWrite() {
   }, [content, busy, selectionPanel]);
 
   const hasBody = (content || "").trim().length > 0;
-  const hasLlm = llmOptions.length > 0;
+  const modelSelection = user && providerMeta ? llmSelection(user, providerMeta, isDesktopApp) : null;
+  const hasLlm = Boolean(modelSelection?.generationProvider && modelSelection.generationModel);
 
   function canMutateChapter(): boolean {
     if (busy || previewLoading || versionActionLoading || saveBlockedRef.current || navigationPendingRef.current) {
@@ -1723,7 +1722,6 @@ export default function NovelWrite() {
     return <p className="muted">{t("write_loading_chapters")}</p>;
   }
 
-  const modelSelection = user && providerMeta ? llmSelection(user, providerMeta, isDesktopApp) : null;
   const generationModelLabel = modelSelection?.generationModel || t("ai_settings_not_configured");
   const drawerOpen = Boolean(rightTool && activeId !== null);
   const drawerTitle = rightTool

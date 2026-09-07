@@ -12,7 +12,7 @@ from app.deps import CurrentUser
 from app.language import Language
 from app.llm.llm_errors import LLMRequestError
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
-from app.llm.providers import list_available_providers, resolve_llm_for_user
+from app.llm.providers import has_generation_configuration, resolve_llm_for_user
 from app.models import Chapter, Character, Novel
 from app.schemas.ai import (
     NovelAiChatIn,
@@ -108,10 +108,10 @@ def novel_ai_chat(
     language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
     chapters = db.query(Chapter).filter(Chapter.novel_id == novel_id).order_by(Chapter.sort_order).all()
     characters = db.query(Character).filter(Character.novel_id == novel_id).order_by(Character.id).all()
@@ -147,10 +147,10 @@ def novel_ai_naming(
     language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
     system, user_msg = novel_naming_messages(novel, body, language=language)
 
@@ -184,10 +184,10 @@ def novel_ai_chapter_summary_inspire_ep(
     language: Language,
 ):
     novel = _get_owned_novel(db, user.id, novel_id)
-    if not list_available_providers():
+    if not has_generation_configuration(user, db):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="未配置任何 LLM API Key",
+            detail="请在 AI 设置中配置并选择可用的正文生成模型",
         )
     chapters = (
         db.query(Chapter)

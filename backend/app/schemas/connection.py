@@ -43,3 +43,4 @@ class LLMProbeResponse(BaseModel):
     status: str
     models: list[str] = []
     http_status: int | None = None
+    elapsed_ms: float | None = None

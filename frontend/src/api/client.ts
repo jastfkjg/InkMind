@@ -1299,7 +1299,7 @@ export async function checkLlmConnection(target: "generation" | "agent"): Promis
 }
 
 export type LlmProbeMode = "models" | "model";
-export type LlmProbeResult = { mode: LlmProbeMode; status: string; models: string[]; http_status: number | null };
+export type LlmProbeResult = { mode: LlmProbeMode; status: string; models: string[]; http_status: number | null; elapsed_ms?: number | null };
 export async function probeSavedLlm(target: "generation" | "agent", mode: LlmProbeMode): Promise<LlmProbeResult> {
   const { data } = await api.post<LlmProbeResult>("/meta/llm-probe", { target, mode }, { timeout: 35000 });
   return data;

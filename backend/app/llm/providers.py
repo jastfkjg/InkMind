@@ -82,6 +82,17 @@ def list_available_providers() -> list[str]:
     return out
 
 
+def has_generation_configuration(user: object, db: Session, explicit_provider: str | None = None) -> bool:
+    """Check the selected connection, without making a model request."""
+    if getattr(user, "generation_use_custom", False):
+        from app.models import UserCustomLLM
+        custom_id = getattr(user, "generation_custom_llm_id", None)
+        custom = db.get(UserCustomLLM, custom_id) if custom_id else None
+        return bool(custom and custom.user_id == getattr(user, "id", None)
+                    and (custom.api_key or "").strip())
+    return _normalize_provider_name(explicit_provider, user) in list_available_providers()
+
+
 def get_builtin_provider_info() -> list[dict]:
     available = list_available_providers()
     result = []

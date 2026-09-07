@@ -22,6 +22,20 @@ from app.routers.meta import router
 
 
 class ConnectionTests(unittest.TestCase):
+    def test_probe_duration_includes_success_and_failure(self) -> None:
+        from app.services.llm_connection import probe_provider
+        for mode in ("models", "model"):
+            for failure in (False, True):
+                with self.subTest(mode=mode, failure=failure):
+                    provider = Mock()
+                    provider.list_models.return_value = ["example-model"]
+                    if failure:
+                        getattr(provider, "list_models" if mode == "models" else "test_model").side_effect = TimeoutError()
+                    with patch("app.services.llm_connection.perf_counter", side_effect=[10.0, 11.25]):
+                        result = probe_provider(provider, mode)
+                    self.assertEqual(result.elapsed_ms, 1250.0)
+                    self.assertEqual(result.status, "timeout" if failure else "ok")
+
     def setUp(self) -> None:
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(self.engine)

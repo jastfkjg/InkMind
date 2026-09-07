@@ -1,5 +1,11 @@
 export const workspacePolishTranslations = {
   zh: {
+    llm_compact_placeholder: "选择或输入模型 ID", llm_refresh_models: "刷新列表",
+    llm_save_before_test: "请先保存模型", llm_test_cost_short: "测试消耗少量 Token",
+    llm_list_count: "已获取 {count} 个模型", llm_request_ok: "请求成功",
+    llm_list_unavailable: "当前地址未提供模型列表，可手动输入",
+    llm_request_failed: "请求未成功", llm_total_duration: "总耗时", llm_seconds: "秒", llm_details: "查看详情",
+
     workspace_switch: "切换作品", workspace_library: "返回作品库",
     workspace_back_write: "返回写作", workspace_back_settings: "返回作品设定",
     workspace_back_people: "返回人物", workspace_back_memos: "返回备忘",
@@ -19,6 +25,12 @@ export const workspacePolishTranslations = {
     workspace_usage_sources: "用量来源", workspace_usage_scope: "下方展示最近记录，累计用量包含全部历史记录。",
   },
   en: {
+    llm_compact_placeholder: "Select or enter a model ID", llm_refresh_models: "Refresh list",
+    llm_save_before_test: "Save the model first", llm_test_cost_short: "Testing uses a few tokens",
+    llm_list_count: "Retrieved {count} models", llm_request_ok: "Request succeeded",
+    llm_list_unavailable: "Model list unavailable at this address. Enter an ID manually.",
+    llm_request_failed: "Request unsuccessful", llm_total_duration: "Total time", llm_seconds: "s", llm_details: "Details",
+
     workspace_switch: "Switch work", workspace_library: "Back to library",
     workspace_back_write: "Back to writing", workspace_back_settings: "Back to work settings",
     workspace_back_people: "Back to characters", workspace_back_memos: "Back to memos",

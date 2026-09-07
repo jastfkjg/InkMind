@@ -12,8 +12,7 @@ import {
   LinkOutlined,
 } from "@ant-design/icons";
 import ConnectionModelFields from "@/components/ConnectionModelFields";
-import ModelInput from "@/components/ModelInput";
-import ConnectionStatus from "@/components/ConnectionStatus";
+import RoleModelField from "@/components/RoleModelField";
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigation } from "@/context/NavigationContext";
@@ -406,31 +405,9 @@ export default function AiSettings() {
   const primaryColor = colors.primaryColor;
 
 
-  const genDecoded = genProviderValue ? decodeProviderValue(genProviderValue) : null;
   const genCurrentModels = genProviderValue ? getModelsForProviderValue(genProviderValue) : [];
 
-  const genProviderLabel = genDecoded
-    ? genDecoded.kind === "builtin"
-      ? providerInfo?.builtin.find((p) => p.id === genDecoded.providerId)?.label || genDecoded.providerId
-      : (() => {
-          const cl = providerInfo?.custom_llms.find((c) => c.id === genDecoded.customLlmId);
-          return cl ? `${cl.provider_label}` : t("ai_settings_custom_tag");
-        })()
-    : "";
-
-  const agentDecoded = agentProviderValue ? decodeProviderValue(agentProviderValue) : null;
   const agentCurrentModels = agentProviderValue ? getModelsForProviderValue(agentProviderValue) : [];
-
-  const agentProviderLabel = agentDecoded
-    ? agentDecoded.kind === "builtin"
-      ? providerInfo?.agent_builtin
-        ? t("ai_settings_agent_builtin_proxy")
-        : "Anthropic"
-      : (() => {
-          const cl = providerInfo?.custom_llms.find((c) => c.id === agentDecoded.customLlmId);
-          return cl ? cl.provider_label : t("ai_settings_custom_tag");
-        })()
-    : "";
 
   const agentCurrentModel = agentProviderValue ? agentModel : "";
 
@@ -492,11 +469,6 @@ export default function AiSettings() {
           />
         )}
 
-        <div className="connection-overview">
-          <ConnectionStatus target="generation" title={t("ai_settings_generation_ai")} provider={genProviderLabel} model={genModel} configured={!!genProviderValue && !!genModel} disabled={genSaving || addSaving || editSaving} revision={providerInfo} />
-          <ConnectionStatus target="agent" title={t("ai_settings_agent_ai")} provider={agentProviderLabel} model={agentCurrentModel} configured={!!agentProviderValue && !!agentCurrentModel} disabled={agentSaving || addSaving || editSaving} revision={providerInfo} />
-        </div>
-        <p className="workspace-hint">{t("workspace_connections_hint")}</p>
         <div className="settings-section-nav" role="group" aria-label={t("settings_sections")}>
           {(["connections", "preferences", "advanced"] as const).map((key) => <button key={key} aria-pressed={settingsSection === key} onClick={() => setSettingsSection(key)}>{t(`settings_section_${key}`)}</button>)}
         </div>
@@ -505,7 +477,7 @@ export default function AiSettings() {
             const name = String(errorFields[0]?.name[0] || "");
             setSettingsSection(["agent_mode", "max_llm_iterations", "max_tokens_per_task"].includes(name) ? "advanced" : "preferences");
           }}>
-            <section hidden={settingsSection !== "connections"} aria-label={t("settings_section_connections")}><p className="settings-section-hint">{t("settings_hint_connections")}</p>{/* ===== 正文生成 ===== */}
+            <section hidden={settingsSection !== "connections"} aria-label={t("settings_section_connections")}>{/* ===== 正文生成 ===== */}
             <Card
               type="inner"
               title={
@@ -516,9 +488,7 @@ export default function AiSettings() {
               }
               style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
             >
-              <Paragraph style={{ color: secondaryTextColor, marginBottom: "1rem" }}>
-                {t("ai_settings_generation_ai_desc")}
-              </Paragraph>
+
               <Row gutter={24}>
                 <Col xs={24} md={12}>
                   <div style={{ marginBottom: 8 }}>
@@ -589,20 +559,12 @@ export default function AiSettings() {
                     </Text>
                   </div>
                   <Spin spinning={genSaving} size="small">
-                    <ModelInput value={genModel} models={genCurrentModels}
+                    <RoleModelField key={JSON.stringify([genProviderValue, providerInfo])} target="generation" value={genModel} models={genCurrentModels}
                       disabled={genSaving || !genProviderValue} onSave={handleGenModelChange} />
-                    <Text type="secondary">{t("ai_settings_model_custom_hint")}</Text>
+
                   </Spin>
                 </Col>
               </Row>
-              <div style={{ marginTop: "0.75rem" }}>
-                <Text
-                  type="secondary"
-                  style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
-                >
-                  {isDesktopApp && !genProviderValue ? t("ai_settings_add_provider_hint") : t("ai_settings_switch_hint")}
-                </Text>
-              </div>
             </Card>
 
             {/* ===== AI 助手 (Agent) ===== */}
@@ -616,9 +578,7 @@ export default function AiSettings() {
               }
               style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
             >
-              <Paragraph style={{ color: secondaryTextColor, marginBottom: "1rem" }}>
-                {t("ai_settings_agent_ai_desc")}
-              </Paragraph>
+
               <Row gutter={24}>
                 <Col xs={24} md={12}>
                   <div style={{ marginBottom: 8 }}>
@@ -689,20 +649,13 @@ export default function AiSettings() {
                     </Text>
                   </div>
                   <Spin spinning={agentSaving} size="small">
-                    <ModelInput value={agentCurrentModel} models={agentCurrentModels}
+                    <RoleModelField key={JSON.stringify([agentProviderValue, providerInfo])} target="agent" value={agentCurrentModel} models={agentCurrentModels}
                       disabled={agentSaving || !agentProviderValue} onSave={handleAgentModelChange} />
-                    <Text type="secondary">{t("ai_settings_model_custom_hint")}</Text>
+
                   </Spin>
                 </Col>
               </Row>
-              <div style={{ marginTop: "0.75rem" }}>
-                <Text
-                  type="secondary"
-                  style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
-                >
-                  {!agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
-                </Text>
-              </div>
+              {!agentProviderValue && <Text type="secondary">{t("ai_settings_agent_setup_hint")}</Text>}
             </Card>
 
             {/* ===== Custom LLM Management ===== */}
@@ -772,7 +725,7 @@ export default function AiSettings() {
                         gap: 8,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="custom-llm-identity" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <Text strong style={{ color: textColor }}>
                           {cl.provider_label}
                         </Text>
@@ -796,7 +749,7 @@ export default function AiSettings() {
                           </Tag>
                         )}
                       </div>
-                      <Space size={4}>
+                      <Space className="custom-llm-actions" size={4} wrap>
                         <Button
                           size="small"
                           icon={<EditOutlined />}
@@ -816,7 +769,7 @@ export default function AiSettings() {
                         </Popconfirm>
                       </Space>
                     </div>
-                    <div style={{ marginTop: 4 }}>
+                    <details className="custom-llm-details"><summary>{t("llm_details")}</summary>
                       <Text
                         type="secondary"
                         style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
@@ -835,7 +788,8 @@ export default function AiSettings() {
                           URL: {cl.base_url}
                         </Text>
                       )}
-                    </div>
+                      <p>{t("ai_settings_available_models")}: {cl.models.join(", ") || "-"}</p>
+                    </details>
                     <div style={{ marginTop: 2 }}>
                       <Text
                         type="secondary"
@@ -843,8 +797,7 @@ export default function AiSettings() {
                       >
                         {t("ai_settings_protocol")}: {t(cl.protocol === "anthropic" ? "ai_settings_protocol_anthropic" : "ai_settings_protocol_openai")}
                         <br />
-                        {t("llm_default_model")}: {cl.default_model || "—"}<br />
-                        {t("ai_settings_available_models")}: {cl.models.join(", ") || "-"}
+                        {t("llm_default_model")}: {cl.default_model || "—"}
                       </Text>
                     </div>
                   </div>
