@@ -561,6 +561,9 @@ def _build_agent_options(novel_id: int, session_id: str = "", user: User | None 
     env_overrides = _build_claude_cli_env(agent_config)
 
     options_kwargs: dict[str, Any] = {
+        # None loads Claude Code's user/project/local settings, whose env can
+        # override this connection (e.g. a stale localhost gateway).
+        "setting_sources": [],
         "system_prompt": _ORCHESTRATOR_SYSTEM_PROMPT,
         "mcp_servers": {"inkmind": mcp_server},
         "allowed_tools": ALL_TOOL_NAMES + ["AskUserQuestion"],

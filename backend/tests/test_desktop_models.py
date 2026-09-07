@@ -12,7 +12,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import Settings, settings
 from app.database import Base, get_db
 from app.deps import get_current_user, get_optional_user
-from app.agent.claude_orchestrator import _build_claude_cli_env
+from app.agent.claude_orchestrator import _build_agent_options, _build_claude_cli_env
 from app.llm.providers import get_llm, get_llm_from_user_config, resolve_llm_for_user, resolve_agent_llm_for_user
 from app.models import User, UserCustomLLM
 from app.routers import auth, custom_llms, meta
@@ -20,6 +20,22 @@ from app.routers.agent import _get_backend, _create_orchestrator
 
 
 class DesktopModelsTest(unittest.TestCase):
+    def test_agent_disables_host_settings_in_the_spawned_cli(self) -> None:
+        from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
+
+        config = {"api_key": "fixture-secret", "base_url": "https://fixture.invalid",
+                  "model": "fixture-model", "claude_auth_mode": "api_key"}
+        with patch("app.agent.claude_orchestrator.SessionLocal"), \
+             patch("app.agent.claude_orchestrator._build_mcp_server", return_value={}), \
+             patch("app.llm.providers.resolve_agent_llm_for_user", return_value=config):
+            options = _build_agent_options(1, "fixture-session")
+        options.cli_path = "/fixture/claude"
+        transport = SubprocessCLITransport(prompt="hi", options=options)
+        command = transport._build_command()
+        self.assertIn("--setting-sources=", command)
+        self.assertEqual(options.env["ANTHROPIC_BASE_URL"], config["base_url"])
+        self.assertEqual(options.env["ANTHROPIC_API_KEY"], config["api_key"])
+
     def setUp(self) -> None:
         self.runtime = patch.multiple(
             settings, desktop_mode=True, anthropic_api_key="server-anthropic",
