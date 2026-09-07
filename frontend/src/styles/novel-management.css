@@ -30,7 +30,7 @@
 .novel-management-page input.ant-input, .novel-management-page .ant-input-affix-wrapper { min-height: 40px; font-size: 14px; border-radius: 8px; }
 .novel-management-page .ant-input-affix-wrapper > input.ant-input { min-height: auto; }
 .novel-management-page textarea.ant-input { font-size: 14px; line-height: 1.85; padding: 10px 12px; border-radius: 8px; resize: vertical; }
-.novel-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--border); padding: 18px 0 20px; }
+.novel-form-footer { position: sticky; bottom: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-top: 1px solid var(--border); padding: 18px 0 20px; background: var(--card); }
 .novel-form-footer p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
 .novel-form-footer__actions { display: flex; gap: 10px; flex-shrink: 0; margin-left: auto; }
 .novel-management-loading { min-height: 240px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
@@ -78,6 +78,33 @@
 .novel-ai-tools .input, .novel-ai-tools .textarea { color: var(--ink); border-color: var(--border); background: var(--bg-deep); font-size: 14px; }
 .novel-ai-tools .textarea::placeholder { color: var(--muted); opacity: 1; }
 .novel-management-page a:focus-visible, .novel-ai-tools > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.novel-form-surface .ant-input { scroll-margin-bottom: 100px; }
+.novel-form-status.is-dirty { color: var(--accent-active); }
+.theme--dark .novel-form-status.is-dirty { color: var(--accent-soft); }
+.novel-leave-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.novel-reference-browser { display: grid; grid-template-columns: minmax(240px, 31%) minmax(0, 1fr); min-height: 440px; }
+.novel-reference-index { min-width: 0; border-right: 1px solid var(--border); }
+.novel-reference-search { padding: 20px 16px 12px; }
+.novel-reference-search > [role="status"] { display: block; color: var(--muted); font-size: 12px; margin-top: 10px; }
+.novel-reference-list { list-style: none; margin: 0; padding: 0 8px 12px; max-height: calc(100vh - 340px); min-height: 220px; overflow-y: auto; }
+.novel-reference-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-width: 0; overflow: hidden; padding: 14px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--ink); cursor: pointer; font-family: var(--font-ui); }
+.novel-reference-item:hover { background: var(--bg-hover); }
+.novel-reference-item.is-selected { background: var(--bg-hover); box-shadow: inset 3px 0 var(--accent); }
+.novel-reference-item .novel-entry__avatar { width: 32px; height: 32px; flex-basis: 32px; font-size: 16px; background: var(--card); }
+.novel-reference-item__body { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; overflow: hidden; }
+.novel-reference-item__body strong { font-size: 14px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.novel-reference-item__body > span { min-width: 0; max-width: 100%; color: var(--muted); font-size: 13px; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.novel-reference-item__body time { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 3px; }
+.novel-reference-detail { min-width: 0; max-height: calc(100vh - 220px); min-height: 440px; overflow-y: auto; border-radius: 0 12px 12px 0; }
+.novel-reference-detail__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 28px 20px; border-bottom: 1px solid var(--border-soft); background: var(--card); }
+.novel-reference-detail__heading > div:first-child { min-width: 0; }
+.novel-reference-detail__heading h2 { font-family: var(--font-ui); font-size: 20px; font-weight: 600; line-height: 1.6; margin: 0 0 8px; overflow-wrap: anywhere; }
+.novel-reference-detail__heading time { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.novel-reference-detail__content { padding: 24px 28px 32px; }
+.novel-reference-detail__content section + section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border-soft); }
+.novel-reference-detail__content h3 { color: var(--muted); font-family: var(--font-ui); font-size: 13px; font-weight: 500; margin: 0 0 12px; }
+.novel-reference-detail__content p { color: var(--ink-soft); font-size: 15px; line-height: 1.9; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.novel-reference-item:focus-visible, .novel-reference-detail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 1050px) {
   .novel-content:has(.novel-management-page) { padding: 24px !important; }
   .novel-form-surface { padding: 24px 24px 0; }
@@ -91,4 +118,10 @@
   .novel-entry__heading { display: block; }
   .novel-entry { gap: 10px; flex-wrap: wrap; }
   .novel-entry__actions { margin-left: auto; }
+  .novel-reference-browser { grid-template-columns: minmax(0, 1fr); }
+  .novel-reference-index { border-right: 0; border-bottom: 1px solid var(--border); }
+  .novel-reference-list { min-height: 0; max-height: 220px; }
+  .novel-reference-detail { max-height: none; min-height: 280px; }
+  .novel-reference-detail__heading { padding: 20px; }
+  .novel-reference-detail__content { padding: 20px; }
 }

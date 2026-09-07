@@ -23,6 +23,8 @@ class NovelUpdate(BaseModel):
     background: str | None = None
     genre: str | None = Field(default=None, max_length=128)
     writing_style: str | None = None
+    is_pinned: bool = False
+    is_archived: bool = False
 
 
 class NovelOut(BaseModel):
@@ -32,6 +34,8 @@ class NovelOut(BaseModel):
     background: str
     genre: str
     writing_style: str
+    is_pinned: bool = False
+    is_archived: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -1,64 +1,58 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOutletContext, useParams } from "react-router-dom";
 import { Form, Input, Button, Alert, App as AntApp } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { apiErrorMessage, updateNovel } from "@/api/client";
+import { useUnsavedForm } from "@/hooks/useUnsavedForm";
 import type { Novel } from "@/types";
 import { useI18n } from "@/i18n";
 import { FormSection, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
 type Ctx = { novel: Novel | null; setNovel: React.Dispatch<React.SetStateAction<Novel | null>> };
 const { TextArea } = Input;
+const emptyValues = { title: "", background: "", genre: "", writingStyle: "" };
 export default function NovelSettings() {
   const { t } = useI18n();
   const { message: messageApi } = AntApp.useApp();
   const { novelId } = useParams();
   const id = Number(novelId);
   const { novel, setNovel } = useOutletContext<Ctx>();
-  const [form] = Form.useForm();
-  const [saving, setSaving] = useState(false);
+  const [form] = Form.useForm<typeof emptyValues>();
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const loadedId = useRef<number | null>(null);
+  const { dirty, saving, initialize, refreshDirty, save, leaveDialog } = useUnsavedForm({
+    form, emptyValues,
+    async onSave(values) {
+      setErrorMsg("");
+      setSuccessMsg("");
+      try {
+        const n = await updateNovel(id, {
+          title: values.title,
+          background: values.background || "",
+          genre: values.genre || "",
+          writing_style: values.writingStyle || "",
+        });
+        setNovel(n);
+        messageApi.success(t("settings_success"));
+        setSuccessMsg(t("settings_success"));
+      } catch (error) {
+        setErrorMsg(apiErrorMessage(error));
+        throw error;
+      }
+    },
+  });
   useEffect(() => {
-    if (!novel) return;
-    form.setFieldsValue({
-      title: novel.title,
-      background: novel.background,
-      genre: novel.genre,
-      writingStyle: novel.writing_style,
-    });
-  }, [novel, form]);
-  const onFinish = async (values: {
-    title: string;
-    background?: string;
-    genre?: string;
-    writingStyle?: string;
-  }) => {
-    setErrorMsg("");
-    setSuccessMsg("");
-    setSaving(true);
-    try {
-      const n = await updateNovel(id, {
-        title: values.title,
-        background: values.background || "",
-        genre: values.genre || "",
-        writing_style: values.writingStyle || "",
-      });
-      setNovel(n);
-      messageApi.success(t("settings_success"));
-      setSuccessMsg(t("settings_success"));
-      setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (e) {
-      setErrorMsg(apiErrorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  };
+    if (!novel || loadedId.current === novel.id) return;
+    loadedId.current = novel.id;
+    initialize({ title: novel.title, background: novel.background || "", genre: novel.genre || "", writingStyle: novel.writing_style || "" });
+  }, [novel, initialize]);
   return (
     <ManagementPage title={t("settings_title")} description={t("manage_novel_basic_info")}>
+      {leaveDialog}
       {successMsg && <Alert title={successMsg} type="success" showIcon role="status" />}
       {errorMsg && <Alert title={t("save_error_title")} description={errorMsg} type="error" showIcon />}
       {!novel && <ManagementLoading label={t("loading_novel_info")} />}
-      <Form hidden={!novel} form={form} name="novelSettings" onFinish={onFinish} layout="vertical"
+      <Form hidden={!novel} form={form} name="novelSettings" onFinish={() => void save()} onValuesChange={() => { refreshDirty(); setSuccessMsg(""); }} disabled={saving} layout="vertical"
         className="novel-form-surface" initialValues={{ title: "", background: "", genre: "", writingStyle: "" }}>
         <FormSection title={t("settings_general")} description={t("management_basic_hint")}>
           <div className="novel-form-grid">
@@ -79,7 +73,7 @@ export default function NovelSettings() {
           </Form.Item>
         </FormSection>
         <footer className="novel-form-footer">
-          <p>{t("management_settings_hint")}</p>
+          <p role="status" className={dirty ? "novel-form-status is-dirty" : "novel-form-status"}>{t(saving ? "form_saving" : dirty ? "form_unsaved" : "form_saved")}</p>
           <div className="novel-form-footer__actions">
             <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>{t("settings_save")}</Button>
           </div>

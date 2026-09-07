@@ -1,7 +1,16 @@
+import { libraryOrganizeTranslations } from "./libraryOrganize";
+import { referenceFormsTranslations } from "./referenceForms";
+import { writingLayoutTranslations } from "./writingLayout";
+import { workspacePolishTranslations } from "./workspacePolish";
 export type Language = "zh" | "en";
 
 export const translations: Record<Language, Record<string, string>> = {
   zh: {
+    ...libraryOrganizeTranslations.zh,
+    ...referenceFormsTranslations.zh,
+    ...writingLayoutTranslations.zh,
+    ...workspacePolishTranslations.zh,
+
     library_count: "共 {count} 部作品",
     library_view: "作品显示方式",
     library_grid: "卡片视图",
@@ -50,7 +59,7 @@ export const translations: Record<Language, Record<string, string>> = {
     settings_section_connections: "模型连接",
     settings_section_preferences: "生成偏好",
     settings_section_advanced: "高级选项",
-    settings_hint_connections: "正文模型负责生成与改写，对话助手负责协助与工具操作。模型切换会立即保存。",
+    settings_hint_connections: "正文模型负责生成与改写，对话助手负责协助与工具操作。两者可分别配置。",
     settings_hint_preferences: "设置生成内容的预览、质量检查和语言，调整后保存。",
     settings_hint_advanced: "调整助手的工作方式和单次任务资源上限，通常保留默认值即可。",
     settings_preferences_save_hint: "此按钮保存生成偏好和高级选项。",
@@ -301,7 +310,13 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_not_configured: "未配置",
     ai_settings_provider_placeholder: "选择已配置的供应商",
     ai_settings_add_provider_hint: "请先在下方添加自定义 LLM，再选择供应商和模型。",
-    ai_settings_agent_setup_hint: "请先在下方添加 Anthropic 兼容的自定义 LLM，再为 AI 助手选择供应商和模型。",
+    ai_settings_protocol: "API 协议",
+    ai_settings_protocol_openai: "OpenAI 兼容",
+    ai_settings_protocol_anthropic: "Anthropic 兼容",
+    ai_settings_protocol_hint: "协议独立于供应商品牌。对话与工具助手需要 Anthropic 兼容协议；切换后请填写该协议对应的 Base URL。",
+    ai_settings_protocol_url_required: "请填写与所选 API 协议匹配的 Base URL",
+    ai_settings_model_custom_hint: "可选预置模型，或输入模型 ID 后按 Enter / 保存",
+    ai_settings_agent_setup_hint: "暂无 Anthropic 兼容配置。请在下方添加或编辑 LLM，选择 Anthropic 兼容协议并填写对应的 Base URL。",
     ai_settings_generation_model_placeholder: "如 gpt-4o-mini, deepseek-chat 等",
     ai_settings_provider: "供应商",
 
@@ -320,9 +335,9 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_api_key_required: "请输入 API Key",
     ai_settings_current_config: "当前 AI 配置",
     ai_settings_switch_success: "AI 配置已切换",
-    ai_settings_switch_hint: "切换供应商或模型将立即生效，无需手动保存",
+    ai_settings_switch_hint: "切换供应商或选择预置模型会自动保存；手动输入模型 ID 后请按 Enter 或保存",
     ai_settings_custom_llm_management: "自定义 LLM 管理",
-    ai_settings_custom_llm_management_desc: "添加和管理你的自定义 LLM 配置。添加后可在上方供应商选择中使用，模型列表由供应商自动提供。",
+    ai_settings_custom_llm_management_desc: "添加和管理你的自定义 LLM 配置。添加后可在上方供应商选择中使用，预置模型仅供参考，也可手动输入模型 ID。",
     ai_settings_no_custom_llms: "暂无自定义 LLM，点击上方按钮添加",
     ai_settings_add_custom_llm_title: "添加自定义 LLM",
     ai_settings_edit_custom_llm_title: "编辑自定义 LLM",
@@ -331,7 +346,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_delete_custom_confirm: "确定要删除此自定义 LLM 吗？如果正在使用中，将自动切换回内置供应商。",
     ai_settings_confirm_delete: "确定删除",
     ai_settings_cancel: "取消",
-    ai_settings_available_models: "可用模型",
+    ai_settings_available_models: "预置模型（仅供参考）",
     
     usage_title: "Token 用量统计",
     usage_action_generate: "生成",
@@ -1307,6 +1322,11 @@ export const translations: Record<Language, Record<string, string>> = {
     agent_task_section_generating: "正在生成...",
   },
   en: {
+    ...libraryOrganizeTranslations.en,
+    ...referenceFormsTranslations.en,
+    ...writingLayoutTranslations.en,
+    ...workspacePolishTranslations.en,
+
     library_count: "{count} works",
     library_view: "Library view",
     library_grid: "Grid view",
@@ -1355,7 +1375,7 @@ export const translations: Record<Language, Record<string, string>> = {
     settings_section_connections: "Model connections",
     settings_section_preferences: "Writing preferences",
     settings_section_advanced: "Advanced",
-    settings_hint_connections: "The writing model generates and rewrites text; the assistant handles chat and tools. Model changes save immediately.",
+    settings_hint_connections: "The writing model generates and rewrites text; the assistant handles chat and tools. Configure each independently.",
     settings_hint_preferences: "Choose preview, quality checks and language, then save your preferences.",
     settings_hint_advanced: "Adjust how the assistant works and its task limits. Defaults suit most writing sessions.",
     settings_preferences_save_hint: "Saves writing preferences and advanced options.",
@@ -1606,7 +1626,13 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_not_configured: "Not configured",
     ai_settings_provider_placeholder: "Select a configured provider",
     ai_settings_add_provider_hint: "Add a custom LLM below, then select its provider and model.",
-    ai_settings_agent_setup_hint: "Add an Anthropic-compatible custom LLM below, then select its provider and model for the AI assistant.",
+    ai_settings_protocol: "API protocol",
+    ai_settings_protocol_openai: "OpenAI compatible",
+    ai_settings_protocol_anthropic: "Anthropic compatible",
+    ai_settings_protocol_hint: "Protocol is independent of provider. The assistant requires Anthropic compatibility. After switching, enter the matching Base URL.",
+    ai_settings_protocol_url_required: "Enter the Base URL for the selected API protocol",
+    ai_settings_model_custom_hint: "Choose a preset or enter a model ID and press Enter / Save",
+    ai_settings_agent_setup_hint: "No Anthropic-compatible connection. Add or edit an LLM below and select the Anthropic protocol with its matching Base URL.",
     ai_settings_generation_model_placeholder: "e.g. gpt-4o-mini, deepseek-chat",
     ai_settings_provider: "Provider",
 
@@ -1625,9 +1651,9 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_api_key_required: "Please enter API Key",
     ai_settings_current_config: "Current AI Configuration",
     ai_settings_switch_success: "AI configuration switched",
-    ai_settings_switch_hint: "Switching provider or model takes effect immediately, no manual save needed",
+    ai_settings_switch_hint: "Provider and preset changes save automatically; press Enter or Save after entering a model ID",
     ai_settings_custom_llm_management: "Custom LLM Management",
-    ai_settings_custom_llm_management_desc: "Add and manage your custom LLM configurations. After adding, they can be selected in the provider dropdown above. Model lists are automatically provided by the provider.",
+    ai_settings_custom_llm_management_desc: "Add and manage your custom LLM configurations. After adding, they can be selected in the provider dropdown above. Preset models are for reference; you can also enter a model ID.",
     ai_settings_no_custom_llms: "No custom LLMs yet. Click the button above to add one.",
     ai_settings_add_custom_llm_title: "Add Custom LLM",
     ai_settings_edit_custom_llm_title: "Edit Custom LLM",
@@ -1636,7 +1662,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_delete_custom_confirm: "Are you sure you want to delete this custom LLM? If it's currently in use, it will automatically switch back to the built-in provider.",
     ai_settings_confirm_delete: "Confirm Delete",
     ai_settings_cancel: "Cancel",
-    ai_settings_available_models: "Available models",
+    ai_settings_available_models: "Preset models (reference only)",
     
     usage_title: "Token Usage Statistics",
     usage_action_generate: "Generate",

@@ -1,0 +1,69 @@
+/* Scope the adaptive pane layout to the writing page; management forms reuse other write controls. */
+.write-shell.write-layout { margin-left: 0; }
+.write-layout .write-workspace-toolbar { flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
+.write-layout .write-workspace-toolbar .write-sidenav-toggle { flex-basis: auto; align-self: center; }
+.write-layout .write-workspace-toolbar > .write-action-strip { flex: 1; min-width: 320px; }
+.write-layout .write-workspace-toolbar__actions { margin-left: auto; flex: 0 0 auto; }
+.write-layout .write-ai-quickbar { margin: 0; padding: 0; }
+.write-layout .write-ai-quickbtn { height: 32px; padding-inline: 9px; font-weight: 500; }
+.write-layout .write-ai-quickbtn:hover:not(:disabled) { transform: none; }
+.write-layout .write-editor-header { padding: 16px 24px 12px; gap: 6px; }
+.write-layout .write-body-wrapper { padding-top: 16px; }
+.write-layout .write-editor-nav { margin-left: -6px; }
+.write-layout .editor-title--improved { font-size: 28px; }
+.write-layout .write-workspace { position: relative; gap: 0; }
+.write-layout .write-chapter-pane[hidden] { display: none; }
+.write-layout .write-chapter-pane { width: var(--write-chapter-width); flex: 0 0 var(--write-chapter-width); margin-right: 12px; min-width: 0; }
+.write-layout .write-chapter-pane .write-left-sidebar { width: 100%; flex-basis: auto; height: 100%; transition: none; }
+.write-layout .write-left-inner.card { padding-right: 0 !important; }
+.write-layout .write-stage { position: relative; }
+.write-layout .write-pane-resize { display: none; }
+.write-layout-picker { position: relative; }
+.write-layout-popover { position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 260px; max-width: calc(100vw - 40px); padding: 16px; border: 1px solid var(--write-hairline); border-radius: 8px; background: var(--write-canvas); box-shadow: var(--write-shadow-soft); color: var(--write-body); font: 13px/1.6 var(--font-ui); }
+.write-layout-range { display: block; margin-bottom: 14px; }
+.write-layout-range > span { display: flex; justify-content: space-between; gap: 16px; }
+.write-layout-range output { color: var(--write-muted); font-variant-numeric: tabular-nums; }
+.write-layout-range input { width: 100%; margin: 12px 0 0; accent-color: var(--write-accent); cursor: pointer; }
+.write-layout-popover p { margin: 0 0 10px; color: var(--write-muted); font-size: 12px; }
+.write-layout .write-sidenav-toggle > .is-auto-collapsed::after { content: ""; width: 4px; height: 4px; background: var(--write-accent); border-radius: 50%; position: absolute; bottom: 4px; }
+.write-layout--resizing, .write-layout--resizing * { cursor: col-resize !important; user-select: none !important; }
+
+@media (min-width: 900px) {
+  .write-layout .write-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+  .write-layout .write-stage--with-panel { grid-template-columns: minmax(0, 1fr) var(--write-tools-width); }
+  .write-layout .write-stage > .write-workspace { grid-column: 1; grid-row: 1; min-width: 0; }
+  .write-layout .write-stage > :is(.write-ai-drawer, .write-reference-panel, .write-evaluate-panel, .write-selection-result-float, .write-assistant-dock) {
+    grid-column: 2; grid-row: 1; position: relative !important; inset: auto !important; width: 100% !important; height: var(--write-frame-height); max-height: var(--write-frame-height); min-height: 0; transform: none !important; margin: 0; box-shadow: none; border: 1px solid var(--write-hairline); border-radius: 12px; overflow: hidden;
+  }
+  .write-layout .write-stage > .write-evaluate-panel, .write-layout .write-stage > .write-selection-result-float { display: flex; flex-direction: column; }
+  .write-layout .write-evaluate-panel__body, .write-layout .write-selection-result-float__body { flex: 1; min-height: 0; overflow: auto; }
+  .write-layout :is(.write-ai-drawer-head, .write-evaluate-panel__head, .write-selection-result-float__head) { cursor: default; }
+  .write-layout .write-assistant-dock > .ai-assistant-panel { position: relative !important; inset: auto !important; width: 100% !important; height: 100% !important; min-width: 0; min-height: 0; max-height: none; box-shadow: none; border: 0; border-radius: 0; }
+  .write-layout .write-assistant-dock :is(.ai-assistant-panel__resize, .ai-assistant-panel__width-handle) { display: none; }
+  .write-layout .write-assistant-dock .ai-assistant-header { cursor: default; }
+  .write-layout .write-assistant-dock .agent-messages { padding-inline: 14px; }
+  .write-layout .write-assistant-dock .agent-input-container { padding: 12px; }
+  .write-layout .write-assistant-dock .agent-message-avatar { display: none; }
+  .write-layout .write-pane-resize { display: block; position: absolute; z-index: 46; top: 0; bottom: 0; width: 12px; cursor: col-resize; touch-action: none; outline-offset: -2px; border-radius: 6px; }
+  .write-layout .write-pane-resize::after { content: ""; position: absolute; top: 12px; bottom: 12px; left: 5px; width: 2px; border-radius: 6px; background: transparent; }
+  .write-layout .write-pane-resize:hover::after, .write-layout .write-pane-resize:focus-visible::after, .write-layout--resizing .write-pane-resize::after { background: var(--write-accent); }
+  .write-layout .write-pane-resize:focus-visible { outline: 2px solid var(--write-accent); }
+  .write-layout .write-pane-resize--chapters { left: var(--write-chapter-width); }
+  .write-layout .write-pane-resize--tools { right: var(--write-tools-width); height: var(--write-frame-height); }
+  .write-layout--sidebar-overlay .write-chapter-pane { position: absolute; top: 0; bottom: 0; left: 0; z-index: 47; width: min(320px, 80vw); }
+  .write-layout--sidebar-overlay .write-left-inner.card { background: var(--write-canvas); border: 1px solid var(--write-hairline); padding: 12px !important; box-shadow: var(--write-shadow); }
+  .write-layout--sidebar-overlay .write-sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 44; border: 0; background: transparent; }
+  .write-layout.write-focus-mode .write-stage { grid-template-columns: minmax(0, 1fr); width: 100%; flex: 1; min-height: 0; }
+  .write-layout.write-focus-mode .write-stage > .write-workspace { height: 100%; }
+}
+
+@media (max-width: 899px) {
+  .write-layout .write-chapter-pane { flex-basis: 0; width: 0; margin: 0; }
+  .write-layout .write-chapter-pane .write-left-sidebar { width: min(320px, calc(100vw - 24px)); height: auto; }
+  .write-layout .write-workspace-toolbar > .write-action-strip { order: 3; flex-basis: 100%; min-width: 0; }
+  .write-layout .write-left-inner.card { padding: 12px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .write-layout .write-ai-quickbtn, .write-layout .write-left-sidebar { transition: none; }
+}

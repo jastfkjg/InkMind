@@ -36,6 +36,7 @@ export type BuiltinProviderInfo = {
 };
 
 export type CustomLlmInfo = {
+  protocol: "openai" | "anthropic";
   id: number;
   provider: string;
   provider_label: string;
@@ -61,6 +62,8 @@ export type Novel = {
   id: number;
   user_id: number;
   title: string;
+  is_pinned: boolean;
+  is_archived: boolean;
   background: string;
   genre: string;
   writing_style: string;

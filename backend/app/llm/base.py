@@ -17,6 +17,10 @@ def calc_max_tokens_from_word_count(word_count: int | None, *, language: str = "
 
 
 class LLMProvider(ABC):
+    def check_connection(self) -> None:
+        """Read provider metadata without generating text or recording token usage."""
+        raise NotImplementedError
+
     @abstractmethod
     def stream_complete(
         self, system: str, user: str, *, max_tokens: int | None = None

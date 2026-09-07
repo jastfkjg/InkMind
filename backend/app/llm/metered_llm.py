@@ -328,6 +328,9 @@ class MeteredLLM(LLMProvider):
         self._source = source
         self._accumulator = accumulator
 
+    def check_connection(self) -> None:
+        self._inner.check_connection()
+
     def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> str:
         output_text = "".join(self._inner.stream_complete(system, user, max_tokens=max_tokens)).strip()
         try:

@@ -19,11 +19,12 @@ import {
   RocketOutlined,
   InboxOutlined,
   SendOutlined,
-  BarChartOutlined,
 } from "@ant-design/icons";
 
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
 import { useNavigation } from "@/context/NavigationContext";
+import { backDestinationKey } from "@/utils/backDestination";
+import "@/styles/workspace-polish.css";
 import { useI18n } from "@/i18n";
 import { apiErrorMessage, fetchLlmUsage, fetchMyQuota } from "@/api/client";
 import type { LlmUsageSummary, TokenQuotaStatus } from "@/types";
@@ -33,12 +34,12 @@ const { Title, Text } = Typography;
 
 function fmtK(value: number | string | undefined): string {
   const n = typeof value === "number" ? value : 0;
-  return `${(n / 1000).toFixed(1)}K`;
+  return n < 1000 ? String(n) : `${(n / 1000).toFixed(1)}K`;
 }
 
 export default function UsageDashboard() {
   const { t, isZh } = useI18n();
-  const { goBackSmart } = useNavigation();
+  const { goBackSmart, lastValidPage } = useNavigation();
   const colors = useHeaderTheme();
   const [data, setData] = useState<LlmUsageSummary | null>(null);
   const [quota, setQuota] = useState<TokenQuotaStatus | null>(null);
@@ -285,9 +286,9 @@ export default function UsageDashboard() {
         extraActions={
           <>
             <Button icon={<ArrowLeftOutlined />} onClick={() => goBackSmart()} size="large" style={{ height: 40 }}>
-              {t("nav_back")}
+              {t(backDestinationKey(lastValidPage))}
             </Button>
-            <Button type="primary" icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} size="large" style={{ height: 40 }}>
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} size="large" style={{ height: 40 }}>
               {t("common_refresh")}
             </Button>
           </>
@@ -298,7 +299,7 @@ export default function UsageDashboard() {
       <Content
         style={{
           padding: "28px",
-          maxWidth: 1280,
+          maxWidth: 1200,
           margin: "0 auto",
           width: "100%",
         }}
@@ -313,74 +314,26 @@ export default function UsageDashboard() {
           />
         )}
 
-        {data && (
-          <Row gutter={[20, 20]} className="ops-metric-grid" style={{ marginBottom: 20 }}>
-            <Col xs={24} sm={12} lg={6}>
-              {renderMetricCard({
-                title: t("usage_total_calls"),
-                value: fmtNum(data.total_calls),
-                icon: <RocketOutlined />,
-                color: primaryColor,
-              })}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {renderMetricCard({
-                title: t("usage_builtin_tokens"),
-                value: fmtK(data.builtin_total_tokens),
-                icon: <InboxOutlined />,
-                color: "#5db8a6",
-                suffix: (
-                  <Tag color="blue" style={{ fontSize: "0.65rem", lineHeight: "1.2", padding: "0 4px", marginLeft: 6 }}>
-                    {t("ai_settings_builtin_tag")}
-                  </Tag>
-                ),
-              })}
-            </Col>
-            <Col xs={24} sm={12} lg={6}>
-              {renderMetricCard({
-                title: t("usage_custom_tokens"),
-                value: fmtK(data.custom_total_tokens),
-                icon: <SendOutlined />,
-                color: "#d48806",
-                suffix: (
-                  <Tag color="orange" style={{ fontSize: "0.65rem", lineHeight: "1.2", padding: "0 4px", marginLeft: 6 }}>
-                    {t("ai_settings_custom_tag")}
-                  </Tag>
-                ),
-              })}
-            </Col>
-            {hasQuota && (
-              <Col xs={24} sm={12} lg={6}>
-                {renderMetricCard({
-                  title: t("quota_remaining"),
-                  value: fmtK(quotaRemaining),
-                  icon: <BarChartOutlined />,
-                  color: quotaStatusColor,
-                  suffix: `/ ${fmtK(quota!.token_quota!)}`,
-                  footer: (
-                    <>
-                      <div style={{ marginTop: 18 }}>
-                        <Progress
-                          percent={Math.min(quotaPercent, 100)}
-                          size="small"
-                          showInfo={false}
-                          status={quotaIsExceeded ? "exception" : "normal"}
-                          strokeColor={quotaStatusColor}
-                        />
-                      </div>
-                      <div className="ops-quota-row">
-                        <span>{t("quota_used")}: {fmtK(quotaUsed)}</span>
-                        <strong style={{ color: textColor }}>
-                          {Math.min(quotaPercent, 100).toFixed(1)}%
-                        </strong>
-                      </div>
-                    </>
-                  ),
-                })}
-              </Col>
-            )}
+        {data && <>
+          <Row gutter={[16, 16]} className="ops-metric-grid" style={{ marginBottom: 16 }}>
+            {[
+              { title: t("workspace_usage_total"), value: fmtK(data.total_tokens), icon: <RocketOutlined />, color: primaryColor },
+              { title: t("usage_table_input"), value: fmtK(data.total_input_tokens), icon: <InboxOutlined />, color: textColor },
+              { title: t("usage_table_output"), value: fmtK(data.total_output_tokens), icon: <SendOutlined />, color: textColor },
+              { title: t("usage_total_calls"), value: fmtNum(data.total_calls), icon: <RocketOutlined />, color: textColor },
+            ].map((metric) => <Col key={metric.title} xs={12} lg={6}>{renderMetricCard(metric)}</Col>)}
           </Row>
-        )}
+          <div className="usage-source-summary" aria-label={t("workspace_usage_sources")}>
+            <span>{t("workspace_usage_sources")}</span>
+            <span>{t("usage_builtin_tokens")}<strong>{fmtNum(data.builtin_total_tokens)}</strong></span>
+            <span>{t("usage_custom_tokens")}<strong>{fmtNum(data.custom_total_tokens)}</strong></span>
+          </div>
+          {hasQuota && <div className="usage-quota">
+            <div className="usage-quota__label"><span>{t("quota_remaining")} <strong>{fmtK(quotaRemaining)} / {fmtK(quota!.token_quota!)}</strong></span><span>{t("quota_used")}: {fmtK(quotaUsed)} · {Math.min(quotaPercent, 100).toFixed(1)}%</span></div>
+            <Progress percent={Math.min(quotaPercent, 100)} size="small" showInfo={false} status={quotaIsExceeded ? "exception" : "normal"} strokeColor={quotaStatusColor} />
+          </div>}
+        </>}
+        <p className="workspace-hint">{t("workspace_usage_scope")}</p>
 
         <Card
           className="ops-panel"
@@ -429,7 +382,7 @@ export default function UsageDashboard() {
                 dataSource={data?.items || []}
                 rowKey="id"
                 pagination={{
-                  pageSize: 20,
+                  defaultPageSize: 20,
                   showSizeChanger: true,
                   showTotal: (total) => t("usage_total_records").replace("{total}", String(total)),
                   pageSizeOptions: ["10", "20", "50", "100"],

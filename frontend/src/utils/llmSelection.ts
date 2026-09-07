@@ -7,7 +7,7 @@ export function llmSelection(user: User, info: LlmProvidersResponse, desktop: bo
     : undefined;
   const agent = user.agent_use_custom
     ? info.custom_llms.find((item) => item.id === user.agent_custom_llm_id
-      && (!desktop || item.provider === "anthropic"))
+      && item.protocol === "anthropic")
     : undefined;
   const builtin = !desktop && !user.generation_use_custom
     ? info.builtin.find((item) => item.id === (user.preferred_llm_provider || info.default))
@@ -18,6 +18,6 @@ export function llmSelection(user: User, info: LlmProvidersResponse, desktop: bo
     generationModel: generation ? user.preferred_llm_model || generation.models[0] || ""
       : builtin ? user.preferred_llm_model || builtin.default_model : "",
     agentProvider: agent ? `custom:${agent.id}` : agentBuiltin ? "builtin:anthropic" : "",
-    agentModel: agent ? user.agent_model || agent.models[0] || "" : agentBuiltin?.model || "",
+    agentModel: agent ? user.agent_model || agent.models[0] || "" : agentBuiltin ? user.agent_model || agentBuiltin.model : "",
   };
 }

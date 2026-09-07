@@ -42,6 +42,9 @@ import type { Chapter, ChapterVersion, ChapterVersionDiff, LlmProvidersResponse,
 import { normalizeBodyParagraphIndent } from "@/utils/bodyParagraphIndent";
 import { getCaretViewportPoint } from "@/utils/textareaCaretViewport";
 import EditorSettings, { useEditorSettings } from "@/components/write/EditorSettings";
+import { useWritingLayout } from "@/components/write/useWritingLayout";
+import WritingLayoutControls, { WritingPaneResizeHandle } from "@/components/write/WritingLayoutControls";
+import "@/styles/writing-layout.css";
 import ChapterSidebar from "@/components/write/ChapterSidebar";
 import GenerationReview from "@/components/write/GenerationReview";
 import ReferencePanel from "@/components/write/ReferencePanel";
@@ -87,7 +90,6 @@ export default function NovelWrite() {
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [content, setContent] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 900);
   const [rightTool, setRightTool] = useState<AiTool | null>(null);
   const [commandPanelPos, setCommandPanelPos] = useState<{ left: number; top: number } | null>(null);
   const [commandPanelDragging, setCommandPanelDragging] = useState(false);
@@ -202,14 +204,17 @@ export default function NovelWrite() {
   const preGenerateSnapshotRef = useRef({ title: "", summary: "", content: "" });
   const chaptersRef = useRef<Chapter[]>([]);
   chaptersRef.current = chapters;
-  const narrowRef = useRef(narrow);
-  narrowRef.current = narrow;
   const saveBlockedRef = useRef(false);
   const bodyStreamingRef = useRef(false);
   saveBlockedRef.current = isPreviewMode || Boolean(recoveryDraft);
   const createVersionRef = useRef(false);
 
-  const handleToggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
+  const layout = useWritingLayout({
+    panelOpen: !focusMode && Boolean((rightTool && activeId !== null) || assistantOpen || referenceOpen || selectionPanel || evaluateResult),
+    focusMode,
+    desktop: !narrow,
+  });
+  const { sidebarOpen, closeOverlay } = layout;
   const handleDrawerClose = useCallback(() => setRightTool(null), []);
   const handleOpenSmartWriterPrompt = useCallback((prompt: string) => {
     setRightTool(null);
@@ -219,7 +224,7 @@ export default function NovelWrite() {
     }));
   }, [id]);
   const handleCommandPanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (rightTool === "versions" || window.innerWidth >= 1180) return;
+    if (rightTool === "versions" || window.innerWidth >= 900) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = commandPanelRef.current?.getBoundingClientRect();
@@ -238,7 +243,7 @@ export default function NovelWrite() {
   }, [rightTool]);
 
   const handleSelectionPanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 1180) return;
+    if (window.innerWidth >= 900) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = selectionPanelRef.current?.getBoundingClientRect();
@@ -268,7 +273,7 @@ export default function NovelWrite() {
   }, []);
 
   const handleEvaluatePanelDragStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (window.innerWidth >= 1180) return;
+    if (window.innerWidth >= 900) return;
     const target = event.target as HTMLElement;
     if (target.closest("button, textarea, input, select, a")) return;
     const rect = evaluatePanelRef.current?.getBoundingClientRect();
@@ -451,7 +456,6 @@ export default function NovelWrite() {
 
   useEffect(() => {
     if (focusMode) {
-      setSidebarOpen(false);
       setRightTool(null);
       setReferenceOpen(false);
     }
@@ -1100,8 +1104,8 @@ export default function NovelWrite() {
     if (!(await beforeLeave())) return;
     setActiveId(cid);
     clearVersionState();
-    if (narrowRef.current) setSidebarOpen(false);
-  }, [beforeLeave]);
+    closeOverlay();
+  }, [beforeLeave, closeOverlay]);
 
   const activeIndex = chapters.findIndex((c) => c.id === activeId);
   const hasPrevChapter = activeIndex > 0;
@@ -1196,7 +1200,7 @@ export default function NovelWrite() {
       setChapters(full);
       setActiveId(ch.id);
       lastLoadedChapterIdRef.current = null;
-      if (narrowRef.current) setSidebarOpen(false);
+      closeOverlay();
     } catch (e) {
       if (novelIdRef.current === nid) {
         setErr(apiErrorMessage(e));
@@ -1748,7 +1752,7 @@ export default function NovelWrite() {
     : null;
 
   return (
-    <div className={`write-shell write-theme--${theme}${focusMode ? " write-focus-mode" : ""}`}>
+    <div className={`write-shell write-layout write-theme--${theme}${focusMode ? " write-focus-mode" : ""}${layout.overlay ? " write-layout--sidebar-overlay" : ""}${layout.resizing ? " write-layout--resizing" : ""}`} style={layout.style}>
       {modalContextHolder}
       {err ? <p className="form-error write-err-banner" role="alert">{err}</p> : null}
       {recoveryDraft && (
@@ -1776,12 +1780,12 @@ export default function NovelWrite() {
         </div>
       )}
 
-      {narrow && sidebarOpen && !focusMode ? (
+      {layout.overlay && sidebarOpen && !focusMode ? (
         <button
           type="button"
           className="write-sidebar-backdrop"
           aria-label={t("write_close_chapter_list")}
-          onClick={() => setSidebarOpen(false)}
+          onClick={closeOverlay}
         />
       ) : null}
 
@@ -1790,9 +1794,64 @@ export default function NovelWrite() {
           settings={editorSettings}
           sidebarToolsRef={sidebarToolsRef}
           sidebarOpen={sidebarOpen}
-          onToggleSidebar={handleToggleSidebar}
+          sidebarAutoCollapsed={!narrow && layout.autoCollapsed}
+          layoutControls={<WritingLayoutControls layout={layout} />}
+          onToggleSidebar={layout.toggleSidebar}
           onDrawerClose={handleDrawerClose}
         />
+        {!focusMode && activeId ? (
+          <div className="write-action-strip">
+            <div className="write-ai-quickbar" aria-label={t("write_ai_quickbar_label")}>
+              <button
+                type="button"
+                className={`write-ai-quickbtn${!hasBody ? " is-primary" : ""}${rightTool === "generate" ? " is-active" : ""}`}
+                disabled={!hasLlm || busy}
+                onClick={() => setRightTool("generate")}
+              >
+                <ThunderboltOutlined aria-hidden="true" />
+                {t("write_ai_quick_generate")}
+              </button>
+              <button
+                type="button"
+                className={`write-ai-quickbtn${rightTool === "rewrite" ? " is-active" : ""}`}
+                disabled={!hasLlm || busy || !hasBody}
+                onClick={() => setRightTool("rewrite")}
+              >
+                <EditOutlined aria-hidden="true" />
+                {t("write_ai_quick_rewrite")}
+              </button>
+              <button
+                type="button"
+                className={`write-ai-quickbtn${hasBody ? " is-primary" : ""}${rightTool === "append" ? " is-active" : ""}`}
+                disabled={!hasLlm || busy}
+                onClick={() => setRightTool("append")}
+              >
+                <ForwardOutlined aria-hidden="true" />
+                {t("write_ai_quick_continue")}
+              </button>
+              <button
+                type="button"
+                className="write-ai-quickbtn"
+                disabled={!hasLlm || evaluateBusy || busy || !activeId}
+                onClick={() => void onRunEvaluate()}
+              >
+                <CheckCircleOutlined aria-hidden="true" />
+                {evaluateBusy ? t("write_evaluating") : t("write_ai_quick_check")}
+              </button>
+              <Dropdown trigger={["click"]} menu={{ items: [
+                { key: "naming", label: t("write_ai_naming"), onClick: () => setRightTool("naming"), disabled: !hasLlm || busy },
+              ] }}><button type="button" className="write-ai-quickbtn" aria-label={t("dashboard_more")}><MoreOutlined /></button></Dropdown>
+            </div>
+            <button
+              type="button"
+              className={`write-history-btn${rightTool === "versions" ? " is-active" : ""}`}
+              disabled={!activeId}
+              onClick={toggleVersionsPanel}
+            >
+              {t("write_tool_versions")}
+            </button>
+          </div>
+        ) : null}
         {!focusMode && <div className="write-workspace-toolbar__actions">
           <button className={`btn btn-ghost${referenceOpen ? " is-active" : ""}`} aria-label={t("reference_title")} aria-expanded={referenceOpen} onClick={() => {
             setReferenceOpen((v) => !v); setRightTool(null); window.dispatchEvent(new Event("inkmind:assistant-minimize"));
@@ -1800,10 +1859,11 @@ export default function NovelWrite() {
           <button className={`btn btn-ghost write-assistant-trigger${assistantOpen ? " is-active" : ""}`} aria-label={t("write_ai_quick_ask")} aria-expanded={assistantOpen} onClick={() => assistantOpen ? window.dispatchEvent(new Event("inkmind:assistant-minimize")) : handleOpenSmartWriterPrompt("")}><RobotOutlined />{t("write_ai_quick_ask")}</button>
         </div>}
       </div>
-      <div className={`write-stage${!focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) ? " write-stage--with-panel" : ""}`}>
+      <div ref={layout.stageRef} className={`write-stage${!focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) ? " write-stage--with-panel" : ""}`}>
       <div className={`write-workspace${sidebarOpen ? " write-workspace--sidebar-open" : ""}`}>
 
 
+        <div id="write-chapter-pane" className="write-chapter-pane" hidden={!sidebarOpen}>
         <ChapterSidebar
           chapters={chapters}
           activeId={activeId}
@@ -1813,6 +1873,8 @@ export default function NovelWrite() {
           onDeleteChapter={onDeleteChapterById}
           disabled={busy || isPreviewMode || previewLoading || versionActionLoading || Boolean(recoveryDraft)}
         />
+        </div>
+        {!narrow && sidebarOpen && !layout.overlay && <WritingPaneResizeHandle pane="chapters" layout={layout} />}
 
         <div className="write-main write-main--with-rail">
           <div className="card write-editor-card">
@@ -1890,60 +1952,6 @@ export default function NovelWrite() {
                       />
                     </div>
                   )}
-                  {!focusMode ? (
-                    <div className="write-action-strip">
-                      <div className="write-ai-quickbar" aria-label={t("write_ai_quickbar_label")}>
-                        <span className="write-ai-quickbar__label">{t("write_ai_quickbar_title")}</span>
-                        <button
-                          type="button"
-                          className={`write-ai-quickbtn${!hasBody ? " is-primary" : ""}${rightTool === "generate" ? " is-active" : ""}`}
-                          disabled={!hasLlm || busy}
-                          onClick={() => setRightTool("generate")}
-                        >
-                          <ThunderboltOutlined aria-hidden="true" />
-                          {t("write_ai_quick_generate")}
-                        </button>
-                        <button
-                          type="button"
-                          className={`write-ai-quickbtn${rightTool === "rewrite" ? " is-active" : ""}`}
-                          disabled={!hasLlm || busy || !hasBody}
-                          onClick={() => setRightTool("rewrite")}
-                        >
-                          <EditOutlined aria-hidden="true" />
-                          {t("write_ai_quick_rewrite")}
-                        </button>
-                        <button
-                          type="button"
-                          className={`write-ai-quickbtn${hasBody ? " is-primary" : ""}${rightTool === "append" ? " is-active" : ""}`}
-                          disabled={!hasLlm || busy}
-                          onClick={() => setRightTool("append")}
-                        >
-                          <ForwardOutlined aria-hidden="true" />
-                          {t("write_ai_quick_continue")}
-                        </button>
-                        <button
-                          type="button"
-                          className="write-ai-quickbtn"
-                          disabled={!hasLlm || evaluateBusy || busy || !activeId}
-                          onClick={() => void onRunEvaluate()}
-                        >
-                          <CheckCircleOutlined aria-hidden="true" />
-                          {evaluateBusy ? t("write_evaluating") : t("write_ai_quick_check")}
-                        </button>
-                        <Dropdown trigger={["click"]} menu={{ items: [
-                          { key: "naming", label: t("write_ai_naming"), onClick: () => setRightTool("naming"), disabled: !hasLlm || busy },
-                        ] }}><button type="button" className="write-ai-quickbtn" aria-label={t("dashboard_more")}><MoreOutlined /></button></Dropdown>
-                      </div>
-                      <button
-                        type="button"
-                        className={`write-history-btn${rightTool === "versions" ? " is-active" : ""}`}
-                        disabled={!activeId}
-                        onClick={toggleVersionsPanel}
-                      >
-                        {t("write_tool_versions")}
-                      </button>
-                    </div>
-                  ) : null}
                   {!hasLlm && !focusMode && (
                     <p className="write-ai-unavailable">{t("write_ai_unavailable")} <button type="button" className="write-retry-save" onClick={() => nav("/settings")}>{t("nav_ai_settings")}</button></p>
                   )}
@@ -1986,6 +1994,8 @@ export default function NovelWrite() {
           </div>
         </div>
       </div>
+
+      {!narrow && !focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) && <WritingPaneResizeHandle pane="tools" layout={layout} />}
 
       {!focusMode && drawerOpen && rightTool && (
         <div

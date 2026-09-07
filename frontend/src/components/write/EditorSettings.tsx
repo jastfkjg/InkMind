@@ -138,11 +138,13 @@ interface EditorSettingsProps {
   settings: ReturnType<typeof useEditorSettings>;
   sidebarToolsRef: React.RefObject<HTMLDivElement>;
   sidebarOpen: boolean;
+  sidebarAutoCollapsed?: boolean;
+  layoutControls?: React.ReactNode;
   onToggleSidebar: () => void;
   onDrawerClose?: () => void;
 }
 
-export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebarOpen, onToggleSidebar, onDrawerClose }: EditorSettingsProps) {
+export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebarOpen, sidebarAutoCollapsed, layoutControls, onToggleSidebar, onDrawerClose }: EditorSettingsProps) {
   const { t } = useI18n();
   const { bodyFontSizeId, setBodyFontSizeId, lineHeightId, setLineHeightId, lineWidthId, setLineWidthId, focusMode, setFocusMode, typewriterMode, setTypewriterMode } = settings;
 
@@ -202,10 +204,12 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
     <div className="write-sidenav-toggle">
       <button
         type="button"
-        className="write-icon-btn"
-        title={sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
+        className={`write-icon-btn${sidebarAutoCollapsed && !sidebarOpen ? " is-auto-collapsed" : ""}`}
+        title={sidebarAutoCollapsed && !sidebarOpen ? t("write_layout_auto_collapsed") : sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
         aria-label={sidebarOpen ? t("write_close_sidebar") : t("write_open_sidebar")}
         aria-expanded={sidebarOpen}
+        aria-controls="write-chapter-pane"
+        disabled={focusMode}
         onClick={onToggleSidebar}
       >
         <span className="write-icon-hamburger" aria-hidden>
@@ -219,6 +223,7 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
         <span className="write-focus-icon" aria-hidden><span /><span /><span /><span /></span>
       </button>
       <div className="write-sidenav-tools" ref={sidebarToolsRef} hidden={!toolsOpen}>
+        {layoutControls}
         <div className="write-size-picker">
           <button
             type="button"
@@ -368,6 +373,8 @@ export default memo(function EditorSettings({ settings, sidebarToolsRef, sidebar
   );
 }, function areEqual(prev: EditorSettingsProps, next: EditorSettingsProps) {
   if (prev.sidebarOpen !== next.sidebarOpen) return false;
+  if (prev.sidebarAutoCollapsed !== next.sidebarAutoCollapsed) return false;
+  if (prev.layoutControls !== next.layoutControls) return false;
   if (prev.sidebarToolsRef !== next.sidebarToolsRef) return false;
   if (prev.onToggleSidebar !== next.onToggleSidebar) return false;
   if (prev.onDrawerClose !== next.onDrawerClose) return false;

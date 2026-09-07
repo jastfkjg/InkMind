@@ -3,11 +3,20 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.deps import OptionalUser
+from app.deps import CurrentUser, OptionalUser
 from app.llm.providers import get_builtin_provider_info, _PROVIDER_DEFAULTS, _PROVIDER_LABELS
 from app.models import UserCustomLLM
+from app.schemas.connection import LLMConnectionCheckRequest, LLMConnectionCheckResponse
+from app.services.llm_connection import check_saved_llm_connection
 
 router = APIRouter(prefix="/meta", tags=["meta"])
+
+
+@router.post("/llm-connection-test", response_model=LLMConnectionCheckResponse)
+def llm_connection_test(
+    body: LLMConnectionCheckRequest, user: CurrentUser, db: Session = Depends(get_db),
+) -> LLMConnectionCheckResponse:
+    return LLMConnectionCheckResponse(status=check_saved_llm_connection(user, db, body.target))
 
 
 def _mask_key(key: str | None) -> str | None:
@@ -38,6 +47,7 @@ def llm_providers(user: OptionalUser, db: Session = Depends(get_db)) -> dict:
             custom_llms.append({
                 "id": item.id,
                 "provider": provider,
+                "protocol": item.effective_protocol,
                 "provider_label": _PROVIDER_LABELS.get(provider, provider),
                 "api_key": _mask_key(item.api_key),
                 "base_url": item.base_url,

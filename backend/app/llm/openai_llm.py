@@ -26,6 +26,9 @@ class OpenAICompatibleLLM(LLMProvider):
         self._model = model
         self._send_temperature = send_temperature
 
+    def check_connection(self) -> None:
+        self._client.with_options(timeout=15.0, max_retries=0).models.list()
+
     def _chat_temperature(self) -> float | None:
         if not self._send_temperature:
             return None

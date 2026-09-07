@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -67,7 +67,7 @@ def list_novels(user: CurrentUser, db: Annotated[Session, Depends(get_db)]) -> l
             total_words=words or 0, last_chapter_id=chapter_id, last_chapter_title=chapter_title,
             last_edited_at=max(novel.updated_at, edited_at) if edited_at else novel.updated_at,
         ))
-    return sorted(result, key=lambda item: (item.last_edited_at, item.id), reverse=True)
+    return sorted(result, key=lambda item: (item.is_pinned, item.last_edited_at, item.id), reverse=True)
 
 
 @router.post("", response_model=NovelOut, status_code=status.HTTP_201_CREATED)
@@ -294,8 +294,12 @@ def update_novel(
 ) -> Novel:
     n = _get_owned_novel(db, user.id, novel_id)
     data = body.model_dump(exclude_unset=True)
-    for k, v in data.items():
-        setattr(n, k, v)
+    if data and not (data.keys() - {"is_pinned", "is_archived"}):
+        # Library organization must not make an older manuscript look recently edited.
+        db.execute(update(Novel).where(Novel.id == n.id).values(**data, updated_at=n.updated_at))
+    else:
+        for k, v in data.items():
+            setattr(n, k, v)
     db.add(n)
     db.commit()
     db.refresh(n)

@@ -1,22 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Alert, Button, Dropdown, Input, Modal, App as AntApp } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, MoreOutlined, FileTextOutlined } from "@ant-design/icons";
+import { Alert, Button, Modal, App as AntApp } from "antd";
+import { PlusOutlined, FileTextOutlined } from "@ant-design/icons";
 import { apiErrorMessage, deleteMemo, fetchMemos } from "@/api/client";
 import type { Memo } from "@/types";
 import { useI18n } from "@/i18n";
 import { CollectionEmpty, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
-import { relativeEditTime } from "@/utils/relativeTime";
+import { ReferenceBrowser } from "@/components/novel/ReferenceBrowser";
 
 export default function NovelMemos() {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { message: messageApi } = AntApp.useApp();
   const { novelId } = useParams();
   const id = Number(novelId);
   const [items, setItems] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [query, setQuery] = useState("");
   const [modal, modalContextHolder] = Modal.useModal();
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,11 +50,9 @@ export default function NovelMemos() {
       },
     });
   }
-  const search = query.trim().toLocaleLowerCase();
-  const visible = items.filter(item => [item.title, item.body].join(" ").toLocaleLowerCase().includes(search));
   const addAction = <Link className="novel-add-link" to={`/novels/${id}/memos/new`}><PlusOutlined />{t("memos_create_memo")}</Link>;
   return (
-    <ManagementPage title={t("memos_title")} description={t("management_memos_hint")}
+    <ManagementPage title={t("memos_title")} description={t("reference_read_hint")}
       count={loading ? undefined : t("memos_count").replace("{count}", String(items.length))}
       action={items.length > 0 ? addAction : undefined}>
       {modalContextHolder}
@@ -65,35 +62,14 @@ export default function NovelMemos() {
         {loading ? <ManagementLoading label={t("common_loading")} /> : items.length === 0 ? (
           !err && <CollectionEmpty icon={<FileTextOutlined />} title={t("memos_no_memos")} description={t("memos_no_memos_desc")} action={addAction} />
         ) : (
-          <>
-            <div className="novel-collection-tools">
-              <Input type="search" aria-label={t("management_memos_search")} placeholder={t("management_memos_search")}
-                prefix={<SearchOutlined />} allowClear value={query} onChange={e => setQuery(e.target.value)} />
-              {search && <span role="status">{t("management_search_count").replace("{count}", String(visible.length))}</span>}
-            </div>
-            {visible.length === 0 ? <div className="novel-search-empty" role="status">{t("management_no_results")}</div> : (
-              <ul className="novel-entry-list">
-                {visible.map(item => (
-                  <li className="novel-entry" key={item.id}>
-                    <span className="novel-entry__avatar" aria-hidden="true">{<FileTextOutlined />}</span>
-                    <div className="novel-entry__body">
-                      <div className="novel-entry__heading">
-                        <h2><Link to={`/novels/${id}/memos/${item.id}/edit`}>{item.title.trim() || t("memos_no_title")}</Link></h2>
-                        <time dateTime={item.updated_at} title={new Date(item.updated_at).toLocaleString(language)}>{relativeEditTime(item.updated_at, language)}</time>
-                      </div>
-                      <p className="novel-entry__preview">{item.body || t("memos_no_content")}</p>
-                    </div>
-                    <div className="novel-entry__actions">
-                      <Link className="novel-entry__edit" to={`/novels/${id}/memos/${item.id}/edit`} aria-label={t("memos_edit") + " " + (item.title || t("memos_no_title"))}><EditOutlined />{t("memos_edit")}</Link>
-                      <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "delete", label: t("memos_delete"), icon: <DeleteOutlined />, danger: true, onClick: () => showDeleteConfirm(item) }] }}>
-                        <Button type="text" icon={<MoreOutlined />} aria-label={t("management_more_actions") + " " + (item.title || t("memos_no_title"))} />
-                      </Dropdown>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+          <ReferenceBrowser searchLabel={t("management_memos_search")} editLabel={t("memos_edit")} deleteLabel={t("memos_delete")}
+            editPath={entryId => `/novels/${id}/memos/${entryId}/edit`}
+            onDelete={entryId => { const memo = items.find(item => item.id === entryId); if (memo) showDeleteConfirm(memo); }}
+            entries={items.map(item => ({
+              id: item.id, title: item.title.trim() || t("memos_no_title"), preview: item.body || t("memos_no_content"), updatedAt: item.updated_at,
+              icon: <FileTextOutlined />,
+              sections: [{ label: t("management_memo_content_heading"), content: item.body || t("memos_no_content") }],
+            }))} />
         )}
       </div>
     </ManagementPage>

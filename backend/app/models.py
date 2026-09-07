@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Boolean,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,11 +37,17 @@ class UserCustomLLM(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     provider: Mapped[str] = mapped_column(String(64))
+    protocol: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     api_key: Mapped[str] = mapped_column(String(512))
     base_url: Mapped[str | None] = mapped_column(String(512), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     owner: Mapped["User"] = relationship("User", back_populates="custom_llms", foreign_keys=[user_id])
+
+    @property
+    def effective_protocol(self) -> str:
+        return self.protocol or ("anthropic" if self.provider == "anthropic" else "openai")
 
 
 class User(Base):
@@ -97,6 +104,8 @@ class Novel(Base):
     background: Mapped[str] = mapped_column(Text, default="")
     genre: Mapped[str] = mapped_column(String(128), default="")
     writing_style: Mapped[str] = mapped_column(Text, default="")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)

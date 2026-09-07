@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -12,12 +14,14 @@ router = APIRouter(prefix="/custom-llms", tags=["custom-llms"])
 
 class CustomLLMCreate(BaseModel):
     provider: str
+    protocol: Literal["openai", "anthropic"] | None = None
     api_key: str
     base_url: str | None = None
 
 
 class CustomLLMUpdate(BaseModel):
     provider: str | None = None
+    protocol: Literal["openai", "anthropic"] | None = None
     api_key: str | None = None
     base_url: str | None = None
 
@@ -26,6 +30,7 @@ class CustomLLMOut(BaseModel):
     id: int
     provider: str
     provider_label: str
+    protocol: Literal["openai", "anthropic"]
     api_key: str | None
     base_url: str | None
     default_base_url: str | None
@@ -42,6 +47,7 @@ class CustomLLMOut(BaseModel):
         return cls(
             id=obj.id,
             provider=provider,
+            protocol=obj.effective_protocol,
             provider_label=_PROVIDER_LABELS.get(provider, provider),
             api_key=_mask_key(obj.api_key),
             base_url=obj.base_url,
@@ -73,10 +79,15 @@ def create_custom_llm(body: CustomLLMCreate, user: CurrentUser, db: Session = De
     defaults = _PROVIDER_DEFAULTS.get(provider)
     if not defaults:
         raise HTTPException(status_code=400, detail=f"不支持的供应商: {provider}")
-    effective_base_url = body.base_url or defaults.get("base_url")
+    protocol = body.protocol or ("anthropic" if provider == "anthropic" else "openai")
+    effective_base_url = (body.base_url or "").strip() or None
+    if protocol != ("anthropic" if provider == "anthropic" else "openai") and not effective_base_url:
+        raise HTTPException(status_code=400, detail="请填写与所选 API 协议匹配的 Base URL")
+    effective_base_url = effective_base_url or defaults.get("base_url")
     item = UserCustomLLM(
         user_id=user.id,
         provider=provider,
+        protocol=protocol,
         api_key=body.api_key.strip(),
         base_url=effective_base_url,
     )
@@ -91,10 +102,18 @@ def update_custom_llm(item_id: int, body: CustomLLMUpdate, user: CurrentUser, db
     item = db.query(UserCustomLLM).filter(UserCustomLLM.id == item_id, UserCustomLLM.user_id == user.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="未找到该自定义 LLM")
+    if body.protocol is not None and body.protocol != item.effective_protocol:
+        if not (body.base_url or "").strip():
+            raise HTTPException(status_code=400, detail="切换 API 协议时请填写对应的 Base URL")
+        item.protocol = body.protocol
     if body.provider is not None:
         provider = body.provider.lower().strip()
         if provider == "moonshot":
             provider = "kimi"
+        if provider not in _PROVIDER_DEFAULTS:
+            raise HTTPException(status_code=400, detail=f"不支持的供应商: {provider}")
+        # Persist the previous protocol before changing the brand of legacy records.
+        item.protocol = item.effective_protocol
         item.provider = provider
     if body.api_key is not None:
         if "***" not in body.api_key:

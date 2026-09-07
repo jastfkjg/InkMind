@@ -11,9 +11,13 @@ import {
   PlusOutlined, DeleteOutlined, EditOutlined, SwapOutlined,
   LinkOutlined,
 } from "@ant-design/icons";
+import ModelInput from "@/components/ModelInput";
+import ConnectionStatus from "@/components/ConnectionStatus";
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigation } from "@/context/NavigationContext";
+import { backDestinationKey } from "@/utils/backDestination";
+import "@/styles/workspace-polish.css";
 import { useI18n } from "@/i18n";
 import {
   fetchLlmProviders,
@@ -61,7 +65,7 @@ export default function AiSettings() {
   const { user, updateAiSettings, refreshUser } = useAuth();
   const { t } = useI18n();
   const colors = useHeaderTheme();
-  const { goBackSmart } = useNavigation();
+  const { goBackSmart, lastValidPage } = useNavigation();
   const [form] = Form.useForm();
   const [settingsSection, setSettingsSection] = useState("connections");
   const autoAuditEnabled = Form.useWatch("enable_auto_audit", form);
@@ -172,11 +176,16 @@ export default function AiSettings() {
         message.success(t("ai_settings_switch_success"));
       } catch (e) {
         message.error(String(e));
+        if (user && providerInfo) {
+          const selected = llmSelection(user, providerInfo, isDesktopApp);
+          setGenProviderValue(selected.generationProvider);
+          setGenModel(selected.generationModel);
+        }
       } finally {
         setGenSaving(false);
       }
     },
-    [updateAiSettings, t]
+    [updateAiSettings, t, user, providerInfo]
   );
 
   const handleGenProviderChange = useCallback(
@@ -206,7 +215,7 @@ export default function AiSettings() {
           await updateAiSettings({
             agent_use_custom: false,
             agent_custom_llm_id: null,
-            agent_model: null,
+            agent_model: model || null,
           });
         } else {
           await updateAiSettings({
@@ -218,11 +227,16 @@ export default function AiSettings() {
         message.success(t("ai_settings_switch_success"));
       } catch (e) {
         message.error(String(e));
+        if (user && providerInfo) {
+          const selected = llmSelection(user, providerInfo, isDesktopApp);
+          setAgentProviderValue(selected.agentProvider);
+          setAgentModel(selected.agentModel);
+        }
       } finally {
         setAgentSaving(false);
       }
     },
-    [updateAiSettings, t]
+    [updateAiSettings, t, user, providerInfo]
   );
 
   const handleAgentProviderChange = useCallback(
@@ -281,6 +295,7 @@ export default function AiSettings() {
     try {
       await createCustomLLM({
         provider: values.provider,
+        protocol: values.protocol,
         api_key: values.api_key.trim(),
         base_url: values.base_url?.trim() || null,
       });
@@ -303,7 +318,7 @@ export default function AiSettings() {
     const values = await editForm.validateFields();
     setEditSaving(true);
     try {
-      const payload: { provider?: string; api_key?: string; base_url?: string | null } = {};
+      const payload: { provider?: string; protocol?: "openai" | "anthropic"; api_key?: string; base_url?: string | null } = { protocol: values.protocol };
       if (values.provider) payload.provider = values.provider;
       if (values.api_key && !isMasked(values.api_key)) {
         payload.api_key = values.api_key.trim();
@@ -340,6 +355,7 @@ export default function AiSettings() {
     setEditingCustom(custom);
     editForm.setFieldsValue({
       provider: custom.provider,
+      protocol: custom.protocol,
       api_key: custom.api_key || "",
       base_url: custom.base_url || "",
     });
@@ -349,8 +365,9 @@ export default function AiSettings() {
   const openAddModal = () => {
     addForm.setFieldsValue({
       provider: "openai",
+      protocol: "openai",
       api_key: "",
-      base_url: "",
+      base_url: ALL_PROVIDERS[0].defaultUrl,
     });
     setAddModalOpen(true);
   };
@@ -358,14 +375,14 @@ export default function AiSettings() {
   const handleAddProviderChange = (provider: string) => {
     const found = ALL_PROVIDERS.find((p) => p.value === provider);
     if (found) {
-      addForm.setFieldsValue({ base_url: found.defaultUrl });
+      addForm.setFieldsValue({ protocol: provider === "anthropic" ? "anthropic" : "openai", base_url: found.defaultUrl });
     }
   };
 
   const handleEditProviderChange = (provider: string) => {
     const found = ALL_PROVIDERS.find((p) => p.value === provider);
     if (found) {
-      editForm.setFieldsValue({ base_url: found.defaultUrl });
+      editForm.setFieldsValue({ base_url: (editForm.getFieldValue("protocol") === "anthropic") === (provider === "anthropic") ? found.defaultUrl : "" });
     }
   };
 
@@ -410,7 +427,6 @@ export default function AiSettings() {
     : "";
 
   const agentDecoded = agentProviderValue ? decodeProviderValue(agentProviderValue) : null;
-  const agentIsCustom = agentDecoded?.kind === "custom";
   const agentCurrentModels = agentProviderValue ? getModelsForProviderValue(agentProviderValue) : [];
 
   const agentProviderLabel = agentDecoded
@@ -459,13 +475,13 @@ export default function AiSettings() {
             size="large"
             style={{ height: 40 }}
           >
-            {t("nav_back")}
+            {t(backDestinationKey(lastValidPage))}
           </Button>
         }
         disabledMenuItem="settings"
       />
 
-      <Content style={{ padding: "2rem", maxWidth: 900, margin: "0 auto", width: "100%" }}>
+      <Content style={{ padding: "2rem", maxWidth: 1080, margin: "0 auto", width: "100%" }}>
         {successMsg && (
           <Alert
             message={t("ai_settings_save_success")}
@@ -484,10 +500,11 @@ export default function AiSettings() {
           />
         )}
 
-        <div className="settings-connection-summary">
-          <span>{t("ai_settings_generation_ai")}<strong>{genProviderLabel || t("ai_settings_not_configured")} · {genModel || "—"}</strong></span>
-          <span>{t("ai_settings_agent_ai")}<strong>{agentProviderLabel || t("ai_settings_not_configured")} · {agentCurrentModel || "—"}</strong></span>
+        <div className="connection-overview">
+          <ConnectionStatus target="generation" title={t("ai_settings_generation_ai")} provider={genProviderLabel} model={genModel} configured={!!genProviderValue && !!genModel} disabled={genSaving || addSaving || editSaving} revision={providerInfo} />
+          <ConnectionStatus target="agent" title={t("ai_settings_agent_ai")} provider={agentProviderLabel} model={agentCurrentModel} configured={!!agentProviderValue && !!agentCurrentModel} disabled={agentSaving || addSaving || editSaving} revision={providerInfo} />
         </div>
+        <p className="workspace-hint">{t("workspace_connections_hint")}</p>
         <div className="settings-section-nav" role="group" aria-label={t("settings_sections")}>
           {(["connections", "preferences", "advanced"] as const).map((key) => <button key={key} aria-pressed={settingsSection === key} onClick={() => setSettingsSection(key)}>{t(`settings_section_${key}`)}</button>)}
         </div>
@@ -580,38 +597,9 @@ export default function AiSettings() {
                     </Text>
                   </div>
                   <Spin spinning={genSaving} size="small">
-                    {genCurrentModels.length > 0 ? (
-                      <Select
-                        size="large"
-                        style={{ width: "100%" }}
-                        value={genModel || undefined}
-                        onChange={handleGenModelChange}
-                        disabled={genSaving}
-                        placeholder={t("ai_settings_model_placeholder")}
-                        suffixIcon={
-                          genSaving ? (
-                            <Spin size="small" />
-                          ) : (
-                            <SwapOutlined style={{ color: secondaryTextColor }} />
-                          )
-                        }
-                      >
-                        {genCurrentModels.map((m) => (
-                          <Option key={m} value={m}>
-                            {m}
-                          </Option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <Input
-                        size="large"
-                        style={{ height: 44 }}
-                        value={genModel}
-                        placeholder={t("ai_settings_model_placeholder")}
-                        readOnly
-                        disabled
-                      />
-                    )}
+                    <ModelInput value={genModel} models={genCurrentModels}
+                      disabled={genSaving || !genProviderValue} onSave={handleGenModelChange} />
+                    <Text type="secondary">{t("ai_settings_model_custom_hint")}</Text>
                   </Spin>
                 </Col>
               </Row>
@@ -652,7 +640,7 @@ export default function AiSettings() {
                       style={{ width: "100%" }}
                       value={agentProviderValue || undefined}
                       placeholder={t("ai_settings_provider_placeholder")}
-                      notFoundContent={t("ai_settings_add_provider_hint")}
+                      notFoundContent={t("ai_settings_agent_setup_hint")}
                       onChange={handleAgentProviderChange}
                       disabled={agentSaving}
                       suffixIcon={
@@ -681,7 +669,7 @@ export default function AiSettings() {
                           </Space>
                         </Option>
                       )}
-                      {providerInfo?.custom_llms.filter((cl) => !isDesktopApp || cl.provider === "anthropic").map((cl) => (
+                      {providerInfo?.custom_llms.filter((cl) => cl.protocol === "anthropic").map((cl) => (
                         <Option key={`custom:${cl.id}`} value={`custom:${cl.id}`}>
                           <Space>
                             {cl.provider_label}
@@ -709,31 +697,9 @@ export default function AiSettings() {
                     </Text>
                   </div>
                   <Spin spinning={agentSaving} size="small">
-                    {agentIsCustom && agentCurrentModels.length > 0 ? (
-                      <Select
-                        size="large"
-                        style={{ width: "100%" }}
-                        value={agentModel || undefined}
-                        onChange={handleAgentModelChange}
-                        disabled={agentSaving}
-                        placeholder={t("ai_settings_model_placeholder")}
-                      >
-                        {agentCurrentModels.map((m) => (
-                          <Option key={m} value={m}>
-                            {m}
-                          </Option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <Input
-                        size="large"
-                        style={{ height: 44 }}
-                        value={agentCurrentModel}
-                        placeholder={t("ai_settings_model_placeholder")}
-                        readOnly
-                        disabled
-                      />
-                    )}
+                    <ModelInput value={agentCurrentModel} models={agentCurrentModels}
+                      disabled={agentSaving || !agentProviderValue} onSave={handleAgentModelChange} />
+                    <Text type="secondary">{t("ai_settings_model_custom_hint")}</Text>
                   </Spin>
                 </Col>
               </Row>
@@ -742,7 +708,7 @@ export default function AiSettings() {
                   type="secondary"
                   style={{ color: secondaryTextColor, fontSize: "0.8rem" }}
                 >
-                  {isDesktopApp && !agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
+                  {!agentProviderValue ? t("ai_settings_agent_setup_hint") : t("ai_settings_switch_hint")}
                 </Text>
               </div>
             </Card>
@@ -883,6 +849,8 @@ export default function AiSettings() {
                         type="secondary"
                         style={{ color: secondaryTextColor, fontSize: "0.75rem" }}
                       >
+                        {t("ai_settings_protocol")}: {t(cl.protocol === "anthropic" ? "ai_settings_protocol_anthropic" : "ai_settings_protocol_openai")}
+                        <br />
                         {t("ai_settings_available_models")}: {cl.models.join(", ") || "-"}
                       </Text>
                     </div>
@@ -1137,6 +1105,7 @@ export default function AiSettings() {
             </Card>
 
             </section>
+            {settingsSection !== "connections" && <>
             <p className="settings-section-hint">{t("settings_preferences_save_hint")}</p>
             <Form.Item className="settings-save-row" style={{ marginBottom: 0, marginTop: "1rem" }}>
               <Button
@@ -1156,6 +1125,7 @@ export default function AiSettings() {
                 {t("ai_settings_save_button")}
               </Button>
             </Form.Item>
+            </>}
           </Form>
         </Card>
       </Content>
@@ -1189,6 +1159,13 @@ export default function AiSettings() {
               ))}
             </Select>
           </Form.Item>
+          <Form.Item name="protocol" label={t("ai_settings_protocol")}
+            extra={t("ai_settings_protocol_hint")}
+            rules={[{ required: true }]}>
+            <Select size="large" onChange={() => addForm.setFieldsValue({ base_url: "" })}
+              options={[{ value: "openai", label: t("ai_settings_protocol_openai") },
+                { value: "anthropic", label: t("ai_settings_protocol_anthropic") }]} />
+          </Form.Item>
           <Form.Item
             name="api_key"
             label={t("ai_settings_api_key")}
@@ -1203,6 +1180,7 @@ export default function AiSettings() {
           </Form.Item>
           <Form.Item
             name="base_url"
+            rules={[{ required: true, whitespace: true, message: t("ai_settings_protocol_url_required") }]}
             label={
               <Space>
                 <span>{t("ai_settings_base_url")}</span>
@@ -1213,7 +1191,7 @@ export default function AiSettings() {
             }
           >
             <Input
-              placeholder="https://api.openai.com/v1"
+              placeholder={t("ai_settings_protocol_url_required")}
               size="large"
               style={{ height: 44 }}
             />
@@ -1253,6 +1231,13 @@ export default function AiSettings() {
               ))}
             </Select>
           </Form.Item>
+          <Form.Item name="protocol" label={t("ai_settings_protocol")}
+            extra={t("ai_settings_protocol_hint")}
+            rules={[{ required: true }]}>
+            <Select size="large" onChange={() => editForm.setFieldsValue({ base_url: "" })}
+              options={[{ value: "openai", label: t("ai_settings_protocol_openai") },
+                { value: "anthropic", label: t("ai_settings_protocol_anthropic") }]} />
+          </Form.Item>
           <Form.Item
             name="api_key"
             label={t("ai_settings_api_key")}
@@ -1267,6 +1252,7 @@ export default function AiSettings() {
           </Form.Item>
           <Form.Item
             name="base_url"
+            rules={[{ required: true, whitespace: true, message: t("ai_settings_protocol_url_required") }]}
             label={
               <Space>
                 <span>{t("ai_settings_base_url")}</span>
@@ -1277,7 +1263,7 @@ export default function AiSettings() {
             }
           >
             <Input
-              placeholder="https://api.openai.com/v1"
+              placeholder={t("ai_settings_protocol_url_required")}
               size="large"
               style={{ height: 44 }}
             />

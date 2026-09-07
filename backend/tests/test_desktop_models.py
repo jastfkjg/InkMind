@@ -90,7 +90,7 @@ class DesktopModelsTest(unittest.TestCase):
         })
         with patch("app.llm.providers.get_llm_from_user_config") as factory:
             resolve_llm_for_user(self.user, "qwen", db=self.db)
-            factory.assert_called_once_with("anthropic", "user-test-key", "https://user.invalid", "user-model")
+            factory.assert_called_once_with("anthropic", "user-test-key", "https://user.invalid", "user-model", protocol="anthropic")
         self.assertEqual(self.client.delete(f"/custom-llms/{custom_id}").status_code, 204)
         with self.assertRaises(ValueError):
             resolve_llm_for_user(self.user, None, db=self.db)
@@ -137,6 +137,62 @@ class DesktopModelsTest(unittest.TestCase):
         self.user.agent_use_custom = True
         self.user.agent_custom_llm_id = custom.id
         self.assertEqual(_get_backend(self.user, self.db), "none")
+
+    def test_protocol_is_independent_of_brand_and_model_presets(self) -> None:
+        response = self.client.post("/custom-llms", json={
+            "provider": "qwen", "protocol": "anthropic", "api_key": "synthetic-key",
+            "base_url": "https://user.invalid/anthropic",
+        })
+        self.assertEqual(response.status_code, 201)
+        custom_id = response.json()["id"]
+        self.assertEqual(response.json()["protocol"], "anthropic")
+        self.assertEqual(self.client.get("/meta/llm-providers").json()["custom_llms"][0]["protocol"], "anthropic")
+        response = self.client.patch("/auth/me", json={
+            "agent_use_custom": True, "agent_custom_llm_id": custom_id,
+            "agent_model": "unlisted-model", "generation_use_custom": True,
+            "generation_custom_llm_id": custom_id, "preferred_llm_model": "unlisted-model",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(resolve_agent_llm_for_user(self.user, self.db)["model"], "unlisted-model")
+        with patch("app.llm.providers.AnthropicLLM") as factory:
+            resolve_llm_for_user(self.user, None, db=self.db)
+            self.assertEqual(factory.call_args.kwargs["model"], "unlisted-model")
+            self.assertEqual(factory.call_args.kwargs["base_url"], "https://user.invalid/anthropic")
+        response = self.client.patch(f"/custom-llms/{custom_id}", json={
+            "protocol": "openai", "base_url": "https://user.invalid/v1",
+        })
+        self.assertEqual(response.status_code, 200)
+        with patch("app.llm.providers.OpenAICompatibleLLM") as factory:
+            resolve_llm_for_user(self.user, None, db=self.db)
+            self.assertEqual(factory.call_args.kwargs["model"], "unlisted-model")
+        for desktop in (True, False):
+            with patch.object(settings, "desktop_mode", desktop):
+                self.assertIsNone(resolve_agent_llm_for_user(self.user, self.db)["api_key"])
+        self.assertEqual(self.client.patch("/auth/me", json={"agent_custom_llm_id": custom_id}).status_code, 400)
+
+    def test_protocol_validation_and_legacy_defaults(self) -> None:
+        for brand, protocol in (("qwen", "openai"), ("anthropic", "anthropic")):
+            response = self.client.post("/custom-llms", json={"provider": brand, "api_key": "synthetic-key"})
+            self.assertEqual(response.status_code, 201)
+            self.assertEqual(response.json()["protocol"], protocol)
+        for payload, status in (({"protocol": "invalid"}, 422), ({"protocol": "anthropic"}, 400)):
+            self.assertEqual(self.client.post("/custom-llms", json={
+                "provider": "qwen", "api_key": "synthetic-key", **payload,
+            }).status_code, status)
+
+    def test_legacy_protocol_migration_is_repeatable(self) -> None:
+        from sqlalchemy import text
+        from app import main
+        with self.engine.begin() as conn:
+            conn.execute(text("DROP TABLE user_custom_llms"))
+            conn.execute(text("CREATE TABLE user_custom_llms (id INTEGER PRIMARY KEY, user_id INTEGER, provider VARCHAR(64), api_key VARCHAR(512), base_url VARCHAR(512), created_at DATETIME)"))
+            conn.execute(text("INSERT INTO user_custom_llms (id, provider, api_key) VALUES (1, 'qwen', 'synthetic-qwen'), (2, 'anthropic', 'synthetic-anthropic')"))
+        with patch.object(main, "engine", self.engine):
+            main._migrate_sqlite()
+            main._migrate_sqlite()
+        with self.engine.connect() as conn:
+            self.assertEqual(conn.execute(text("SELECT protocol, api_key FROM user_custom_llms ORDER BY id")).all(),
+                             [("openai", "synthetic-qwen"), ("anthropic", "synthetic-anthropic")])
 
 
 if __name__ == "__main__":

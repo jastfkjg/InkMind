@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Layout,
   Card,
@@ -30,6 +30,8 @@ import {
 
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
 import { useNavigation } from "@/context/NavigationContext";
+import { backDestinationKey } from "@/utils/backDestination";
+import "@/styles/workspace-polish.css";
 import { useI18n } from "@/i18n";
 import { 
   apiErrorMessage, 
@@ -49,10 +51,12 @@ interface TaskWithProgress extends BackgroundTask {
 
 export default function BackgroundTasksPage() {
   const { t, isZh } = useI18n();
-  const { goBackSmart } = useNavigation();
+  const { goBackSmart, lastValidPage } = useNavigation();
   const colors = useHeaderTheme();
   const [tasks, setTasks] = useState<TaskWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
+  const [taskFilter, setTaskFilter] = useState("all");
+  const requestInFlight = useRef(false);
   const [err, setErr] = useState("");
   const [selectedTask, setSelectedTask] = useState<TaskWithProgress | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -125,6 +129,8 @@ export default function BackgroundTasksPage() {
   };
 
   const loadTasks = useCallback(async () => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
     setErr("");
     try {
       const r = await fetchBackgroundTasks({ limit: 50 });
@@ -144,9 +150,11 @@ export default function BackgroundTasksPage() {
       );
       
       setTasks(tasksWithProgress);
+      setSelectedTask((current) => current ? tasksWithProgress.find((task) => task.id === current.id) ?? current : null);
     } catch (e) {
       setErr(apiErrorMessage(e));
     } finally {
+      requestInFlight.current = false;
       setLoading(false);
     }
   }, []);
@@ -155,7 +163,7 @@ export default function BackgroundTasksPage() {
     void loadTasks();
     
     const interval = setInterval(() => {
-      void loadTasks();
+      if (!document.hidden) void loadTasks();
     }, 3000);
     
     return () => clearInterval(interval);
@@ -357,9 +365,9 @@ export default function BackgroundTasksPage() {
         extraActions={
           <>
             <Button icon={<ArrowLeftOutlined />} onClick={() => goBackSmart()} size="large" style={{ height: 40 }}>
-              {t("nav_back")}
+              {t(backDestinationKey(lastValidPage))}
             </Button>
-            <Button type="primary" icon={<ReloadOutlined />} onClick={() => { setLoading(true); void loadTasks(); }} loading={loading} size="large" style={{ height: 40 }}>
+            <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); void loadTasks(); }} loading={loading} size="large" style={{ height: 40 }}>
               {t("common_refresh")}
             </Button>
           </>
@@ -370,7 +378,7 @@ export default function BackgroundTasksPage() {
       <Content
         style={{
           padding: "2rem",
-          maxWidth: 1400,
+          maxWidth: 1200,
           margin: "0 auto",
           width: "100%",
         }}
@@ -390,6 +398,10 @@ export default function BackgroundTasksPage() {
         <div className="tasks-summary" aria-label={t("tasks_summary")}>
           {[["tasks_stat_running", runningCount], ["tasks_stat_completed", completedCount], ["tasks_stat_failed", failedCount], ["tasks_stat_total", tasks.length]].map(([label, value]) => <div key={label}><span>{t(String(label))}</span><strong>{value}</strong></div>)}
         </div>
+        <div className="task-filter-bar" role="group" aria-label={t("tasks_list_title")}>
+          {["all", "active", "failed", "completed"].map((filter) => <button key={filter} aria-pressed={taskFilter === filter} onClick={() => setTaskFilter(filter)}>{t(`workspace_task_${filter}`)}</button>)}
+        </div>
+        <p className="workspace-hint">{t("workspace_task_scope")}</p>
 
 
         <Card
@@ -441,14 +453,16 @@ export default function BackgroundTasksPage() {
               </div>
             ) : (
               <Table
+                key={taskFilter}
                 columns={columns}
-                dataSource={[...tasks].sort((a, b) => {
+                locale={{ emptyText: t("workspace_task_no_match") }}
+                dataSource={tasks.filter((task) => taskFilter === "all" || (taskFilter === "active" ? ["running", "pending", "paused"].includes(task.status) : task.status === taskFilter)).sort((a, b) => {
                   const priority = { running: 0, pending: 1, paused: 2, failed: 3, completed: 4, cancelled: 5 };
                   return priority[a.status] - priority[b.status] || Date.parse(b.created_at) - Date.parse(a.created_at);
                 })}
                 rowKey="id"
                 pagination={{
-                  pageSize: 20,
+                  defaultPageSize: 20,
                   showSizeChanger: true,
                   showTotal: (total) => t("tasks_total_records").replace("{total}", String(total)),
                   pageSizeOptions: ["10", "20", "50"],

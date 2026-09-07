@@ -143,13 +143,14 @@ def get_llm_from_user_config(
     api_key: str,
     base_url: str | None = None,
     model: str | None = None,
+    protocol: str | None = None,
 ) -> LLMProvider:
     if not api_key.strip():
         raise ValueError("请在 AI 设置中为自定义 LLM 配置 API Key")
     name = provider.lower().strip()
     if name == "moonshot":
         name = "kimi"
-    if name == "anthropic":
+    if (protocol or ("anthropic" if name == "anthropic" else "openai")) == "anthropic":
         if settings.desktop_mode:
             base_url = base_url or "https://api.anthropic.com"
             model = model or _PROVIDER_DEFAULTS["anthropic"]["model"]
@@ -208,6 +209,7 @@ def resolve_llm_for_user(
                     custom_llm.api_key,
                     custom_llm.base_url,
                     getattr(user, "preferred_llm_model", None),
+                    protocol=custom_llm.effective_protocol,
                 )
                 uid = getattr(user, "id", None)
                 if uid is not None:
@@ -247,18 +249,18 @@ def resolve_agent_llm_for_user(user: object | None, db: Session | None = None) -
             custom_llm = db.get(UserCustomLLM, custom_llm_id)
             if (custom_llm and custom_llm.user_id == getattr(user, "id", None)
                     and custom_llm.api_key.strip()
-                    and (not settings.desktop_mode or custom_llm.provider == "anthropic")):
+                    and custom_llm.effective_protocol == "anthropic"):
                 return {
                     "api_key": custom_llm.api_key,
                     "base_url": custom_llm.base_url or ("https://api.anthropic.com" if settings.desktop_mode else None),
                     "model": getattr(user, "agent_model", None),
                     "source": "custom",
                 }
-    if settings.desktop_mode:
+    if settings.desktop_mode or getattr(user, "agent_use_custom", False):
         return {"api_key": None, "base_url": None, "model": None, "source": "custom"}
     return {
         "api_key": settings.anthropic_api_key,
         "base_url": settings.anthropic_base_url,
-        "model": settings.anthropic_model or None,
+        "model": getattr(user, "agent_model", None) or settings.anthropic_model or None,
         "source": "builtin",
     }

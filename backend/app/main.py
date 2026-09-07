@@ -22,6 +22,8 @@ def _migrate_sqlite() -> None:
             return
         table_names = {t["name"] for t in tables} if isinstance(tables, list) and tables and isinstance(tables[0], dict) else set(tables)
         with engine.begin() as conn:
+            # Inspect on this transaction so SQLite metadata reads cannot roll back data migrations.
+            insp = inspect(conn)
             if "user_custom_llms" not in table_names:
                 conn.execute(text("""
                     CREATE TABLE user_custom_llms (
@@ -34,6 +36,10 @@ def _migrate_sqlite() -> None:
                     )
                 """))
                 conn.execute(text("CREATE INDEX ix_user_custom_llms_user_id ON user_custom_llms(user_id)"))
+            custom_columns = {c["name"] for c in insp.get_columns("user_custom_llms")}
+            if "protocol" not in custom_columns:
+                conn.execute(text("ALTER TABLE user_custom_llms ADD COLUMN protocol VARCHAR(32)"))
+                conn.execute(text("UPDATE user_custom_llms SET protocol = CASE WHEN provider = 'anthropic' THEN 'anthropic' ELSE 'openai' END"))
             cols_users = {c["name"] for c in insp.get_columns("users")}
             if "preferred_llm_provider" not in cols_users:
                 conn.execute(
@@ -91,6 +97,10 @@ def _migrate_sqlite() -> None:
                 ncols = {c["name"] for c in insp.get_columns("novels")}
                 if "outline" in ncols and "background" not in ncols:
                     conn.execute(text("ALTER TABLE novels RENAME COLUMN outline TO background"))
+                if "is_pinned" not in ncols:
+                    conn.execute(text("ALTER TABLE novels ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT 0"))
+                if "is_archived" not in ncols:
+                    conn.execute(text("ALTER TABLE novels ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT 0"))
             if "characters" in table_names:
                 cols = {c["name"] for c in insp.get_columns("characters")}
                 if "relationships" in cols:

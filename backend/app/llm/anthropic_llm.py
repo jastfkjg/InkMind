@@ -20,6 +20,9 @@ class AnthropicLLM(LLMProvider):
         self._client = anthropic.Anthropic(**client_kwargs)
         self._model = model or settings.anthropic_model
 
+    def check_connection(self) -> None:
+        self._client.with_options(timeout=15.0, max_retries=0).models.list()
+
     def stream_complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
         effective_max = max_tokens or 8192
         try:

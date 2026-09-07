@@ -161,6 +161,8 @@ def update_me(body: UserUpdate, user: CurrentUser, db: Session = Depends(get_db)
             custom = db.get(UserCustomLLM, v)
             if not custom or custom.user_id != user.id:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="自定义 LLM 不存在")
+            if custom.effective_protocol != "anthropic":
+                raise HTTPException(status_code=400, detail="AI 助手需要 Anthropic 兼容协议，请编辑该 LLM 的协议与 Base URL")
         user.agent_custom_llm_id = v
 
     if "agent_model" in data:

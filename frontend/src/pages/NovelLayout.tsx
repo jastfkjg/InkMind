@@ -6,24 +6,24 @@ import {
   Tabs,
   Button,
   Alert,
-  Typography,
+  Dropdown,
   Space,
-  Tag,
 } from "antd";
 import {
+  DownOutlined,
   ArrowLeftOutlined,
   SettingOutlined,
   EditOutlined,
   TeamOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
-import { apiErrorMessage, fetchNovel } from "@/api/client";
+import { apiErrorMessage, fetchNovel, fetchNovels } from "@/api/client";
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
 import { useI18n } from "@/i18n";
+import "@/styles/workspace-polish.css";
 import type { Novel } from "@/types";
 
 const { Content } = Layout;
-const { Title } = Typography;
 
 export default function NovelLayout() {
   const { novelId } = useParams();
@@ -38,20 +38,28 @@ export default function NovelLayout() {
   const writeTabActive = loc.pathname.includes("/write");
   const [novel, setNovel] = useState<Novel | null>(null);
   const [err, setErr] = useState("");
+  const [works, setWorks] = useState<Novel[]>([]);
+  const loadWorks = async () => {
+    try { setWorks(await fetchNovels()); } catch (e) { setErr(apiErrorMessage(e)); }
+  };
 
   useEffect(() => {
     if (!Number.isFinite(id)) {
       nav("/", { replace: true });
       return;
     }
+    let active = true;
+    setErr("");
+    setNovel(null);
     (async () => {
       try {
         const n = await fetchNovel(id);
-        setNovel(n);
+        if (active) setNovel(n);
       } catch (e) {
-        setErr(apiErrorMessage(e));
+        if (active) setErr(apiErrorMessage(e));
       }
     })();
+    return () => { active = false; };
   }, [id, nav]);
 
   if (!Number.isFinite(id)) {
@@ -60,20 +68,20 @@ export default function NovelLayout() {
 
   const tabItems = [
     {
-      key: "settings",
-      label: (
-        <Space>
-          <SettingOutlined />
-          <span>{t("novel_tab_settings")}</span>
-        </Space>
-      ),
-    },
-    {
       key: "write",
       label: (
         <Space>
           <EditOutlined />
           <span>{t("novel_tab_write")}</span>
+        </Space>
+      ),
+    },
+    {
+      key: "settings",
+      label: (
+        <Space>
+          <SettingOutlined />
+          <span>{t("novel_tab_settings")}</span>
         </Space>
       ),
     },
@@ -112,7 +120,6 @@ export default function NovelLayout() {
   const bgColor = colors.bgColor;
   const bgLinear = colors.bgLinear;
   const bgRadial = colors.bgRadial;
-  const textColor = colors.textColor;
 
   return (
     <Layout
@@ -130,21 +137,19 @@ export default function NovelLayout() {
         headerStyle={{ flexWrap: "wrap", gap: "1rem" }}
         leftContent={
           <div className="novel-header__content">
-            <Button className="novel-header__back" aria-label={t("nav_dashboard")} type="text" icon={<ArrowLeftOutlined />} onClick={() => nav("/")} size="large">
-              {t("nav_back")}
+            <Button className="novel-header__back" aria-label={t("workspace_library")} type="text" icon={<ArrowLeftOutlined />} onClick={() => nav("/")} size="large">
+              {t("workspace_library")}
             </Button>
             {novel && (
-              <div className="novel-header__identity">
-                <Title level={5} title={novel.title} style={{
-                  margin: 0,
-                  fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
-                  color: textColor,
-                  transition: "color 0.3s ease",
-                }}>
-                  {novel.title || t("novel_untitled")}
-                </Title>
-                {novel.genre && <Tag style={{ margin: 0 }}>{novel.genre}</Tag>}
-              </div>
+              <Dropdown trigger={["click"]} onOpenChange={(open) => { if (open) void loadWorks(); }} menu={{
+                selectedKeys: [String(id)],
+                items: (works.length ? works : [novel]).filter((work) => !work.is_archived || work.id === id).map((work) => ({ key: String(work.id), label: work.title || t("novel_untitled") })),
+                onClick: ({ key }) => { if (Number(key) !== id) nav(`/novels/${key}/write`); },
+              }}>
+                <Button type="text" className="novel-header__work-switch" aria-label={`${t("workspace_switch")} · ${novel.title}`} title={novel.title}>
+                  <span>{novel.title || t("novel_untitled")}</span><DownOutlined />
+                </Button>
+              </Dropdown>
             )}
             <Tabs
               className="novel-header__tabs"

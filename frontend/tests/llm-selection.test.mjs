@@ -19,10 +19,21 @@ test('missing providers do not leak raw builtin or custom identifiers', () => {
 });
 test('desktop preserves configured models; deletion clears the selection', () => {
   const user = { generation_use_custom: true, generation_custom_llm_id: 42, agent_use_custom: true, agent_custom_llm_id: 42, preferred_llm_model: 'writer', agent_model: 'assistant' };
-  const info = { ...builtins, custom_llms: [{ id: 42, provider: 'anthropic', models: ['suggestion'] }] };
+  const info = { ...builtins, custom_llms: [{ id: 42, provider: 'qwen', protocol: 'anthropic', models: ['suggestion'] }] };
   assert.deepEqual(llmSelection(user, info, true), { generationProvider: 'custom:42', generationModel: 'writer', agentProvider: 'custom:42', agentModel: 'assistant' });
   assert.deepEqual(llmSelection(user, builtins, true), empty);
 });
 test('web still selects configured built-ins', () => {
   assert.deepEqual(llmSelection({}, builtins, false), { generationProvider: 'builtin:qwen', generationModel: 'qwen-model', agentProvider: 'builtin:anthropic', agentModel: 'claude-model' });
+});
+
+test('assistant availability follows protocol, not brand, on desktop and web', () => {
+  for (const desktop of [true, false]) {
+    const user = { agent_use_custom: true, agent_custom_llm_id: 42, agent_model: 'custom-unlisted-model' };
+    const info = { ...builtins, custom_llms: [{ id: 42, provider: 'anthropic', protocol: 'openai', models: [] }] };
+    assert.equal(llmSelection(user, info, desktop).agentProvider, '');
+    info.custom_llms[0] = { id: 42, provider: 'qwen', protocol: 'anthropic', models: [] };
+    assert.equal(llmSelection(user, info, desktop).agentProvider, 'custom:42');
+    assert.equal(llmSelection(user, info, desktop).agentModel, 'custom-unlisted-model');
+  }
 });

@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 
 const demo = process.argv.includes('--demo');
 const user = { id: 901, email: 'writer@example.invalid', display_name: demo ? '南枝' : '测试作者', preferred_llm_provider: 'fixture', token_quota: null, preview_before_save: true };
-const novel = { id: 901, user_id: 901, title: demo ? '山海来信' : '长篇测试作品：山海之间与归途的故事', genre: '奇幻', background: demo ? '群山之间，旧驿路连接着一座会遗忘的城。年轻的修信师林照沿着失落的邮路，寻找一封寄给明天的信。' : '一座山城和两位远行者。', writing_style: '细腻、克制，以日常细节铺陈奇幻气息', created_at: '2026-09-01T10:00:00', updated_at: '2026-09-04T10:00:00' };
+const novel = { is_pinned: false, is_archived: false, id: 901, user_id: 901, title: demo ? '山海来信' : '长篇测试作品：山海之间与归途的故事', genre: '奇幻', background: demo ? '群山之间，旧驿路连接着一座会遗忘的城。年轻的修信师林照沿着失落的邮路，寻找一封寄给明天的信。' : '一座山城和两位远行者。', writing_style: '细腻、克制，以日常细节铺陈奇幻气息', created_at: '2026-09-01T10:00:00', updated_at: '2026-09-04T10:00:00' };
 const makeChapter = (id, title, content) => ({ id, novel_id: 901, title, summary: demo ? '林照收到一封日期写着明天的信，循着盐粒和旧地图，寻找山城遗忘的海。' : '主人公重返山城，发现旧友留下的信。', content, sort_order: id, created_at: novel.created_at, updated_at: novel.updated_at });
 let chapters = [makeChapter(901, '山城来信', Array.from({ length: 40 }, (_, i) => `　　第${i + 1}段。雨落在石阶上，远方的灯火渐渐亮了起来。她收起信，沿着熟悉的小巷往前走。`).join('\n')), makeChapter(902, '归途', '　　城门在晨光中缓缓打开。')];
 if (demo) {
@@ -59,14 +59,15 @@ createServer(async (req, res) => {
   if (path === '/auth/quota' || path === '/admin/me/quota') { json({ token_quota: null, token_quota_used: 0 }); return; }
   if (path === '/novels') {
     if (req.method === 'POST') {
-      const n = { ...novel, id: Math.max(...novels.map(n => n.id)) + 1, title: body.title, genre: '', background: '', writing_style: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const n = { ...novel, is_pinned: false, is_archived: false, id: Math.max(...novels.map(n => n.id)) + 1, title: body.title, genre: '', background: '', writing_style: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       novels.push(n); chapterStore.set(n.id, body.create_first_chapter ? [{ ...makeChapter(n.id * 10, '', ''), novel_id: n.id, summary: '' }] : []); json(n, 201); return;
     }
     json(novels.map(n => { const list = chapterStore.get(n.id) || []; const recent = [...list].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return { ...n, chapter_count: list.length, total_words: list.reduce((sum, c) => sum + Array.from(c.content.replace(/\s/g, '')).length, 0), last_chapter_id: recent?.id ?? null, last_chapter_title: recent?.title ?? null, last_edited_at: recent && Date.parse(recent.updated_at) > Date.parse(n.updated_at) ? recent.updated_at : n.updated_at }; })); return;
   }
+  if (path === '/meta/llm-connection-test') { json({ status: body.target === 'generation' ? 'ok' : 'unconfigured' }); return; }
   if (path === '/meta/llm-providers') { json({ builtin: [{ id: 'fixture', label: 'Local fixture', models: ['fixture', 'fixture-other'], default_model: 'fixture' }], default: 'fixture', custom_llms: [], agent_builtin: null, generation_custom_llm_id: null, agent_custom_llm_id: null }); return; }
   if (path === '/background-tasks') { json(tasks); return; }
-  if (path.startsWith('/background-tasks/')) { const task = tasks.find(t => t.id === Number(path.split('/')[2])); json(path.endsWith('/progress') ? { ...task, task_id: task.id, progress: .4 } : task); return; }
+  if (path.startsWith('/background-tasks/')) { const task = tasks.find(t => t.id === Number(path.split('/')[2])); json(path.endsWith('/progress') ? { ...task, task_id: task.id, progress: 40 } : task); return; }
   if (path.startsWith('/usage')) { json({ total_calls: 0, total_input_tokens: 0, total_output_tokens: 0, total_tokens: 0, builtin_calls: 0, builtin_input_tokens: 0, builtin_output_tokens: 0, builtin_total_tokens: 0, custom_calls: 0, custom_input_tokens: 0, custom_output_tokens: 0, custom_total_tokens: 0, items: [] }); return; }
   const novelId = Number(path.split('/')[2]);
   const currentNovel = novels.find(n => n.id === novelId);

@@ -261,7 +261,7 @@ export async function fetchNovel(id: number) {
 
 export async function updateNovel(
   id: number,
-  payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style">>) {
+  payload: Partial<Pick<Novel, "title" | "background" | "genre" | "writing_style" | "is_pinned" | "is_archived">>) {
   const { data } = await api.patch<Novel>(`/novels/${id}`, payload);
   return data;
 }
@@ -525,6 +525,7 @@ export async function listCustomLLMs(): Promise<CustomLlmInfo[]> {
 }
 
 export async function createCustomLLM(payload: {
+  protocol?: "openai" | "anthropic";
   provider: string;
   api_key: string;
   base_url?: string | null;
@@ -537,6 +538,7 @@ export async function updateCustomLLM(
   id: number,
   payload: {
     provider?: string;
+    protocol?: "openai" | "anthropic";
     api_key?: string;
     base_url?: string | null;
   }
@@ -1284,5 +1286,12 @@ export async function cancelAgentTask(
   const { data } = await api.post<{ success: boolean }>(
     `/novels/${novelId}/agent/tasks/${taskId}/cancel`
   );
+  return data;
+}
+
+export type LlmConnectionStatus = "ok" | "unconfigured" | "authentication" | "permission" | "not_supported" | "timeout" | "rate_limit" | "unavailable";
+
+export async function checkLlmConnection(target: "generation" | "agent"): Promise<{ status: LlmConnectionStatus }> {
+  const { data } = await api.post<{ status: LlmConnectionStatus }>("/meta/llm-connection-test", { target }, { timeout: 20000 });
   return data;
 }

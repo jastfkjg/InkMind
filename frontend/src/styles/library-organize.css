@@ -1,0 +1,32 @@
+.library-recent {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 0 0 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-hover);
+}
+
+.library-recent__label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.library-recent__main { flex: 1; min-width: 0; }
+.library-recent__main > a { display: block; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; font-weight: 500; color: var(--ink); }
+.library-recent__main > p { margin: 4px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+.library-recent > .ant-btn { flex-shrink: 0; }
+
+.library-scope-tabs { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.library-scope-tabs > .ant-btn { color: var(--muted); min-height: 36px; gap: 8px; }
+.library-scope-tabs > .ant-btn[aria-pressed="true"] { color: var(--ink); background: var(--bg-hover); font-weight: 500; }
+.library-scope-tabs > .ant-btn > span:last-child { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.library-archive-hint { display: flex; align-items: baseline; gap: 8px; color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 0 20px; }
+.library-organized-empty { padding: 36px 20px; text-align: center; }
+.library-item__flags { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 45%; flex-shrink: 0; }
+.library-item__flags .ant-tag { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-item__pin { color: var(--muted); font-size: 13px; flex-shrink: 0; }
+.library-recent a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+
+@media (max-width: 760px) {
+  .library-recent { gap: 12px; flex-wrap: wrap; }
+  .library-recent__label { width: 100%; }
+}
