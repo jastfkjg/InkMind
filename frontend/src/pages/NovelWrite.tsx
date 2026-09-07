@@ -187,6 +187,9 @@ export default function NovelWrite() {
   const [reviewMetadata, setReviewMetadata] = useState(true);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewLeaveOpen, setPreviewLeaveOpen] = useState(false);
+  const [previewLeaveBusy, setPreviewLeaveBusy] = useState(false);
+  const previewLeaveResolverRef = useRef<((canLeave: boolean) => void) | null>(null);
 
   const [versions, setVersions] = useState<ChapterVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
@@ -1074,12 +1077,94 @@ export default function NovelWrite() {
     await drainSave();
   }, [drainSave]);
 
+  const onConfirmPreview = useCallback(async (): Promise<boolean> => {
+    if (!previewResult || !activeId) return false;
+    const nid = id;
+    setPreviewLoading(true);
+    setErr("");
+    try {
+      const ch = await confirmChapterGeneration(nid, {
+        chapter_id: activeId,
+        title: reviewMetadata ? previewResult.title : title,
+        content: reviewedDraft,
+        summary: reviewMetadata ? previewResult.summary : summary,
+      });
+      if (novelIdRef.current !== nid) return false;
+      const full = await loadChapters();
+      if (novelIdRef.current !== nid) return false;
+      setChapters(full);
+      setActiveId(ch.id);
+      lastLoadedChapterIdRef.current = null;
+      setTitle(ch.title);
+      setSummary(ch.summary);
+      setContent(normalizeBodyParagraphIndent(ch.content));
+      ai.dismiss();
+      setPreviewResult(null);
+      setIsPreviewMode(false);
+      setSingleGenerateTitle("");
+      setSingleGenerateLockTitle(false);
+      return true;
+    } catch (e) {
+      setErr(apiErrorMessage(e));
+      return false;
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [activeId, ai, id, loadChapters, previewResult, reviewMetadata, reviewedDraft, summary, title]);
+
+  const onCancelPreview = useCallback(() => {
+    ai.dismiss();
+    setErr("");
+    const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
+    setPreviewResult(null);
+    setEvaluateResult(null);
+    setIsPreviewMode(false);
+    setTitle(savedTitle);
+    setSummary(savedSummary);
+    setContent(savedContent);
+  }, [ai]);
+
+  const finishPreviewLeave = useCallback((canLeave: boolean) => {
+    setPreviewLeaveOpen(false);
+    const resolve = previewLeaveResolverRef.current;
+    previewLeaveResolverRef.current = null;
+    resolve?.(canLeave);
+  }, []);
+
+  const promptPreviewLeave = useCallback(() => new Promise<boolean>((resolve) => {
+    previewLeaveResolverRef.current?.(false);
+    previewLeaveResolverRef.current = resolve;
+    setPreviewLeaveOpen(true);
+  }), []);
+
+  useEffect(() => () => {
+    previewLeaveResolverRef.current?.(false);
+    previewLeaveResolverRef.current = null;
+  }, []);
+
+  const handleAcceptPreviewAndLeave = useCallback(async () => {
+    setPreviewLeaveBusy(true);
+    const saved = await onConfirmPreview();
+    setPreviewLeaveBusy(false);
+    finishPreviewLeave(saved);
+  }, [finishPreviewLeave, onConfirmPreview]);
+
+  const handleDiscardPreviewAndLeave = useCallback(() => {
+    onCancelPreview();
+    finishPreviewLeave(true);
+  }, [finishPreviewLeave, onCancelPreview]);
+
   const beforeLeave = useCallback(async () => {
     rememberPosition();
-    if (busy || previewLoading || versionActionLoading || isPreviewMode || recoveryDraft) {
-      setErr(t(isPreviewMode ? "write_resolve_preview" : recoveryDraft ? "write_resolve_draft" : "write_wait_for_operation"));
+    if (busy || previewLoading || versionActionLoading) {
+      setErr(t("write_wait_for_operation"));
       return false;
     }
+    if (recoveryDraft) {
+      setErr(t("write_resolve_draft"));
+      return false;
+    }
+    if (isPreviewMode) return promptPreviewLeave();
     try {
       await flushSave();
       return true;
@@ -1087,7 +1172,7 @@ export default function NovelWrite() {
       setErr(`${t("write_save_failed")} ${apiErrorMessage(error)}`);
       return false;
     }
-  }, [rememberPosition, busy, previewLoading, versionActionLoading, isPreviewMode, recoveryDraft, flushSave, t]);
+  }, [rememberPosition, busy, previewLoading, versionActionLoading, recoveryDraft, isPreviewMode, promptPreviewLeave, flushSave, t]);
 
   useEffect(() => registerLeaveGuard(beforeLeave), [registerLeaveGuard, beforeLeave]);
 
@@ -1375,51 +1460,6 @@ export default function NovelWrite() {
     }
   }
 
-  async function onConfirmPreview() {
-    if (!previewResult || !activeId) return;
-    const nid = id;
-    setPreviewLoading(true);
-    setErr("");
-    try {
-      const ch = await confirmChapterGeneration(nid, {
-        chapter_id: activeId,
-        title: reviewMetadata ? previewResult.title : title,
-        content: reviewedDraft,
-        summary: reviewMetadata ? previewResult.summary : summary,
-      });
-      if (novelIdRef.current !== nid) return;
-      const full = await loadChapters();
-      if (novelIdRef.current !== nid) return;
-      setChapters(full);
-      setActiveId(ch.id);
-      lastLoadedChapterIdRef.current = null;
-      setTitle(ch.title);
-      setSummary(ch.summary);
-      setContent(normalizeBodyParagraphIndent(ch.content));
-      ai.dismiss();
-      setPreviewResult(null);
-      setIsPreviewMode(false);
-      setSingleGenerateTitle("");
-      setSingleGenerateLockTitle(false);
-    } catch (e) {
-      setErr(apiErrorMessage(e));
-    } finally {
-      setPreviewLoading(false);
-    }
-  }
-
-  function onCancelPreview() {
-    ai.dismiss();
-    setErr("");
-    const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
-    setPreviewResult(null);
-    setEvaluateResult(null);
-    setIsPreviewMode(false);
-    setTitle(savedTitle);
-    setSummary(savedSummary);
-    setContent(savedContent);
-  }
-
   async function onBatchGenerate() {
     if (!canMutateChapter()) return;
     const nid = id;
@@ -1685,15 +1725,6 @@ export default function NovelWrite() {
         versions: t("write_version_versions"),
       } satisfies Record<AiTool, string>)[rightTool]
     : "";
-  const drawerDescription = rightTool
-    ? ({
-        generate: t("write_ai_generate_desc"),
-        rewrite: t("write_ai_rewrite_desc"),
-        append: t("write_ai_append_desc"),
-        naming: t("write_ai_naming_desc"),
-        versions: t("write_version_desc"),
-      } satisfies Record<AiTool, string>)[rightTool]
-    : "";
   const selectionPanelPosition = selectionPanel && selectionMenuPos
     ? (selectionPanelPos ?? { left: selectionMenuPos.left, top: selectionMenuPos.top + 8 })
     : null;
@@ -1704,6 +1735,30 @@ export default function NovelWrite() {
   return (
     <div className={`write-shell write-layout write-theme--${theme}${focusMode ? " write-focus-mode" : ""}${layout.overlay ? " write-layout--sidebar-overlay" : ""}${layout.resizing ? " write-layout--resizing" : ""}`} style={layout.style}>
       {modalContextHolder}
+      <Modal
+        open={previewLeaveOpen}
+        title={t("write_preview_leave_title")}
+        centered
+        closable={!previewLeaveBusy}
+        maskClosable={!previewLeaveBusy}
+        keyboard={!previewLeaveBusy}
+        onCancel={() => finishPreviewLeave(false)}
+        footer={(
+          <div className="write-preview-leave-actions">
+            <button type="button" className="btn btn-ghost" autoFocus disabled={previewLeaveBusy} onClick={() => finishPreviewLeave(false)}>
+              {t("write_stay_on_chapter")}
+            </button>
+            <button type="button" className="btn btn-danger" disabled={previewLeaveBusy} onClick={handleDiscardPreviewAndLeave}>
+              {t("write_discard_and_continue")}
+            </button>
+            <button type="button" className="btn btn-primary" disabled={previewLeaveBusy} onClick={() => void handleAcceptPreviewAndLeave()}>
+              {previewLeaveBusy ? t("write_saving") : t("write_accept_and_continue")}
+            </button>
+          </div>
+        )}
+      >
+        <p className="write-preview-leave-copy">{t("write_preview_leave_message")}</p>
+      </Modal>
       {err ? <p className="form-error write-err-banner" role="alert">{err}</p> : null}
       {recoveryDraft && (
         <div className="write-notice" role="status">
@@ -1721,15 +1776,6 @@ export default function NovelWrite() {
           }}>{t("write_keep_server")}</button>
         </div>
       )}
-      {isPreviewMode && (
-        <div className="write-notice" role="status">
-          <span>{t("write_resolve_preview")}</span>
-          <button type="button" className="btn btn-ghost" onClick={() => setRightTool("generate")}>{t("review_title")}</button>
-          <button type="button" className="btn btn-primary" disabled={previewLoading} onClick={() => void onConfirmPreview()}>{t("write_confirm_save")}</button>
-          <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={onCancelPreview}>{t("common_cancel")}</button>
-        </div>
-      )}
-
       {layout.overlay && sidebarOpen && !focusMode ? (
         <button
           type="button"
@@ -1822,6 +1868,7 @@ export default function NovelWrite() {
           onAddChapter={onAddChapter}
           onDeleteChapter={onDeleteChapterById}
           disabled={busy || isPreviewMode || previewLoading || versionActionLoading || Boolean(recoveryDraft)}
+          selectionDisabled={busy || previewLoading || versionActionLoading || Boolean(recoveryDraft)}
         />
         </div>
         {!narrow && sidebarOpen && !layout.overlay && <WritingPaneResizeHandle pane="chapters" layout={layout} />}
@@ -1875,10 +1922,10 @@ export default function NovelWrite() {
                         <svg className={`write-summary-toggle__chevron${summaryOpen ? " is-open" : ""}`} width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5l3 3 3-3" /></svg>
                         <span className="write-summary-toggle__label">{t("write_chapter_summary")}</span>
                       </button>
-                      <span className={`write-save-status write-save-status--${saveStatus}`} role="status" aria-live="polite">
-                        {saveStatus === "saving" && <span className="write-save-dot write-save-dot--saving" aria-hidden />}
-                        {saveStatus === "saved" && <span className="write-save-dot write-save-dot--saved" aria-hidden />}
-                        {saveStatus === "unsaved" && <span className="write-save-dot write-save-dot--unsaved" aria-hidden />}
+                      <span className={`write-save-status write-save-status--${isPreviewMode ? "preview" : saveStatus}`} role="status" aria-live="polite">
+                        {!isPreviewMode && saveStatus === "saving" && <span className="write-save-dot write-save-dot--saving" aria-hidden />}
+                        {!isPreviewMode && saveStatus === "saved" && <span className="write-save-dot write-save-dot--saved" aria-hidden />}
+                        {(isPreviewMode || saveStatus === "unsaved") && <span className="write-save-dot write-save-dot--unsaved" aria-hidden />}
                         {isPreviewMode ? t("write_preview_not_saved") : busy ? t("write_ai_working") : saveStatus === "error" ? t("write_save_failed") : saveStatus === "saving" ? t("write_saving") : saveStatus === "saved" ? t("write_saved") : t("write_save_pending")}
                       </span>
                       {saveStatus === "error" && !busy && !isPreviewMode && (
@@ -1929,6 +1976,31 @@ export default function NovelWrite() {
                     />
                   </div>
                 </div>
+                {isPreviewMode ? (
+                  <div className="write-preview-resolution">
+                    <div className="write-preview-resolution__message" role="status" aria-live="polite" aria-atomic="true">
+                      <span className="write-preview-resolution__dot" aria-hidden="true" />
+                      <span>
+                        <strong>{t("write_preview_bar_title")}</strong>
+                        <small>{t("write_preview_bar_hint")}</small>
+                      </span>
+                    </div>
+                    <div className="write-preview-resolution__actions">
+                      <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={() => {
+                        if (focusMode) setFocusMode(() => false);
+                        setRightTool("generate");
+                      }}>
+                        {t("write_preview_review")}
+                      </button>
+                      <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={onCancelPreview}>
+                        {t("write_discard_preview")}
+                      </button>
+                      <button type="button" className="btn btn-primary" disabled={previewLoading} onClick={() => void onConfirmPreview()}>
+                        {previewLoading ? t("write_saving") : t("write_accept_and_save")}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 {focusMode ? (
                   <div className="write-editor-footer">
                     <button
@@ -1964,23 +2036,17 @@ export default function NovelWrite() {
         >
           <div className="write-ai-drawer-head" onPointerDown={handleCommandPanelDragStart}>
             <div className="write-ai-drawer-titleblock">
-              {rightTool !== "generate" && <span className="write-ai-drawer-eyebrow">{t("write_ai_panel_eyebrow")}</span>}
+              {rightTool === "versions" && <span className="write-ai-drawer-eyebrow">{t("write_ai_panel_eyebrow")}</span>}
               <strong>{drawerTitle}</strong>
-              {drawerDescription && rightTool !== "generate" ? <small>{drawerDescription}</small> : null}
+              {rightTool === "versions" ? <small>{t("write_version_desc")}</small> : null}
             </div>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
               {t("write_close")}
             </button>
           </div>
-          {rightTool === "generate" && <div className="write-generate-context">
-            <span>{generateTab === "batch" ? t("write_batch_chapters") : t("write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
-            <span className="write-generate-context__model">{t("ai_settings_model")}: {generationModelLabel}</span>
-          </div>}
-          {rightTool !== "versions" && rightTool !== "generate" && <div className="write-operation-context">
-            <span>{t("write_operation_scope")}: {rightTool === "naming" ? t("write_scope_reference") : t(rightTool === "append" ? "write_scope_append" : "write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
+          {rightTool !== "versions" && <div className="write-command-context">
+            <span>{rightTool === "naming" ? t("write_scope_reference") : rightTool === "generate" && generateTab === "batch" ? t("write_batch_chapters") : t(rightTool === "append" ? "write_scope_append" : "write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
             <span>{t("ai_settings_model")}: {generationModelLabel}</span>
-            <small>{(rightTool === "rewrite" || rightTool === "append") ? t("write_preview_behavior") : rightTool === "naming" ? t("write_naming_behavior") : t("write_direct_behavior")}</small>
-            {novel && !isNovelSetupComplete(novel) && <small>{t("write_setup_optional")} <button className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("reference_title")}</button></small>}
           </div>}
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && isPreviewMode && previewResult && <GenerationReview
@@ -2125,7 +2191,7 @@ export default function NovelWrite() {
                             disabled={previewLoading}
                             onClick={() => void onConfirmPreview()}
                           >
-                            {previewLoading ? t("write_saving") : t("write_confirm_save")}
+                            {previewLoading ? t("write_saving") : t("write_accept_and_save")}
                           </button>
                           <button
                             type="button"
@@ -2133,7 +2199,7 @@ export default function NovelWrite() {
                             disabled={previewLoading}
                             onClick={onCancelPreview}
                           >
-                            {t("write_cancel")}
+                            {t("write_discard_preview")}
                           </button>
                         </div>
                       </div>
@@ -2246,6 +2312,13 @@ export default function NovelWrite() {
                     placeholder={t("write_rewrite_placeholder")}
                   />
                 </div>
+                {novel && !isNovelSetupComplete(novel) && <details className="write-generate-advanced">
+                  <summary><span>{t("write_advanced_options")}</span></summary>
+                  <div className="write-generate-advanced__content">
+                    <button type="button" className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("write_supplement_reference")}</button>
+                  </div>
+                </details>}
+                <p className="write-command-behavior">{t("write_preview_behavior")}</p>
                 <div className="write-ai-command-actions">
                   <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunRewrite}>
                     {busy ? t("write_processing") : t("write_rewrite")}
@@ -2267,6 +2340,13 @@ export default function NovelWrite() {
                     placeholder={t("write_append_placeholder")}
                   />
                 </div>
+                {novel && !isNovelSetupComplete(novel) && <details className="write-generate-advanced">
+                  <summary><span>{t("write_advanced_options")}</span></summary>
+                  <div className="write-generate-advanced__content">
+                    <button type="button" className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("write_supplement_reference")}</button>
+                  </div>
+                </details>}
+                <p className="write-command-behavior">{t("write_preview_behavior")}</p>
                 <div className="write-ai-command-actions">
                   <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunAppend}>
                     {busy ? t("write_processing") : t("write_append")}
@@ -2277,10 +2357,10 @@ export default function NovelWrite() {
 
             {rightTool === "naming" ? (
               <div className="write-ai-section">
-                <p className="hint">{t("write_naming_hint")}</p>
                 <div className="field">
-                  <label>{t("write_naming_category")}</label>
+                  <label htmlFor="write-naming-category">{t("write_naming_category")}</label>
                   <select
+                    id="write-naming-category"
                     className="input"
                     value={namingCategory}
                     onChange={(e) =>
@@ -2294,8 +2374,9 @@ export default function NovelWrite() {
                   </select>
                 </div>
                 <div className="field">
-                  <label>{t("write_naming_object")}</label>
+                  <label htmlFor="write-naming-description">{t("write_naming_object")}</label>
                   <textarea
+                    id="write-naming-description"
                     className="textarea"
                     rows={3}
                     value={namingDesc}
@@ -2303,17 +2384,18 @@ export default function NovelWrite() {
                     placeholder={t("write_naming_object_placeholder")}
                   />
                 </div>
-                <div className="field">
-                  <label>{t("write_naming_hint_label")}</label>
-                  <textarea
-                    className="textarea textarea-compact"
-                    rows={2}
-                    value={namingHint}
-                    onChange={(e) => setNamingHint(e.target.value)}
-                    placeholder={t("write_naming_hint_placeholder")}
-                  />
-                </div>
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={onRunNaming}>
+                <details className="write-generate-advanced">
+                  <summary><span>{t("write_naming_preferences")}{namingHint.trim() ? ` · ${t("write_options_configured")}` : ""}</span></summary>
+                  <div className="write-generate-advanced__content">
+                    <div className="field">
+                      <label htmlFor="write-naming-preferences">{t("write_naming_hint_label")}</label>
+                      <textarea id="write-naming-preferences" className="textarea textarea-compact" rows={2} value={namingHint} onChange={(e) => setNamingHint(e.target.value)} placeholder={t("write_naming_hint_placeholder")} />
+                    </div>
+                    {novel && !isNovelSetupComplete(novel) && <button type="button" className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("write_supplement_reference")}</button>}
+                  </div>
+                </details>
+                <p className="write-command-behavior">{t("write_naming_behavior")}</p>
+                <button type="button" className="btn btn-primary write-command-submit" disabled={busy} onClick={onRunNaming}>
                   {busy ? t("write_generating") : t("write_naming_generate")}
                 </button>
                 {namingResult && namingResult.length > 0 ? (
@@ -2323,6 +2405,7 @@ export default function NovelWrite() {
                         key={idx}
                         type="button"
                         className={`write-naming-result-btn${namingSelectedIndex === idx ? " is-selected" : ""}`}
+                        aria-pressed={namingSelectedIndex === idx}
                         onClick={() => setNamingSelectedIndex(idx)}
                       >
                         {name}
@@ -2575,7 +2658,7 @@ export default function NovelWrite() {
               {t("write_selection_exit")}
             </button>
           </div>
-          <div className="write-operation-context"><span>{t("write_operation_scope")}: {t("write_scope_selection")}</span><span>{t("ai_settings_model")}: {generationModelLabel}</span></div>
+          <div className="write-command-context"><span>{t("write_scope_selection")}</span><span>{t("ai_settings_model")}: {generationModelLabel}</span></div>
           <div className="write-selection-result-float__body">
             <details className="selection-original"><summary>{t("review_original")}</summary><p>{content.slice(selectionPanel.start, selectionPanel.end)}</p></details>
             {ai.operation?.kind === "selection" ? <AiOperationPanel operation={ai.operation} onCancel={ai.cancel} onDismiss={closeSelectionPanel} /> : selectionPanel.streaming || (busy ? t("write_generating") : "")}

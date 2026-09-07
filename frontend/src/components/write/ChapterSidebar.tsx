@@ -10,6 +10,7 @@ interface ChapterSidebarProps {
   onAddChapter: () => void;
   onDeleteChapter: (id: number) => void;
   disabled?: boolean;
+  selectionDisabled?: boolean;
 }
 
 function ChapterSidebar({
@@ -20,6 +21,7 @@ function ChapterSidebar({
   onAddChapter,
   onDeleteChapter,
   disabled = false,
+  selectionDisabled = disabled,
 }: ChapterSidebarProps) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -47,7 +49,7 @@ function ChapterSidebar({
               <div key={c.id} className="chapter-row">
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={selectionDisabled}
                   aria-current={c.id === activeId ? "page" : undefined}
                   className={`chapter-item${c.id === activeId ? " active" : ""}`}
                   onClick={(e) => { e.stopPropagation(); void onSelectChapter(c.id); }}
