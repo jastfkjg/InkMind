@@ -526,6 +526,7 @@ export async function listCustomLLMs(): Promise<CustomLlmInfo[]> {
 
 export async function createCustomLLM(payload: {
   protocol?: "openai" | "anthropic";
+  default_model?: string | null;
   provider: string;
   api_key: string;
   base_url?: string | null;
@@ -539,6 +540,7 @@ export async function updateCustomLLM(
   payload: {
     provider?: string;
     protocol?: "openai" | "anthropic";
+  default_model?: string | null;
     api_key?: string;
     base_url?: string | null;
   }
@@ -1293,5 +1295,19 @@ export type LlmConnectionStatus = "ok" | "unconfigured" | "authentication" | "pe
 
 export async function checkLlmConnection(target: "generation" | "agent"): Promise<{ status: LlmConnectionStatus }> {
   const { data } = await api.post<{ status: LlmConnectionStatus }>("/meta/llm-connection-test", { target }, { timeout: 20000 });
+  return data;
+}
+
+export type LlmProbeMode = "models" | "model";
+export type LlmProbeResult = { mode: LlmProbeMode; status: string; models: string[]; http_status: number | null };
+export async function probeSavedLlm(target: "generation" | "agent", mode: LlmProbeMode): Promise<LlmProbeResult> {
+  const { data } = await api.post<LlmProbeResult>("/meta/llm-probe", { target, mode }, { timeout: 35000 });
+  return data;
+}
+export async function probeDraftLlm(payload: {
+  provider: string; protocol: "openai" | "anthropic"; base_url: string;
+  default_model?: string; api_key?: string; custom_llm_id?: number; mode: LlmProbeMode;
+}): Promise<LlmProbeResult> {
+  const { data } = await api.post<LlmProbeResult>("/custom-llms/probe", payload, { timeout: 35000 });
   return data;
 }

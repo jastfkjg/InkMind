@@ -26,6 +26,22 @@ class OpenAICompatibleLLM(LLMProvider):
         self._model = model
         self._send_temperature = send_temperature
 
+    def list_models(self) -> list[str]:
+        page = self._client.with_options(timeout=15.0, max_retries=0).models.list()
+        return sorted({item.id for item in page.data})
+
+    def test_model(self) -> tuple[int, int]:
+        limit = "max_completion_tokens" if self._model.lower().startswith(("o1", "o3", "o4", "gpt-5")) else "max_tokens"
+        response = self._client.with_options(timeout=30.0, max_retries=0).chat.completions.create(
+            model=self._model, messages=[{"role": "user", "content": "Reply OK."}], **{limit: 32},
+        )
+        usage = response.usage
+        if usage:
+            return usage.prompt_tokens, usage.completion_tokens
+        from app.llm.token_counter import count_tokens
+        output = "".join(choice.message.content or "" for choice in response.choices)
+        return count_tokens("Reply OK.", "openai"), count_tokens(output, "openai")
+
     def check_connection(self) -> None:
         self._client.with_options(timeout=15.0, max_retries=0).models.list()
 

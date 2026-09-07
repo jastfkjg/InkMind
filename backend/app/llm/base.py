@@ -21,6 +21,13 @@ class LLMProvider(ABC):
         """Read provider metadata without generating text or recording token usage."""
         raise NotImplementedError
 
+    def list_models(self) -> list[str]:
+        raise NotImplementedError
+
+    def test_model(self) -> tuple[int, int]:
+        """Make one bounded request; return input/output usage without exposing output."""
+        raise NotImplementedError
+
     @abstractmethod
     def stream_complete(
         self, system: str, user: str, *, max_tokens: int | None = None

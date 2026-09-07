@@ -20,6 +20,16 @@ class AnthropicLLM(LLMProvider):
         self._client = anthropic.Anthropic(**client_kwargs)
         self._model = model or settings.anthropic_model
 
+    def list_models(self) -> list[str]:
+        page = self._client.with_options(timeout=15.0, max_retries=0).models.list()
+        return sorted({item.id for item in page.data})
+
+    def test_model(self) -> tuple[int, int]:
+        response = self._client.with_options(timeout=30.0, max_retries=0).messages.create(
+            model=self._model, max_tokens=32, messages=[{"role": "user", "content": "Reply OK."}],
+        )
+        return response.usage.input_tokens, response.usage.output_tokens
+
     def check_connection(self) -> None:
         self._client.with_options(timeout=15.0, max_retries=0).models.list()
 

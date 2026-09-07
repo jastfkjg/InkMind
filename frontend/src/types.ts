@@ -36,6 +36,7 @@ export type BuiltinProviderInfo = {
 };
 
 export type CustomLlmInfo = {
+  default_model: string | null;
   protocol: "openai" | "anthropic";
   id: number;
   provider: string;

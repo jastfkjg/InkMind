@@ -208,7 +208,7 @@ def resolve_llm_for_user(
                     custom_llm.provider,
                     custom_llm.api_key,
                     custom_llm.base_url,
-                    getattr(user, "preferred_llm_model", None),
+                    getattr(user, "preferred_llm_model", None) or custom_llm.default_model,
                     protocol=custom_llm.effective_protocol,
                 )
                 uid = getattr(user, "id", None)
@@ -253,7 +253,7 @@ def resolve_agent_llm_for_user(user: object | None, db: Session | None = None) -
                 return {
                     "api_key": custom_llm.api_key,
                     "base_url": custom_llm.base_url or ("https://api.anthropic.com" if settings.desktop_mode else None),
-                    "model": getattr(user, "agent_model", None),
+                    "model": getattr(user, "agent_model", None) or custom_llm.default_model,
                     "source": "custom",
                 }
     if settings.desktop_mode or getattr(user, "agent_use_custom", False):

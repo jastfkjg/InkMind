@@ -1,13 +1,20 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
 from app.llm.providers import _PROVIDER_DEFAULTS, _PROVIDER_LABELS
 from app.models import UserCustomLLM
+
+
+from app.schemas.connection import LLMDraftProbeRequest, LLMProbeResponse
+from app.services.llm_connection import probe_provider
+from app.llm.providers import get_llm_from_user_config
+from app.llm.metered_llm import MeteredLLM
+
 
 router = APIRouter(prefix="/custom-llms", tags=["custom-llms"])
 
@@ -16,14 +23,30 @@ class CustomLLMCreate(BaseModel):
     provider: str
     protocol: Literal["openai", "anthropic"] | None = None
     api_key: str
+    default_model: str | None = None
     base_url: str | None = None
+
+    @field_validator("default_model")
+    @classmethod
+    def clean_model(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or len(value.strip()) > 256):
+            raise ValueError("模型 ID 必须为 1–256 个字符")
+        return value.strip() if value else None
 
 
 class CustomLLMUpdate(BaseModel):
     provider: str | None = None
     protocol: Literal["openai", "anthropic"] | None = None
     api_key: str | None = None
+    default_model: str | None = None
     base_url: str | None = None
+
+    @field_validator("default_model")
+    @classmethod
+    def clean_model(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or len(value.strip()) > 256):
+            raise ValueError("模型 ID 必须为 1–256 个字符")
+        return value.strip() if value else None
 
 
 class CustomLLMOut(BaseModel):
@@ -34,6 +57,7 @@ class CustomLLMOut(BaseModel):
     api_key: str | None
     base_url: str | None
     default_base_url: str | None
+    default_model: str | None
     models: list[str]
     created_at: str
 
@@ -48,6 +72,7 @@ class CustomLLMOut(BaseModel):
             id=obj.id,
             provider=provider,
             protocol=obj.effective_protocol,
+            default_model=obj.default_model,
             provider_label=_PROVIDER_LABELS.get(provider, provider),
             api_key=_mask_key(obj.api_key),
             base_url=obj.base_url,
@@ -88,6 +113,7 @@ def create_custom_llm(body: CustomLLMCreate, user: CurrentUser, db: Session = De
         user_id=user.id,
         provider=provider,
         protocol=protocol,
+        default_model=body.default_model,
         api_key=body.api_key.strip(),
         base_url=effective_base_url,
     )
@@ -115,6 +141,8 @@ def update_custom_llm(item_id: int, body: CustomLLMUpdate, user: CurrentUser, db
         # Persist the previous protocol before changing the brand of legacy records.
         item.protocol = item.effective_protocol
         item.provider = provider
+    if "default_model" in body.model_fields_set:
+        item.default_model = body.default_model
     if body.api_key is not None:
         if "***" not in body.api_key:
             item.api_key = body.api_key.strip()
@@ -139,3 +167,28 @@ def delete_custom_llm(item_id: int, user: CurrentUser, db: Session = Depends(get
         user.agent_custom_llm_id = None
     db.delete(item)
     db.commit()
+
+
+@router.post("/probe", response_model=LLMProbeResponse)
+def probe_custom_llm(body: LLMDraftProbeRequest, user: CurrentUser, db: Session = Depends(get_db)) -> LLMProbeResponse:
+    key = (body.api_key or "").strip()
+    if body.custom_llm_id is not None:
+        item = db.get(UserCustomLLM, body.custom_llm_id)
+        if not item or item.user_id != user.id:
+            raise HTTPException(status_code=404, detail="未找到该自定义 LLM")
+        # A saved credential is only reusable for its saved destination/protocol.
+        if not key:
+            if body.base_url.strip().rstrip("/") != (item.base_url or "").rstrip("/") or body.protocol != item.effective_protocol:
+                return LLMProbeResponse(mode=body.mode, status="key_required")
+            key = item.api_key
+    if not key or "***" in key or not body.base_url.strip() or (body.mode == "model" and not body.default_model.strip()):
+        return LLMProbeResponse(mode=body.mode, status="unconfigured")
+    if body.provider not in _PROVIDER_DEFAULTS:
+        raise HTTPException(status_code=400, detail="不支持的供应商")
+    try:
+        provider = get_llm_from_user_config(body.provider, key, body.base_url.strip(),
+                                            body.default_model.strip() or None, protocol=body.protocol)
+    except (ValueError, TypeError):
+        return LLMProbeResponse(mode=body.mode, status="endpoint")
+    metered = MeteredLLM(provider, db, user.id, provider=body.provider, source="custom", action="模型测试")
+    return probe_provider(metered, body.mode)

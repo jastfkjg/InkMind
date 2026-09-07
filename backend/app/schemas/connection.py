@@ -16,3 +16,30 @@ class LLMConnectionCheckRequest(BaseModel):
 
 class LLMConnectionCheckResponse(BaseModel):
     status: ConnectionStatus
+
+
+ProbeMode = Literal["models", "model"]
+
+
+class LLMProbeRequest(BaseModel):
+    target: Literal["generation", "agent"]
+    mode: ProbeMode
+    model_config = {"extra": "forbid"}
+
+
+class LLMDraftProbeRequest(BaseModel):
+    provider: str
+    protocol: Literal["openai", "anthropic"]
+    base_url: str
+    default_model: str = ""
+    api_key: str | None = None
+    custom_llm_id: int | None = None
+    mode: ProbeMode
+    model_config = {"extra": "forbid"}
+
+
+class LLMProbeResponse(BaseModel):
+    mode: ProbeMode
+    status: str
+    models: list[str] = []
+    http_status: int | None = None

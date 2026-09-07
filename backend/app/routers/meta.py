@@ -9,6 +9,11 @@ from app.models import UserCustomLLM
 from app.schemas.connection import LLMConnectionCheckRequest, LLMConnectionCheckResponse
 from app.services.llm_connection import check_saved_llm_connection
 
+
+from app.schemas.connection import LLMProbeRequest, LLMProbeResponse
+from app.services.llm_connection import probe_saved_connection
+
+
 router = APIRouter(prefix="/meta", tags=["meta"])
 
 
@@ -48,6 +53,7 @@ def llm_providers(user: OptionalUser, db: Session = Depends(get_db)) -> dict:
                 "id": item.id,
                 "provider": provider,
                 "protocol": item.effective_protocol,
+                "default_model": item.default_model,
                 "provider_label": _PROVIDER_LABELS.get(provider, provider),
                 "api_key": _mask_key(item.api_key),
                 "base_url": item.base_url,
@@ -63,3 +69,8 @@ def llm_providers(user: OptionalUser, db: Session = Depends(get_db)) -> dict:
         "generation_custom_llm_id": getattr(user, "generation_custom_llm_id", None) if user else None,
         "agent_custom_llm_id": getattr(user, "agent_custom_llm_id", None) if user else None,
     }
+
+
+@router.post("/llm-probe", response_model=LLMProbeResponse)
+def llm_probe(body: LLMProbeRequest, user: CurrentUser, db: Session = Depends(get_db)) -> LLMProbeResponse:
+    return probe_saved_connection(user, db, body.target, body.mode)

@@ -328,6 +328,18 @@ class MeteredLLM(LLMProvider):
         self._source = source
         self._accumulator = accumulator
 
+    def list_models(self) -> list[str]:
+        return self._inner.list_models()
+
+    def test_model(self) -> tuple[int, int]:
+        if self._source == "builtin":
+            check_token_quota(self._db, self._user_id, estimated_tokens=36)
+        usage = self._inner.test_model()
+        accumulator = LLMUsageAccumulator(self._db, self._user_id, self._provider, "模型测试", self._source)
+        accumulator.accumulate(*usage)
+        accumulator.flush()
+        return usage
+
     def check_connection(self) -> None:
         self._inner.check_connection()
 

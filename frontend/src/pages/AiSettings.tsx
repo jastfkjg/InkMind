@@ -11,6 +11,7 @@ import {
   PlusOutlined, DeleteOutlined, EditOutlined, SwapOutlined,
   LinkOutlined,
 } from "@ant-design/icons";
+import ConnectionModelFields from "@/components/ConnectionModelFields";
 import ModelInput from "@/components/ModelInput";
 import ConnectionStatus from "@/components/ConnectionStatus";
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
@@ -28,7 +29,7 @@ import {
 } from "@/api/client";
 import type { LlmProvidersResponse, CustomLlmInfo } from "@/types";
 
-import { llmSelection } from "@/utils/llmSelection";
+import { llmSelection, llmProviderSelection } from "@/utils/llmSelection";
 
 const { Content } = Layout;
 const { Title, Text, Paragraph } = Typography;
@@ -137,25 +138,13 @@ export default function AiSettings() {
         return providerInfo?.builtin.find((p) => p.id === decoded.providerId)?.models || [];
       }
       const customLlm = providerInfo?.custom_llms.find((c) => c.id === decoded.customLlmId);
-      return customLlm?.models || [];
-    },
-    [providerInfo]
-  );
-
-  const getDefaultModelForProviderValue = useCallback(
-    (pv: string): string => {
-      const decoded = decodeProviderValue(pv);
-      if (decoded.kind === "builtin") {
-        return providerInfo?.builtin.find((p) => p.id === decoded.providerId)?.default_model || "";
-      }
-      const customLlm = providerInfo?.custom_llms.find((c) => c.id === decoded.customLlmId);
-      return customLlm?.models?.[0] || "";
+      return [...new Set([customLlm?.default_model, ...(customLlm?.models || [])].filter((model): model is string => !!model))];
     },
     [providerInfo]
   );
 
   const saveGenProviderModel = useCallback(
-    async (pv: string, model: string) => {
+    async (pv: string, model: string | null) => {
       setGenSaving(true);
       try {
         const decoded = decodeProviderValue(pv);
@@ -191,11 +180,11 @@ export default function AiSettings() {
   const handleGenProviderChange = useCallback(
     async (newPv: string) => {
       setGenProviderValue(newPv);
-      const defaultModel = getDefaultModelForProviderValue(newPv);
-      setGenModel(defaultModel);
-      await saveGenProviderModel(newPv, defaultModel);
+      const selection = llmProviderSelection(providerInfo, newPv, "generation");
+      setGenModel(selection.model);
+      await saveGenProviderModel(newPv, selection.savedModel);
     },
-    [getDefaultModelForProviderValue, saveGenProviderModel]
+    [providerInfo, saveGenProviderModel]
   );
 
   const handleGenModelChange = useCallback(
@@ -207,7 +196,7 @@ export default function AiSettings() {
   );
 
   const saveAgentProviderModel = useCallback(
-    async (pv: string, model: string) => {
+    async (pv: string, model: string | null) => {
       setAgentSaving(true);
       try {
         const decoded = decodeProviderValue(pv);
@@ -242,11 +231,11 @@ export default function AiSettings() {
   const handleAgentProviderChange = useCallback(
     async (newPv: string) => {
       setAgentProviderValue(newPv);
-      const defaultModel = getDefaultModelForProviderValue(newPv);
-      setAgentModel(defaultModel);
-      await saveAgentProviderModel(newPv, defaultModel);
+      const selection = llmProviderSelection(providerInfo, newPv, "agent");
+      setAgentModel(selection.model);
+      await saveAgentProviderModel(newPv, selection.savedModel);
     },
-    [getDefaultModelForProviderValue, saveAgentProviderModel]
+    [providerInfo, saveAgentProviderModel]
   );
 
   const handleAgentModelChange = useCallback(
@@ -296,6 +285,7 @@ export default function AiSettings() {
       await createCustomLLM({
         provider: values.provider,
         protocol: values.protocol,
+        default_model: values.default_model.trim(),
         api_key: values.api_key.trim(),
         base_url: values.base_url?.trim() || null,
       });
@@ -318,7 +308,7 @@ export default function AiSettings() {
     const values = await editForm.validateFields();
     setEditSaving(true);
     try {
-      const payload: { provider?: string; protocol?: "openai" | "anthropic"; api_key?: string; base_url?: string | null } = { protocol: values.protocol };
+      const payload: { default_model?: string; provider?: string; protocol?: "openai" | "anthropic"; api_key?: string; base_url?: string | null } = { protocol: values.protocol, default_model: values.default_model.trim() };
       if (values.provider) payload.provider = values.provider;
       if (values.api_key && !isMasked(values.api_key)) {
         payload.api_key = values.api_key.trim();
@@ -356,6 +346,7 @@ export default function AiSettings() {
     editForm.setFieldsValue({
       provider: custom.provider,
       protocol: custom.protocol,
+      default_model: custom.default_model || "",
       api_key: custom.api_key || "",
       base_url: custom.base_url || "",
     });
@@ -366,6 +357,7 @@ export default function AiSettings() {
     addForm.setFieldsValue({
       provider: "openai",
       protocol: "openai",
+      default_model: "",
       api_key: "",
       base_url: ALL_PROVIDERS[0].defaultUrl,
     });
@@ -541,7 +533,7 @@ export default function AiSettings() {
                       value={genProviderValue || undefined}
                       placeholder={t("ai_settings_provider_placeholder")}
                       notFoundContent={t("ai_settings_add_provider_hint")}
-                      onChange={handleGenProviderChange}
+                      onSelect={handleGenProviderChange}
                       disabled={genSaving}
                       suffixIcon={
                         genSaving ? (
@@ -641,7 +633,7 @@ export default function AiSettings() {
                       value={agentProviderValue || undefined}
                       placeholder={t("ai_settings_provider_placeholder")}
                       notFoundContent={t("ai_settings_agent_setup_hint")}
-                      onChange={handleAgentProviderChange}
+                      onSelect={handleAgentProviderChange}
                       disabled={agentSaving}
                       suffixIcon={
                         agentSaving ? (
@@ -851,6 +843,7 @@ export default function AiSettings() {
                       >
                         {t("ai_settings_protocol")}: {t(cl.protocol === "anthropic" ? "ai_settings_protocol_anthropic" : "ai_settings_protocol_openai")}
                         <br />
+                        {t("llm_default_model")}: {cl.default_model || "—"}<br />
                         {t("ai_settings_available_models")}: {cl.models.join(", ") || "-"}
                       </Text>
                     </div>
@@ -1140,6 +1133,8 @@ export default function AiSettings() {
         confirmLoading={addSaving}
         destroyOnClose
         width={520}
+        style={{ top: 24 }}
+        styles={{ body: { maxHeight: "calc(100dvh - 180px)", overflowY: "auto", paddingRight: 8 } }}
       >
         <Form form={addForm} layout="vertical">
           <Form.Item
@@ -1196,6 +1191,7 @@ export default function AiSettings() {
               style={{ height: 44 }}
             />
           </Form.Item>
+          <ConnectionModelFields form={addForm} />
         </Form>
       </Modal>
 
@@ -1212,6 +1208,8 @@ export default function AiSettings() {
         confirmLoading={editSaving}
         destroyOnClose
         width={520}
+        style={{ top: 24 }}
+        styles={{ body: { maxHeight: "calc(100dvh - 180px)", overflowY: "auto", paddingRight: 8 } }}
       >
         <Form form={editForm} layout="vertical">
           <Form.Item
@@ -1268,6 +1266,7 @@ export default function AiSettings() {
               style={{ height: 44 }}
             />
           </Form.Item>
+          <ConnectionModelFields form={editForm} customId={editingCustom?.id} />
         </Form>
       </Modal>
     </Layout>

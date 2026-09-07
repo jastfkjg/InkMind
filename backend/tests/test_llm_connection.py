@@ -34,7 +34,8 @@ class ConnectionTests(unittest.TestCase):
         self.custom = UserCustomLLM(user_id=self.user.id, provider="anthropic", api_key="fixture-secret", base_url="https://fixture.invalid")
         self.foreign = UserCustomLLM(user_id=self.other.id, provider="anthropic", api_key="other-secret")
         self.db.add_all([self.custom, self.foreign]); self.db.commit()
-        app = FastAPI(); app.include_router(router)
+        from app.routers.custom_llms import router as custom_router
+        app = FastAPI(); app.include_router(router); app.include_router(custom_router)
         app.dependency_overrides[get_db] = lambda: self.db
         app.dependency_overrides[get_current_user] = lambda: self.user
         self.client = TestClient(app)
@@ -110,6 +111,57 @@ class ConnectionTests(unittest.TestCase):
             response = self.client.post("/meta/llm-connection-test", json=body)
             self.assertEqual(response.status_code, 422)
 
+    def test_draft_probe_list_failure_does_not_prevent_model_test(self) -> None:
+        payload = {"provider": "qwen", "protocol": "openai", "base_url": "https://fixture.invalid/v1",
+                   "api_key": "fixture-secret", "default_model": "not-in-presets"}
+        error = openai.APIStatusError("secret", response=httpx.Response(401, request=httpx.Request("GET", "https://fixture.invalid/models")), body={})
+        inner = Mock(); inner.list_models.side_effect = error; inner.test_model.return_value = (7, 2)
+        with patch("app.routers.custom_llms.get_llm_from_user_config", return_value=inner):
+            listed = self.client.post("/custom-llms/probe", json={**payload, "mode": "models"})
+            self.assertEqual(listed.json()["status"], "authentication")
+            self.assertEqual(listed.json()["http_status"], 401)
+            self.assertEqual(self.db.query(LLMUsageEvent).count(), 0)
+            tested = self.client.post("/custom-llms/probe", json={**payload, "mode": "model"})
+            self.assertEqual(tested.json()["status"], "ok")
+        event = self.db.query(LLMUsageEvent).one()
+        self.assertEqual((event.input_tokens, event.output_tokens, event.source), (7, 2, "custom"))
+        self.db.refresh(self.user)
+        self.assertEqual(self.user.llm_call_count, 3)
+        self.assertEqual(self.user.token_quota_used, 17)
+        self.assertNotIn("fixture-secret", listed.text + tested.text)
+
+    def test_saved_key_is_owned_and_cannot_be_reused_for_changed_destination(self) -> None:
+        payload = {"provider": "anthropic", "protocol": "anthropic", "base_url": self.custom.base_url,
+                   "custom_llm_id": self.custom.id, "default_model": "test-model", "mode": "model"}
+        with patch("app.routers.custom_llms.get_llm_from_user_config") as factory:
+            self.assertEqual(self.client.post("/custom-llms/probe", json={**payload, "custom_llm_id": self.foreign.id}).status_code, 404)
+            self.assertEqual(self.client.post("/custom-llms/probe", json={**payload, "base_url": "https://other.invalid"}).json()["status"], "key_required")
+            factory.assert_not_called()
+            factory.return_value.test_model.return_value = (4, 1)
+            self.assertEqual(self.client.post("/custom-llms/probe", json=payload).json()["status"], "ok")
+            self.assertEqual(factory.call_args.args[1], "fixture-secret")
+
+    def test_model_error_codes_are_classified_without_exposing_messages(self) -> None:
+        from app.services.llm_connection import probe_provider
+        for code, body, expected in [(404, {"code":"model_not_found"}, "model_unavailable"),
+                                     (404, {}, "endpoint"), (400, {}, "request"), (403, {}, "permission")]:
+            inner = Mock()
+            inner.test_model.side_effect = openai.APIStatusError("fixture-secret", response=httpx.Response(code, request=httpx.Request("POST", "https://fixture.invalid")), body=body)
+            result = probe_provider(inner, "model")
+            self.assertEqual(result.status, expected)
+            self.assertNotIn("fixture-secret", result.model_dump_json())
+
+    def test_default_model_is_saved_and_used_without_overriding_explicit_selection(self) -> None:
+        from app.llm.providers import resolve_agent_llm_for_user
+        response = self.client.post("/custom-llms", json={"provider":"qwen", "protocol":"anthropic", "api_key":"synthetic", "base_url":"https://fixture.invalid", "default_model":"  custom-model  "})
+        self.assertEqual(response.status_code, 201)
+        item = response.json()
+        self.assertEqual(item["default_model"], "custom-model")
+        self.user.agent_use_custom = True; self.user.agent_custom_llm_id = item["id"]
+        self.assertEqual(resolve_agent_llm_for_user(self.user, self.db)["model"], "custom-model")
+        self.user.agent_model = "override"
+        self.assertEqual(resolve_agent_llm_for_user(self.user, self.db)["model"], "override")
+
 
 class SDKConnectionTests(unittest.TestCase):
     def test_sdk_checks_use_only_model_list_with_bounded_timeout_and_no_retry(self) -> None:
@@ -121,6 +173,20 @@ class SDKConnectionTests(unittest.TestCase):
                 sdk.return_value.with_options.return_value.models.list.assert_called_once_with()
                 sdk.return_value.chat.completions.create.assert_not_called()
                 sdk.return_value.messages.stream.assert_not_called()
+
+    def test_real_model_probe_uses_selected_model_bounded_output_and_no_retries(self) -> None:
+        for factory, constructor, protocol in [(OpenAICompatibleLLM, "app.llm.openai_llm.OpenAI", "openai"), (AnthropicLLM, "app.llm.anthropic_llm.anthropic.Anthropic", "anthropic")]:
+            with patch(constructor) as sdk:
+                provider = factory(api_key="synthetic", base_url="https://fixture.invalid", model="custom-model")
+                client = sdk.return_value.with_options.return_value
+                call = client.chat.completions.create if protocol == "openai" else client.messages.create
+                call.return_value.usage.prompt_tokens = call.return_value.usage.input_tokens = 4
+                call.return_value.usage.completion_tokens = call.return_value.usage.output_tokens = 1
+                self.assertEqual(provider.test_model(), (4, 1))
+                sdk.return_value.with_options.assert_called_once_with(timeout=30.0, max_retries=0)
+                self.assertEqual(call.call_args.kwargs["model"], "custom-model")
+                self.assertEqual(call.call_args.kwargs["max_tokens"], 32)
+                client.models.list.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -43,6 +43,34 @@ class DesktopModelsTest(unittest.TestCase):
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 
+    def test_reselect_connection_inherits_default_for_display_and_generation(self) -> None:
+        for desktop in (True, False):
+            with self.subTest(desktop=desktop), patch.object(settings, "desktop_mode", desktop):
+                response = self.client.post("/custom-llms", json={
+                    "provider": "qwen", "protocol": "anthropic", "api_key": "synthetic-key",
+                    "base_url": "https://fixture.invalid", "default_model": "deepseek-v4-pro",
+                })
+                self.assertEqual(response.status_code, 201)
+                custom_id = response.json()["id"]
+                self.user.preferred_llm_model = self.user.agent_model = "qwen3-max"
+                self.db.commit()
+                response = self.client.patch("/auth/me", json={
+                    "generation_use_custom": True, "generation_custom_llm_id": custom_id,
+                    "preferred_llm_model": None, "agent_use_custom": True,
+                    "agent_custom_llm_id": custom_id, "agent_model": None,
+                })
+                self.assertEqual(response.status_code, 200)
+                self.db.expire_all()
+                self.assertIsNone(self.client.get("/auth/me").json()["preferred_llm_model"])
+                info = self.client.get("/meta/llm-providers").json()
+                self.assertEqual(next(c for c in info["custom_llms"] if c["id"] == custom_id)["default_model"], "deepseek-v4-pro")
+                with patch("app.llm.providers.get_llm_from_user_config") as factory:
+                    resolve_llm_for_user(self.user, None, db=self.db)
+                    self.assertEqual(factory.call_args.args[3], "deepseek-v4-pro")
+                self.assertEqual(resolve_agent_llm_for_user(self.user, self.db)["model"], "deepseek-v4-pro")
+                self.client.patch(f"/custom-llms/{custom_id}", json={"default_model": "updated-default"})
+                self.assertEqual(resolve_agent_llm_for_user(self.user, self.db)["model"], "updated-default")
+
     def test_desktop_settings_discard_inherited_credentials(self) -> None:
         with patch.dict("os.environ", {"KIMI_API_KEY": "server-kimi"}):
             configured = Settings(

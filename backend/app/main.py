@@ -40,6 +40,8 @@ def _migrate_sqlite() -> None:
             if "protocol" not in custom_columns:
                 conn.execute(text("ALTER TABLE user_custom_llms ADD COLUMN protocol VARCHAR(32)"))
                 conn.execute(text("UPDATE user_custom_llms SET protocol = CASE WHEN provider = 'anthropic' THEN 'anthropic' ELSE 'openai' END"))
+            if "default_model" not in custom_columns:
+                conn.execute(text("ALTER TABLE user_custom_llms ADD COLUMN default_model VARCHAR(256)"))
             cols_users = {c["name"] for c in insp.get_columns("users")}
             if "preferred_llm_provider" not in cols_users:
                 conn.execute(
