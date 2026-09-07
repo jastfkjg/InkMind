@@ -77,3 +77,34 @@ class CustomWritingTests(DatabaseCase):
         with patch("app.llm.providers.list_available_providers", return_value=["qwen"]):
             self.assertTrue(has_generation_configuration(self.user, self.db))
             self.assertFalse(has_generation_configuration(self.user, self.db, "openai"))
+
+    def test_generation_preview_transports_keep_draft_and_progress_separate(self) -> None:
+        import json
+        self.user.preview_before_save = True
+        self.user.enable_auto_audit = True
+        self.db.commit()
+        target = self.chapters[0]
+        original = target.content
+        chunks = ['[并行调用工具]\n', '  - get_novel_context\n', '[并行调用完成]\n',
+                  '{"body":"雨落下。\\n\\n他推开门。"}', '[完成] 所有必要步骤已完毕\n']
+        for mode in ('direct', 'react', 'flexible'):
+            self.user.agent_mode = mode
+            self.db.commit()
+            for route in ('generate', 'generate-sse'):
+                with self.subTest(mode=mode, route=route), \
+                        patch('app.services.chapter_gen.FlexibleNovelAgent.run', return_value=iter(chunks)), \
+                        patch('app.services.chapter_gen.ReActAgent.run', return_value=iter(['{"body":"雨落下。\\n\\n他推开门。"}'])), \
+                        patch('app.routers.chapters.resolve_llm_for_user', return_value=RecordingLLM('{"body":"雨落下。\\n\\n他推开门。"}')), \
+                        patch('app.routers.chapters.stream_evaluate_tokens', return_value=iter(['{"de_ai_score": 80}'])):
+                    response = self.client.post(f'/novels/{self.novel.id}/chapters/{route}',
+                                                json={'chapter_id': target.id, 'summary': '雨夜'})
+                self.assertEqual(response.status_code, 200)
+                lines = response.text.splitlines()
+                events = [json.loads(line[6:] if line.startswith('data: ') else line)
+                          for line in lines if line.startswith(('data: ', '{'))]
+                self.assertFalse(any('error' in event for event in events), response.text)
+                result = next(event['preview'] for event in events if 'preview' in event)
+                self.assertEqual(result['content'], '雨落下。\n\n他推开门。')
+                self.assertNotIn('所有必要步骤', response.text)
+                self.db.refresh(target)
+                self.assertEqual(target.content, original)

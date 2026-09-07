@@ -13,7 +13,7 @@ from app.llm.llm_errors import LLMRequestError
 from app.prompts import get_prompt
 from app.llm.metered_llm import llm_usage_session
 from app.llm.ndjson_stream import filter_think_chunks, ndjson_line
-from app.llm.sse_stream import SseStreamBuilder, convert_ndjson_chunk_to_sse
+from app.llm.sse_stream import SseEvent, SseStreamBuilder, convert_ndjson_chunk_to_sse, sse_agent_step
 from app.llm.providers import has_generation_configuration, normalize_provider_name, resolve_llm_for_user
 from app.models import Chapter, ChapterVersion
 from app.observability.otel_ai import ai_span
@@ -174,7 +174,7 @@ def generate_chapter(
                 ch: Chapter | None = None
 
                 if agent_mode == "direct":
-                    yield ndjson_line({"t": get_prompt("stream_direct_mode", language)})
+                    yield ndjson_line({"progress": {"type": "generating", "message": get_prompt("agent_progress_generating", language)}})
                     with ai_span("chapter.generate.direct", novel_id=novel_id):
                         result = run_direct_chapter_generation(
                             db, novel, body.summary.strip(), target,
@@ -206,12 +206,12 @@ def generate_chapter(
                         body_text = _sanitize_generated_body("".join(body_parts))
 
                 elif agent_mode == "react":
-                    yield ndjson_line({"t": get_prompt("stream_react_mode", language)})
+                    yield ndjson_line({"progress": {"type": "generating", "message": get_prompt("agent_progress_generating", language)}})
                     with ai_span("chapter.generate.react_agent", novel_id=novel_id):
                         result = run_react_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations, language=language
+                            max_iterations=max_iterations, language=language, save_to_db=save_to_db
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -229,12 +229,12 @@ def generate_chapter(
                         body_text = _sanitize_generated_body("".join(body_parts))
 
                 else:
-                    yield ndjson_line({"t": get_prompt("stream_flexible_mode", language)})
+                    yield ndjson_line({"progress": {"type": "generating", "message": get_prompt("agent_progress_generating", language)}})
                     with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
                         result = run_flexible_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations, language=language
+                            max_iterations=max_iterations, language=language, save_to_db=save_to_db
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -255,7 +255,7 @@ def generate_chapter(
                 needs_revision = False
 
                 if enable_auto_audit and body_text.strip():
-                    yield ndjson_line({"t": get_prompt("stream_auto_audit", language)})
+                    yield ndjson_line({"progress": {"type": "generating", "message": get_prompt("agent_progress_auditing", language)}})
                     try:
                         eval_buf: list[str] = []
                         with ai_span("chapter.auto_evaluate", novel_id=novel_id):
@@ -268,16 +268,15 @@ def generate_chapter(
                                 language=language,
                             )):
                                 eval_buf.append(part)
-                                yield ndjson_line({"t": part})
                         eval_raw = "".join(eval_buf)
                         evaluate_result = parse_evaluation_json(eval_raw)
                         yield ndjson_line({"evaluate": evaluate_result.model_dump(mode="json")})
 
                         if evaluate_result.de_ai_score < auto_audit_min_score:
                             needs_revision = True
-                            yield ndjson_line({"t": get_prompt("stream_score_warning", language, score=evaluate_result.de_ai_score, threshold=auto_audit_min_score)})
+                            yield ndjson_line({"progress": {"type": "info", "message": get_prompt("stream_score_warning", language, score=evaluate_result.de_ai_score, threshold=auto_audit_min_score)}})
                     except Exception as e:
-                        yield ndjson_line({"t": get_prompt("stream_audit_failed", language, error=str(e))})
+                        yield ndjson_line({"progress": {"type": "info", "message": get_prompt("stream_audit_failed", language, error=str(e))}})
 
                 if preview_before_save:
                     preview_out = ChapterPreviewOut(
@@ -366,7 +365,7 @@ def generate_chapter_sse(
                 ch: Chapter | None = None
 
                 if agent_mode == "direct":
-                    yield builder.build_agent_step(step_type="generating", tool_name="direct_generation").encode()
+                    yield sse_agent_step(step_type="generating", tool_name="direct_generation").encode()
                     with ai_span("chapter.generate.direct", novel_id=novel_id):
                         result = run_direct_chapter_generation(
                             db, novel, body.summary.strip(), target,
@@ -398,12 +397,12 @@ def generate_chapter_sse(
                         body_text = _sanitize_generated_body("".join(body_parts))
 
                 elif agent_mode == "react":
-                    yield builder.build_agent_step(step_type="generating", tool_name="react_agent").encode()
+                    yield sse_agent_step(step_type="generating", tool_name="react_agent").encode()
                     with ai_span("chapter.generate.react_agent", novel_id=novel_id):
                         result = run_react_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations, language=language
+                            max_iterations=max_iterations, language=language, save_to_db=save_to_db
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -413,22 +412,25 @@ def generate_chapter_sse(
                             title_out = ch.title
                             body_text = ch.content
                         else:
-                            sse_events = convert_ndjson_chunk_to_sse(item, builder)
-                            for event in sse_events:
-                                yield event.encode()
-                            if isinstance(item, str) and not item.startswith("["):
+                            progress = _try_parse_progress(item)
+                            if progress is not None:
+                                yield sse_agent_step(step_type="phase", phase_id=progress["type"],
+                                                     phase_status="running", phase_title=progress["message"]).encode()
+                            else:
+                                for event in convert_ndjson_chunk_to_sse(item, builder):
+                                    yield event.encode()
                                 body_parts.append(item)
                     if not body_text and body_parts:
                         from app.services.chapter_gen import _sanitize_generated_body
                         body_text = _sanitize_generated_body("".join(body_parts))
 
                 else:
-                    yield builder.build_agent_step(step_type="generating", tool_name="flexible_agent").encode()
+                    yield sse_agent_step(step_type="generating", tool_name="flexible_agent").encode()
                     with ai_span("chapter.generate.flexible_agent", novel_id=novel_id):
                         result = run_flexible_chapter_generation(
                             db, novel, body.summary.strip(), target,
                             llm, fixed_title=fixed_title, word_count=word_count,
-                            max_iterations=max_iterations, language=language
+                            max_iterations=max_iterations, language=language, save_to_db=save_to_db
                         )
                     ch = None
                     body_parts: list[str] = []
@@ -438,10 +440,13 @@ def generate_chapter_sse(
                             title_out = ch.title
                             body_text = ch.content
                         else:
-                            sse_events = convert_ndjson_chunk_to_sse(item, builder)
-                            for event in sse_events:
-                                yield event.encode()
-                            if isinstance(item, str) and not item.startswith("["):
+                            progress = _try_parse_progress(item)
+                            if progress is not None:
+                                yield sse_agent_step(step_type="phase", phase_id=progress["type"],
+                                                     phase_status="running", phase_title=progress["message"]).encode()
+                            else:
+                                for event in convert_ndjson_chunk_to_sse(item, builder):
+                                    yield event.encode()
                                 body_parts.append(item)
                     if not body_text and body_parts:
                         from app.services.chapter_gen import _sanitize_generated_body
@@ -451,7 +456,7 @@ def generate_chapter_sse(
                 needs_revision = False
 
                 if enable_auto_audit and body_text.strip():
-                    yield builder.build_agent_step(step_type="evaluating", tool_name="auto_audit").encode()
+                    yield sse_agent_step(step_type="evaluating", tool_name="auto_audit").encode()
                     try:
                         eval_buf: list[str] = []
                         with ai_span("chapter.auto_evaluate", novel_id=novel_id):
@@ -464,7 +469,6 @@ def generate_chapter_sse(
                                 language=language,
                             )):
                                 eval_buf.append(part)
-                                yield builder.build_text_delta(part).encode()
                         eval_raw = "".join(eval_buf)
                         evaluate_result = parse_evaluation_json(eval_raw)
 
@@ -490,8 +494,7 @@ def generate_chapter_sse(
                 if evaluate_result:
                     result_data["evaluate"] = evaluate_result.model_dump(mode="json")
 
-                from app.llm.sse_stream import sse_done
-                yield sse_done(**result_data).encode()
+                yield SseEvent(event_type="done", data=result_data).encode()
 
             except LLMRequestError as e:
                 yield builder.build_error(e.message).encode()

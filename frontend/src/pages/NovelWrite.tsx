@@ -1318,7 +1318,6 @@ export default function NovelWrite() {
     bodyStreamingRef.current = true;
     setBusy(true);
     setErr("");
-    setContent("");
     setPreviewResult(null);
     setIsPreviewMode(false);
     setCurrentProgress(null);
@@ -1327,9 +1326,6 @@ export default function NovelWrite() {
         chapterId: activeId,
         title: singleGenerateTitle.trim() || null,
         lockTitle: singleGenerateLockTitle,
-        onToken: (t) => {
-          if (novelIdRef.current === nid) setContent((p) => p + t);
-        },
         onProgress: (progress) => {
           if (novelIdRef.current === nid) setCurrentProgress(progress);
         },
@@ -2161,14 +2157,9 @@ export default function NovelWrite() {
                     </button>
 
                     {generateMode === "foreground" && busy && currentProgress ? (
-                      <pre className="write-generate-log">
+                      <div className="write-generate-log" role="status" aria-live="polite">
                         {currentProgress.message}
-                        {currentProgress.detail && (
-                          <span className="write-generate-log-detail">
-                            {currentProgress.detail.length > 100 ? currentProgress.detail.slice(0, 100) + "..." : currentProgress.detail}
-                          </span>
-                        )}
-                      </pre>
+                      </div>
                     ) : null}
 
                     {previewResult ? (
@@ -2313,7 +2304,7 @@ export default function NovelWrite() {
                       {busy ? t("write_batch_generating") : generateMode === "background" ? t("write_submit_background") : `${t("write_batch_generate_n")} ${batchChapterCount ?? 0} ${t("write_batch_generate_n_suffix")}`}
                     </button>
                     {generateMode === "foreground" && batchStreaming ? (
-                      <pre className="write-generate-log">{batchStreaming}</pre>
+                      <div className="write-generate-log" role="status" aria-live="polite">{batchStreaming}</div>
                     ) : null}
                   </>
                 )}

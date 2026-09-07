@@ -2357,10 +2357,10 @@
   margin: 0.5rem 0 0;
   padding: 0.75rem 0.9rem;
   border-radius: 12px;
-  background: #181715;
-  border: 1px solid #252320;
-  color: #faf9f5;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  background: var(--write-surface-soft);
+  border: 1px solid var(--write-hairline);
+  color: var(--write-ink);
+  font-family: inherit;
   font-size: 0.8rem;
   line-height: 1.6;
   white-space: pre-wrap;

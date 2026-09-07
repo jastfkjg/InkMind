@@ -408,6 +408,18 @@ PROMPTS: dict[str, dict[str, str]] = {
         "zh": "正在生成章节正文...",
         "en": "Generating chapter content...",
     },
+    "agent_progress_context": {
+        "zh": "正在整理创作资料…",
+        "en": "Gathering writing context…",
+    },
+    "agent_progress_finalizing": {
+        "zh": "正文草稿已生成，正在整理结果…",
+        "en": "Draft generated. Preparing the result…",
+    },
+    "agent_progress_auditing": {
+        "zh": "正在检查正文质量…",
+        "en": "Checking draft quality…",
+    },
     "agent_progress_finished": {
         "zh": "任务完成",
         "en": "Task completed",

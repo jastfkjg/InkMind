@@ -50,9 +50,9 @@ def _is_status_chunk(chunk: str) -> bool:
     """检查 chunk 是否是状态信息（以 [思考] 等开头）。"""
     status_prefixes = [
         "[思考]", "[调用工具]", "[工具结果]", "[完成]", 
-        "[开始生成正文]", "[系统]", "[错误]"
+        "[开始生成正文]", "[系统", "[错误]", "[并行调用工具]", "[并行调用完成]", "  - "
     ]
-    return any(chunk.startswith(prefix) for prefix in status_prefixes)
+    return any(chunk.lstrip("\n").startswith(prefix) for prefix in status_prefixes)
 
 
 def _parse_status_chunk(chunk: str, language: Language) -> str | None:
@@ -83,11 +83,15 @@ def _parse_status_chunk(chunk: str, language: Language) -> str | None:
         return _make_progress_event("generating", message)
     
     elif chunk.startswith("[完成]"):
-        detail = chunk[len("[完成]"):].strip()
-        message = get_prompt("agent_progress_finished", language)
-        return _make_progress_event("finished", message, detail=detail)
+        return _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
+
+    elif chunk.startswith(("[并行调用工具]", "- ")):
+        return _make_progress_event("tool_call", get_prompt("agent_progress_context", language))
+
+    elif chunk.startswith("[并行调用完成]"):
+        return _make_progress_event("generating", get_prompt("agent_progress_generating", language))
     
-    elif chunk.startswith("[系统]") or chunk.startswith("[错误]"):
+    elif chunk.startswith("[系统") or chunk.startswith("[错误]"):
         detail = chunk
         return _make_progress_event("info", detail, detail=detail)
     
@@ -116,11 +120,15 @@ def parse_chapter_generation_json(raw: str, *, need_title: bool) -> tuple[str, s
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
+        if text.startswith(("{", "[", "```")):
+            raise ValueError("生成结果格式不完整，请重试")
         return ("", text.strip())
 
     if not isinstance(data, dict):
-        body = raw.strip()
-        return ("", body)
+        raise ValueError("生成结果格式不正确，请重试")
+
+    if not isinstance(data.get("body"), str) or not data["body"].strip():
+        raise ValueError("生成结果缺少正文，请重试")
 
     if need_title:
         title = str(data.get("title") or "").strip()
@@ -185,6 +193,7 @@ def run_react_chapter_generation(
     new_sort_order: int | None = None,
     word_count: int | None = None,
     language: Language = "zh",
+    save_to_db: bool = True,
 ):
     """使用 ReAct Agent 执行章节生成（推理-工具-生成循环）。
 
@@ -222,10 +231,16 @@ def run_react_chapter_generation(
             fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count, "language": language},
         )
     ):
-        result_chunks.append(chunk)
-        yield chunk
+        if _is_status_chunk(chunk):
+            progress = _parse_status_chunk(chunk, language)
+            if progress:
+                yield progress
+        else:
+            result_chunks.append(chunk)
 
     body_text = _sanitize_generated_body("".join(result_chunks))
+    yield body_text
+    yield _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
     
     if fixed_title is not None:
         title_out = fixed_title
@@ -241,6 +256,13 @@ def run_react_chapter_generation(
             body_text=body_text,
             language=language,
         )
+
+    if not save_to_db:
+        yield ChapterModel(
+            novel_id=novel.id, title=title_out, summary=chapter_summary.strip(),
+            content=body_text, sort_order=target_chapter.sort_order if target_chapter else (new_sort_order or 0),
+        )
+        return
 
     if target_chapter is None:
         if new_sort_order is not None:
@@ -300,7 +322,10 @@ def _sanitize_generated_body(raw: str) -> str:
     while lines and re.match(r"^\s*(Thought|Action|Observation)[:：]", lines[0]):
         lines.pop(0)
 
-    return "\n".join(lines).strip()
+    _, body = parse_chapter_generation_json("\n".join(lines).strip(), need_title=False)
+    if not body:
+        raise ValueError("生成结果缺少正文，请重试")
+    return body
 
 
 def _filter_flexible_agent_output(chunks: list[str]) -> tuple[list[str], list[str]]:
@@ -312,7 +337,7 @@ def _filter_flexible_agent_output(chunks: list[str]) -> tuple[list[str], list[st
     status_messages: list[str] = []
     
     for chunk in chunks:
-        if chunk.startswith("[思考]") or chunk.startswith("[调用工具]") or chunk.startswith("[工具结果]") or chunk.startswith("[完成]") or chunk.startswith("[开始生成正文]") or chunk.startswith("[系统]") or chunk.startswith("[错误]"):
+        if _is_status_chunk(chunk):
             status_messages.append(chunk.strip())
         else:
             body_chunks.append(chunk)
@@ -333,6 +358,7 @@ def run_flexible_chapter_generation(
     new_sort_order: int | None = None,
     word_count: int | None = None,
     language: Language = "zh",
+    save_to_db: bool = True,
 ):
     """使用 FlexibleNovelAgent 执行章节生成。
 
@@ -385,12 +411,12 @@ def run_flexible_chapter_generation(
             progress_event = _parse_status_chunk(chunk, language)
             if progress_event:
                 yield progress_event
-        else:
-            yield chunk
 
     body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
     
     body_text = _sanitize_generated_body("".join(body_chunks))
+    yield body_text
+    yield _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
     
     if fixed_title is not None:
         title_out = fixed_title
@@ -406,6 +432,13 @@ def run_flexible_chapter_generation(
             body_text=body_text,
             language=language,
         )
+
+    if not save_to_db:
+        yield ChapterModel(
+            novel_id=novel.id, title=title_out, summary=chapter_summary.strip(),
+            content=body_text, sort_order=target_chapter.sort_order if target_chapter else (new_sort_order or 0),
+        )
+        return
 
     if target_chapter is None:
         if new_sort_order is not None:
