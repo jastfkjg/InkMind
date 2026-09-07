@@ -108,3 +108,30 @@ class CustomWritingTests(DatabaseCase):
                 self.assertNotIn('所有必要步骤', response.text)
                 self.db.refresh(target)
                 self.assertEqual(target.content, original)
+
+    def test_revision_preview_requires_explicit_adoption(self) -> None:
+        import json
+        target = self.chapters[0]
+        original = target.content
+        for mode in ('rewrite', 'append'):
+            with self.subTest(mode=mode), patch('app.routers.chapters.resolve_llm_for_user', return_value=RecordingLLM('新增片段。')):
+                response = self.client.post(f'/novels/{self.novel.id}/chapters/{target.id}/revise',
+                                            json={'mode': mode, 'instruction': '补充动作', 'preview': True})
+            events = [json.loads(line) for line in response.text.splitlines()]
+            preview = next(event['preview'] for event in events if 'preview' in event)
+            self.assertEqual(preview['content'], original + '\n\n新增片段。' if mode == 'append' else '新增片段。')
+            self.db.refresh(target)
+            self.assertEqual(target.content, original)
+            self.assertTrue(any('t' in event for event in events))
+            self.assertFalse(any('chapter' in event for event in events))
+
+    def test_evaluation_stream_exposes_readable_issues_not_json(self) -> None:
+        import json
+        raw = '{"issues":[{"aspect":"动机","detail":"缺少铺垫"}],"de_ai_score":72}'
+        with patch('app.routers.chapters.resolve_llm_for_user', return_value=RecordingLLM()), \
+                patch('app.routers.chapters.stream_evaluate_tokens', return_value=iter(raw)):
+            response = self.client.post(f'/novels/{self.novel.id}/chapters/{self.chapters[0].id}/ai-evaluate', json={})
+        events = [json.loads(line) for line in response.text.splitlines()]
+        text = ''.join(event.get('t','') for event in events)
+        self.assertEqual(text, '动机\n缺少铺垫\n\n')
+        self.assertEqual(events[-1]['evaluate']['de_ai_score'], 72)

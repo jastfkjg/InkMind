@@ -1,6 +1,6 @@
 {
   "name": "inkmind-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "InkMind local desktop writing app",
   "author": "InkMind contributors",
@@ -40,18 +40,25 @@
       {
         "from": "../frontend/dist",
         "to": "frontend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../backend/dist/inkmind-backend",
         "to": "backend",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "build/icon.icns",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "hardenedRuntime": true
     }
   }

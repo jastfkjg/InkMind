@@ -105,3 +105,47 @@ def parse_evaluation_json(raw: str) -> ChapterEvaluateOut:
             issues_out.append(ChapterEvaluateIssue(aspect=aspect[:800], detail=detail[:4000]))
 
     return ChapterEvaluateOut(issues=issues_out, de_ai_score=score)
+
+
+def partial_evaluation_issues(raw: str) -> list[dict[str, str]]:
+    """Only publish complete issue objects from the root issues array."""
+    text = _strip_code_fence(raw)
+    decoder = json.JSONDecoder()
+    pos = 0
+    def whitespace(index: int) -> int:
+        while index < len(text) and text[index].isspace():
+            index += 1
+        return index
+    pos = whitespace(pos)
+    if pos >= len(text) or text[pos] != '{':
+        return []
+    pos += 1
+    try:
+        while True:
+            pos = whitespace(pos)
+            key, pos = decoder.raw_decode(text, pos)
+            pos = whitespace(pos)
+            if text[pos] != ':':
+                return []
+            pos = whitespace(pos + 1)
+            if key == 'issues' and text[pos] == '[':
+                issues: list[dict[str, str]] = []
+                pos += 1
+                while True:
+                    try:
+                        item, pos = decoder.raw_decode(text, whitespace(pos))
+                    except (ValueError, IndexError):
+                        return issues
+                    if isinstance(item, dict) and isinstance(item.get('aspect'), str) and isinstance(item.get('detail'), str):
+                        issues.append({'aspect': item['aspect'], 'detail': item['detail']})
+                    pos = whitespace(pos)
+                    if pos >= len(text) or text[pos] != ',':
+                        return issues
+                    pos += 1
+            _, pos = decoder.raw_decode(text, pos)
+            pos = whitespace(pos)
+            if text[pos] != ',':
+                return []
+            pos += 1
+    except (ValueError, IndexError):
+        return []

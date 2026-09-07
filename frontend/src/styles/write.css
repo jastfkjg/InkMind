@@ -4363,3 +4363,120 @@
   border-color: var(--write-accent);
   color: var(--write-accent-active);
 }
+
+/* A temporary draft lives alongside the original, never inside its textarea. */
+.write-ai-stream {
+  margin: 16px 24px;
+  padding: 16px;
+  border: 1px solid var(--write-hairline);
+  border-radius: 8px;
+  background: var(--write-surface-soft);
+  color: var(--write-ink);
+  min-width: 0;
+}
+.write-ai-stream__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.write-ai-stream__header p { margin: 4px 0; font-size: 14px; }
+.write-ai-stream__header .btn { min-height: 44px; flex-shrink: 0; }
+.write-ai-stream__meta { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--write-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.write-ai-stream__notice, .write-ai-stream__caption { margin: 12px 0 0; font-size: 13px; color: var(--write-muted); line-height: 1.6; }
+.write-ai-stream__steps { margin-top: 8px; font-size: 13px; color: var(--write-muted); }
+.write-ai-stream__steps summary { cursor: pointer; padding: 8px 0; }
+.write-ai-stream__steps ol { padding-left: 20px; line-height: 1.8; max-height: 160px; overflow: auto; }
+.write-ai-stream__text, .write-ai-stream__edit {
+  margin-top: 12px; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: inherit; font-size: 16px; line-height: 1.9; color: var(--write-body);
+  max-height: 45vh; overflow: auto; overscroll-behavior: contain;
+}
+.write-ai-stream__edit { width: 100%; min-height: 240px; background: var(--write-canvas); resize: vertical; }
+.write-ai-stream__text:focus-visible { outline: 2px solid var(--write-accent); outline-offset: 4px; }
+@media (max-width: 600px) {
+  .write-ai-stream { margin: 12px; padding: 12px; }
+  .write-ai-stream__text { max-height: 40vh; }
+}
+
+/* Generation: keep the brief prominent and disclose secondary settings on demand. */
+.write-command-panel--generate .write-ai-drawer-head {
+  align-items: center;
+  padding: 12px 18px 8px;
+  border-bottom: 0;
+  background: var(--write-canvas);
+}
+.write-command-panel--generate .write-ai-close { min-height: 44px; }
+.write-generate-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 0 18px 14px;
+  border-bottom: 1px solid var(--write-hairline-soft);
+  color: var(--write-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.write-generate-context > span { min-width: 0; }
+.write-command-panel--generate .write-ai-section { gap: 16px; }
+.write-command-panel--generate .field { margin-bottom: 0; }
+.write-command-panel--generate #write-ai-chapter-summary {
+  min-height: 180px;
+  line-height: 1.75;
+  border-radius: 8px;
+}
+.write-command-panel--generate .write-generate-advanced {
+  border: 0;
+  border-bottom: 1px solid var(--write-hairline-soft);
+  border-radius: 0;
+  background: transparent;
+}
+.write-command-panel--generate .write-generate-advanced summary {
+  min-height: 44px;
+  padding: 8px 2px;
+  font-weight: 500;
+}
+.write-command-panel--generate .write-generate-advanced__content {
+  padding: 8px 0 16px;
+  border: 0;
+}
+.write-generate-delivery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.write-generate-delivery legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.write-generate-delivery label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--write-body);
+  font-size: 13px;
+  cursor: pointer;
+}
+.write-generate-delivery input,
+.write-command-panel--generate .write-generate-lock input { accent-color: var(--write-accent-active); }
+.write-generate-delivery input { margin: 0; }
+.write-generate-delivery:disabled label { opacity: 0.6; cursor: default; }
+.write-command-panel--generate .write-generate-lock { min-height: 44px; margin: 0; }
+.write-generate-behavior {
+  margin: -12px 0 0;
+  color: var(--write-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.write-command-panel--generate .write-generate-submit {
+  min-height: 44px;
+  border-radius: 8px !important;
+}
+.write-ai-stream__report { margin-top: 12px; font-size: 14px; line-height: 1.7; }
+.write-ai-stream__report summary { cursor: pointer; padding: 8px 0; color: var(--write-muted); }

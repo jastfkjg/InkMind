@@ -28,11 +28,10 @@ import {
   generateChapterBatch,
   novelAiChapterSummaryInspire,
   novelAiNaming,
-  reviseChapter,
+  previewChapterRevision,
   rollbackChapterToVersion,
   updateChapter,
   type ChapterPreviewResult,
-  type ProgressEvent,
 } from "@/api/client";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigation } from "@/context/NavigationContext";
@@ -46,6 +45,8 @@ import { useWritingLayout } from "@/components/write/useWritingLayout";
 import WritingLayoutControls, { WritingPaneResizeHandle } from "@/components/write/WritingLayoutControls";
 import "@/styles/writing-layout.css";
 import ChapterSidebar from "@/components/write/ChapterSidebar";
+import AiOperationPanel from "@/components/write/AiOperationPanel";
+import { useAiOperation } from "@/components/write/useAiOperation";
 import GenerationReview from "@/components/write/GenerationReview";
 import ReferencePanel from "@/components/write/ReferencePanel";
 import { llmSelection } from "@/utils/llmSelection";
@@ -144,7 +145,8 @@ export default function NovelWrite() {
   const [batchChapterCountInput, setBatchChapterCountInput] = useState("3");
   const [batchSummary, setBatchSummary] = useState("");
   const [batchStreaming, setBatchStreaming] = useState("");
-  const [currentProgress, setCurrentProgress] = useState<ProgressEvent | null>(null);
+  const ai = useAiOperation(`${id}:${activeId}`);
+  const [reviewedDraft, setReviewedDraft] = useState("");
   /** 正文选区：用于 AI 扩写/润色 */
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null);
   const [selectionPanel, setSelectionPanel] = useState<{
@@ -209,7 +211,7 @@ export default function NovelWrite() {
   const createVersionRef = useRef(false);
 
   const layout = useWritingLayout({
-    panelOpen: !focusMode && Boolean((rightTool && activeId !== null) || assistantOpen || referenceOpen || selectionPanel || evaluateResult),
+    panelOpen: !focusMode && Boolean((rightTool && activeId !== null) || assistantOpen || referenceOpen || selectionPanel || (evaluateResult && ai.operation?.kind !== "evaluate")),
     focusMode,
     desktop: !narrow,
   });
@@ -819,8 +821,7 @@ export default function NovelWrite() {
     if (!selectionPanel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setSelectionPanel(null);
-        setSelectionPanelPos(null);
+        closeSelectionPanel();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -849,6 +850,7 @@ export default function NovelWrite() {
     setSelectionPanelPos(getSelectionResultAnchor(r));
     setSelectionPanel({ mode, start: r.start, end: r.end, text: "", streaming: "" });
     setBusy(true);
+    const request = ai.begin("selection", t("write_selection_" + mode + "_title"), t("ai_stream_context"));
     try {
       await flushSave();
       let acc = "";
@@ -862,22 +864,28 @@ export default function NovelWrite() {
           llm_provider: preferredLlm,
         },
         {
+          ...request.options,
           onToken: (t) => {
+            request.options.onToken?.(t);
+            if (!request.isCurrent()) return;
             acc += t;
             setSelectionPanel((p) => (p ? { ...p, streaming: acc } : null));
           },
         }
       );
+      if (!request.isCurrent()) return;
       setSelectionPanel((p) => (p ? { ...p, text, streaming: text } : null));
+      request.complete(text);
     } catch (e) {
-      setSelectionPanel(null);
-      setErr(apiErrorMessage(e));
+      request.fail(apiErrorMessage(e));
+      if (request.isCurrent()) setErr(apiErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
   function closeSelectionPanel() {
+    if (ai.operation?.kind === "selection") { ai.cancel(); ai.dismiss(); }
     setSelectionPanel(null);
     setSelectionPanelPos(null);
   }
@@ -1246,22 +1254,23 @@ export default function NovelWrite() {
     if (!activeId || !hasLlm) return;
     setSummaryInspireBusy(true);
     setErr("");
-    let acc = "";
+    setBusy(true);
+    if (narrow) setRightTool(null);
+    const request = ai.begin("summary", t("write_chapter_summary"), t("ai_stream_context"));
     try {
-      await novelAiChapterSummaryInspire(
-        nid,
-        { chapter_id: activeId, chapter_count: 1 },
-        (t) => {
-          acc += t;
-          if (novelIdRef.current === nid) setSummary(acc);
-        }
+      const result = await novelAiChapterSummaryInspire(
+        nid, { chapter_id: activeId, chapter_count: 1 }, request.options.onToken, request.options
       );
+      if (!request.isCurrent()) return;
+      setSummary(result.summary); request.complete(result.summary);
     } catch (e) {
       if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
+        request.fail(apiErrorMessage(e));
+        if (request.isCurrent()) setErr(apiErrorMessage(e));
       }
     } finally {
       setSummaryInspireBusy(false);
+      setBusy(false);
     }
   }
 
@@ -1279,22 +1288,23 @@ export default function NovelWrite() {
     }
     setBatchSummaryInspireBusy(true);
     setErr("");
-    let acc = "";
+    setBusy(true);
+    if (narrow) setRightTool(null);
+    const request = ai.begin("summary", t("write_chapter_summary"), t("ai_stream_context"));
     try {
-      await novelAiChapterSummaryInspire(
-        nid,
-        { chapter_id: activeId, chapter_count: batchChapterCount },
-        (t) => {
-          acc += t;
-          if (novelIdRef.current === nid) setBatchSummary(acc);
-        }
+      const result = await novelAiChapterSummaryInspire(
+        nid, { chapter_id: activeId, chapter_count: batchChapterCount }, request.options.onToken, request.options
       );
+      if (!request.isCurrent()) return;
+      setBatchSummary(result.summary); request.complete(result.summary);
     } catch (e) {
       if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
+        request.fail(apiErrorMessage(e));
+        if (request.isCurrent()) setErr(apiErrorMessage(e));
       }
     } finally {
       setBatchSummaryInspireBusy(false);
+      setBusy(false);
     }
   }
 
@@ -1307,10 +1317,6 @@ export default function NovelWrite() {
       return;
     }
     if (!activeId) return;
-    if (hasBody && user?.preview_before_save === false) {
-      const ok = await confirmAction(t("write_confirm_regenerate"));
-      if (!ok) return;
-    }
     try { await flushSave(); } catch (error) { setErr(apiErrorMessage(error)); return; }
     preGenerateSnapshotRef.current = { title, summary, content };
     const savedContent = content;
@@ -1320,33 +1326,31 @@ export default function NovelWrite() {
     setErr("");
     setPreviewResult(null);
     setIsPreviewMode(false);
-    setCurrentProgress(null);
+    if (narrow) setRightTool(null);
+    const request = ai.begin("generate", t("write_ai_generate"), t("ai_stream_context"));
     try {
       const result = await generateChapter(nid, s, {
         chapterId: activeId,
-        title: singleGenerateTitle.trim() || null,
+        title: singleGenerateLockTitle ? singleGenerateTitle.trim() || null : null,
         lockTitle: singleGenerateLockTitle,
-        onProgress: (progress) => {
-          if (novelIdRef.current === nid) setCurrentProgress(progress);
-        },
+        ...request.options,
       });
-      if (novelIdRef.current !== nid) return;
+      if (novelIdRef.current !== nid || !request.isCurrent()) return;
 
       if (result.preview) {
         setIsPreviewMode(true);
         setReviewRejected(new Set());
         setReviewMetadata(true);
         setPreviewResult(result.preview);
-        setTitle(result.preview.title);
-        setContent(normalizeBodyParagraphIndent(result.preview.content));
-        setSummary(result.preview.summary);
+        setReviewedDraft(normalizeBodyParagraphIndent(result.preview.content));
+        request.complete(normalizeBodyParagraphIndent(result.preview.content), true);
         if (result.preview.evaluate_result) {
           setEvaluateResult(result.preview.evaluate_result);
         }
       } else if (result.chapter) {
         const ch = result.chapter;
         const full = await loadChapters();
-        if (novelIdRef.current !== nid) return;
+        if (novelIdRef.current !== nid || !request.isCurrent()) return;
         setChapters(full);
         setActiveId(ch.id);
         lastLoadedChapterIdRef.current = null;
@@ -1360,14 +1364,14 @@ export default function NovelWrite() {
       }
     } catch (e) {
       if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
+        request.fail(apiErrorMessage(e));
+        if (request.isCurrent()) setErr(apiErrorMessage(e));
         setTitle(savedTitle);
         setContent(savedContent);
       }
     } finally {
       bodyStreamingRef.current = false;
       setBusy(false);
-      setCurrentProgress(null);
     }
   }
 
@@ -1379,9 +1383,9 @@ export default function NovelWrite() {
     try {
       const ch = await confirmChapterGeneration(nid, {
         chapter_id: activeId,
-        title,
-        content,
-        summary,
+        title: reviewMetadata ? previewResult.title : title,
+        content: reviewedDraft,
+        summary: reviewMetadata ? previewResult.summary : summary,
       });
       if (novelIdRef.current !== nid) return;
       const full = await loadChapters();
@@ -1392,6 +1396,7 @@ export default function NovelWrite() {
       setTitle(ch.title);
       setSummary(ch.summary);
       setContent(normalizeBodyParagraphIndent(ch.content));
+      ai.dismiss();
       setPreviewResult(null);
       setIsPreviewMode(false);
       setSingleGenerateTitle("");
@@ -1404,6 +1409,7 @@ export default function NovelWrite() {
   }
 
   function onCancelPreview() {
+    ai.dismiss();
     setErr("");
     const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
     setPreviewResult(null);
@@ -1485,7 +1491,7 @@ export default function NovelWrite() {
       await createSingleBackgroundTask({
         novel_id: nid,
         chapter_id: activeId,
-        title: singleGenerateTitle.trim() || null,
+        title: singleGenerateLockTitle ? singleGenerateTitle.trim() || null : null,
         summary: s,
         fixed_title: singleGenerateLockTitle ? (singleGenerateTitle.trim() || null) : null,
         task_type: hasBody ? "rewrite_chapter" : "single_chapter",
@@ -1542,98 +1548,33 @@ export default function NovelWrite() {
     }
   }
 
-  async function onRunRewrite() {
-    if (!canMutateChapter()) return;
+  async function onRunRevision(mode: "rewrite" | "append") {
+    if (!canMutateChapter() || !activeId) return;
+    const instruction = mode === "rewrite" ? rewriteInstr.trim() : appendInstr.trim();
+    if (!instruction) { setErr(t(mode === "rewrite" ? "write_err_rewrite_instr_required" : "write_err_append_instr_required")); return; }
+    if (mode === "rewrite" && !hasBody) { setErr(t("write_err_rewrite_needs_body")); return; }
     const nid = id;
-    if (!activeId || !rewriteInstr.trim()) {
-      setErr(t("write_err_rewrite_instr_required"));
-      return;
-    }
-    if (!hasBody) {
-      setErr(t("write_err_rewrite_needs_body"));
-      return;
-    }
-    setBusy(true);
-    setErr("");
-    const savedBody = content;
+    setBusy(true); setErr("");
+    if (narrow) setRightTool(null);
+    const request = ai.begin(mode, t(mode === "rewrite" ? "write_ai_rewrite" : "write_ai_append"), t("ai_stream_context"));
     try {
       await flushSave();
+      if (!request.isCurrent()) return;
+      preGenerateSnapshotRef.current = { title, summary, content };
       bodyStreamingRef.current = true;
-      let acc = "";
-      const ch = await reviseChapter(
-        nid,
-        activeId,
-        rewriteInstr.trim(),
-        preferredLlm,
-        "rewrite",
-        (t) => {
-          acc += t;
-          if (novelIdRef.current === nid) setContent(acc);
-        }
-      );
-      if (novelIdRef.current !== nid) return;
-      const full = await loadChapters();
-      if (novelIdRef.current !== nid) return;
-      setChapters(full);
-      setContent(normalizeBodyParagraphIndent(ch.content));
-      setSummary(ch.summary);
-      setRewriteInstr("");
-    } catch (e) {
-      if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
-        setContent(savedBody);
-      }
-    } finally {
-      bodyStreamingRef.current = false;
-      setBusy(false);
-    }
+      const preview = await previewChapterRevision(nid, activeId, instruction, preferredLlm, mode, request.options);
+      if (!request.isCurrent()) return;
+      setPreviewResult(preview); setIsPreviewMode(true); setReviewRejected(new Set()); setReviewMetadata(true);
+      const draft = normalizeBodyParagraphIndent(preview.content);
+      setReviewedDraft(draft); request.complete(draft, true);
+      setRightTool(narrow ? null : "generate");
+    } catch (error) {
+      request.fail(apiErrorMessage(error));
+      if (request.isCurrent()) setErr(apiErrorMessage(error));
+    } finally { bodyStreamingRef.current = false; setBusy(false); }
   }
-
-  async function onRunAppend() {
-    if (!canMutateChapter()) return;
-    const nid = id;
-    if (!activeId || !appendInstr.trim()) {
-      setErr(t("write_err_append_instr_required"));
-      return;
-    }
-    setBusy(true);
-    setErr("");
-    const savedAppendBody = content;
-    try {
-      await flushSave();
-      bodyStreamingRef.current = true;
-      const before = savedAppendBody.trimEnd();
-      let addition = "";
-      const ch = await reviseChapter(
-        nid,
-        activeId,
-        appendInstr.trim(),
-        preferredLlm,
-        "append",
-        (t) => {
-          addition += t;
-          if (novelIdRef.current === nid) {
-            setContent(before + (addition ? "\n\n" + addition : ""));
-          }
-        }
-      );
-      if (novelIdRef.current !== nid) return;
-      const full = await loadChapters();
-      if (novelIdRef.current !== nid) return;
-      setChapters(full);
-      setContent(normalizeBodyParagraphIndent(ch.content));
-      setSummary(ch.summary);
-      setAppendInstr("");
-    } catch (e) {
-      if (novelIdRef.current === nid) {
-        setErr(apiErrorMessage(e));
-        setContent(savedAppendBody);
-      }
-    } finally {
-      bodyStreamingRef.current = false;
-      setBusy(false);
-    }
-  }
+  const onRunRewrite = () => onRunRevision("rewrite");
+  const onRunAppend = () => onRunRevision("append");
 
   async function onRunNaming() {
     if (!canMutateChapter()) return;
@@ -1642,6 +1583,8 @@ export default function NovelWrite() {
       setErr(t("write_err_naming_desc_required"));
       return;
     }
+    if (narrow) setRightTool(null);
+    const request = ai.begin("naming", t("write_ai_naming"), t("ai_stream_context"));
     setBusy(true);
     setErr("");
     setNamingSelectedIndex(null);
@@ -1656,21 +1599,27 @@ export default function NovelWrite() {
           hint: namingHint || null,
         },
         (chunk) => {
+          request.options.onToken?.(chunk);
+          if (!request.isCurrent()) return;
           fullText += chunk;
           const names = fullText
             .split("\n")
             .map((n) => n.trim())
             .filter((n) => n);
           setNamingResult(names);
-        }
+        },
+        request.options
       );
+      if (!request.isCurrent()) return;
+      request.complete(text);
       const finalNames = text
         .split("\n")
         .map((n) => n.trim())
         .filter((n) => n);
       setNamingResult(finalNames);
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      request.fail(apiErrorMessage(e));
+      if (request.isCurrent()) setErr(apiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -1686,6 +1635,8 @@ export default function NovelWrite() {
     }
     if (!(await confirmAction(t("write_confirm_evaluate_chapter")))) return;
     setEvaluateBusy(true);
+    setBusy(true);
+    const request = ai.begin("evaluate", t("write_ai_quick_check"), t("write_evaluating"));
     setRightTool(null);
     window.dispatchEvent(new Event("inkmind:assistant-minimize"));
     setErr("");
@@ -1700,13 +1651,18 @@ export default function NovelWrite() {
           summary,
           content,
           llm_provider: preferredLlm,
-        }
+        },
+        request.options
       );
+      if (!request.isCurrent()) return;
       setEvaluateResult(data);
+      request.complete();
     } catch (e) {
-      setErr(apiErrorMessage(e));
+      request.fail(apiErrorMessage(e));
+      if (request.isCurrent()) setErr(apiErrorMessage(e));
     } finally {
       setEvaluateBusy(false);
+      setBusy(false);
     }
   }
 
@@ -1853,7 +1809,7 @@ export default function NovelWrite() {
           <button className={`btn btn-ghost write-assistant-trigger${assistantOpen ? " is-active" : ""}`} aria-label={t("write_ai_quick_ask")} aria-expanded={assistantOpen} onClick={() => assistantOpen ? window.dispatchEvent(new Event("inkmind:assistant-minimize")) : handleOpenSmartWriterPrompt("")}><RobotOutlined />{t("write_ai_quick_ask")}</button>
         </div>}
       </div>
-      <div ref={layout.stageRef} className={`write-stage${!focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) ? " write-stage--with-panel" : ""}`}>
+      <div ref={layout.stageRef} className={`write-stage${!focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || (evaluateResult && ai.operation?.kind !== "evaluate")) ? " write-stage--with-panel" : ""}`}>
       <div className={`write-workspace${sidebarOpen ? " write-workspace--sidebar-open" : ""}`}>
 
 
@@ -1950,6 +1906,9 @@ export default function NovelWrite() {
                     <p className="write-ai-unavailable">{t("write_ai_unavailable")} <button type="button" className="write-retry-save" onClick={() => nav("/settings")}>{t("nav_ai_settings")}</button></p>
                   )}
                 </div>
+                {ai.operation && !(ai.operation.kind === "selection" && selectionPanel && !focusMode) && <AiOperationPanel operation={ai.operation} onCancel={ai.cancel} onDismiss={ai.dismiss}
+                  report={isPreviewMode ? previewResult?.evaluate_result : ai.operation.kind === "evaluate" ? evaluateResult : null}
+                  onEdit={isPreviewMode && !previewLoading ? (text) => { setReviewedDraft(text); ai.replaceText(text); setPreviewResult((preview) => preview ? { ...preview, content: text } : null); setReviewRejected(new Set()); } : undefined} />}
                 <div className={`write-body-wrapper write-body-wrapper--${lineWidthId}`}>
                   <div className="field write-body-field">
                     <textarea
@@ -1989,7 +1948,7 @@ export default function NovelWrite() {
         </div>
       </div>
 
-      {!narrow && !focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || evaluateResult) && <WritingPaneResizeHandle pane="tools" layout={layout} />}
+      {!narrow && !focusMode && (drawerOpen || assistantOpen || referenceOpen || selectionPanel || (evaluateResult && ai.operation?.kind !== "evaluate")) && <WritingPaneResizeHandle pane="tools" layout={layout} />}
 
       {!focusMode && drawerOpen && rightTool && (
         <div
@@ -2005,31 +1964,30 @@ export default function NovelWrite() {
         >
           <div className="write-ai-drawer-head" onPointerDown={handleCommandPanelDragStart}>
             <div className="write-ai-drawer-titleblock">
-              <span className="write-ai-drawer-eyebrow">{t("write_ai_panel_eyebrow")}</span>
+              {rightTool !== "generate" && <span className="write-ai-drawer-eyebrow">{t("write_ai_panel_eyebrow")}</span>}
               <strong>{drawerTitle}</strong>
-              {drawerDescription ? <small>{drawerDescription}</small> : null}
+              {drawerDescription && rightTool !== "generate" ? <small>{drawerDescription}</small> : null}
             </div>
             <button type="button" className="write-ai-close btn btn-ghost" onClick={() => setRightTool(null)}>
               {t("write_close")}
             </button>
           </div>
-          {rightTool !== "versions" && <div className="write-operation-context">
-            <span>{t("write_operation_scope")}: {rightTool === "naming" ? t("write_scope_reference") : rightTool === "generate" && generateTab === "batch" ? t("write_batch_chapters") : t(rightTool === "append" ? "write_scope_append" : "write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
+          {rightTool === "generate" && <div className="write-generate-context">
+            <span>{generateTab === "batch" ? t("write_batch_chapters") : t("write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
+            <span className="write-generate-context__model">{t("ai_settings_model")}: {generationModelLabel}</span>
+          </div>}
+          {rightTool !== "versions" && rightTool !== "generate" && <div className="write-operation-context">
+            <span>{t("write_operation_scope")}: {rightTool === "naming" ? t("write_scope_reference") : t(rightTool === "append" ? "write_scope_append" : "write_scope_chapter").replace("{title}", title || t("novel_untitled"))}</span>
             <span>{t("ai_settings_model")}: {generationModelLabel}</span>
-            <small>{rightTool === "generate" && generateMode === "foreground" && generateTab === "single" && user?.preview_before_save !== false ? t("write_preview_behavior") : rightTool === "naming" ? t("write_naming_behavior") : t("write_direct_behavior")}</small>
+            <small>{(rightTool === "rewrite" || rightTool === "append") ? t("write_preview_behavior") : rightTool === "naming" ? t("write_naming_behavior") : t("write_direct_behavior")}</small>
             {novel && !isNovelSetupComplete(novel) && <small>{t("write_setup_optional")} <button className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("reference_title")}</button></small>}
           </div>}
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && isPreviewMode && previewResult && <GenerationReview
               original={preGenerateSnapshotRef.current} proposal={{ ...previewResult, content: normalizeBodyParagraphIndent(previewResult.content) }}
               rejected={reviewRejected} useMetadata={reviewMetadata} disabled={previewLoading}
-              onReview={(rejected, next) => {
-                const editor = bodyTextareaRef.current;
-                const scrollTop = editor?.scrollTop ?? 0;
-                setReviewRejected(rejected); setContent(next);
-                requestAnimationFrame(() => { if (editor?.isConnected) editor.scrollTop = scrollTop; });
-              }}
-              onMetadata={(value) => { setReviewMetadata(value); const source = value ? previewResult : preGenerateSnapshotRef.current; setTitle(source.title); setSummary(source.summary); }}
+              onReview={(rejected, next) => { setReviewRejected(rejected); setReviewedDraft(next); ai.replaceText(next); }}
+              onMetadata={setReviewMetadata}
             />}
             {rightTool === "generate" && activeId && !isPreviewMode ? (
               <div className="write-ai-section">
@@ -2100,67 +2058,44 @@ export default function NovelWrite() {
                       />
                     </div>
                     <details className="write-generate-advanced">
-                      <summary><span>{t("write_advanced_options")}</span></summary>
+                      <summary><span>{t("write_advanced_options")}{singleGenerateLockTitle ? ` · ${t("write_custom_title")}` : ""}</span></summary>
                       <div className="write-generate-advanced__content">
-                        <div className="field">
-                          <label htmlFor="write-ai-generate-title">{t("write_generate_title_optional")}</label>
-                          <input
-                            id="write-ai-generate-title"
-                            className="input"
-                            value={singleGenerateTitle}
-                            onChange={(e) => setSingleGenerateTitle(e.target.value)}
-                            placeholder={t("write_title_ai_decide")}
-                          />
-                        </div>
                         <label className="write-generate-lock">
-                          <input
-                            type="checkbox"
-                            checked={singleGenerateLockTitle}
-                            onChange={(e) => setSingleGenerateLockTitle(e.target.checked)}
-                          />
-                          <span>{t("write_lock_title_desc")}</span>
+                          <input type="checkbox" checked={singleGenerateLockTitle} onChange={(e) => {
+                            setSingleGenerateLockTitle(e.target.checked);
+                            if (e.target.checked && !singleGenerateTitle.trim()) setSingleGenerateTitle(title);
+                          }} />
+                          <span>{t("write_custom_title")}</span>
                         </label>
+                        {singleGenerateLockTitle && <div className="field">
+                          <label htmlFor="write-ai-generate-title">{t("write_chapter_title")}</label>
+                          <input id="write-ai-generate-title" className="input" value={singleGenerateTitle} onChange={(e) => setSingleGenerateTitle(e.target.value)} placeholder={t("write_custom_title_placeholder")} />
+                        </div>}
+                        <p className="hint">{t(singleGenerateLockTitle ? "write_custom_title_hint" : "write_auto_title_hint")}</p>
+                        {novel && !isNovelSetupComplete(novel) && <button type="button" className="write-retry-save" onClick={() => { setRightTool(null); setReferenceOpen(true); }}>{t("write_supplement_reference")}</button>}
                       </div>
                     </details>
-                    <div className="field write-field-mb">
-                      <label>{t("write_generate_mode")}</label>
-                      <div className="write-generate-mode-row" role="radiogroup" aria-label={t("write_generate_mode")}>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={generateMode === "foreground"}
-                          className={`write-generate-mode-btn${generateMode === "foreground" ? " is-active" : ""}`}
-                          onClick={() => setGenerateMode("foreground")}
-                        >
-                          <span className="write-generate-mode-btn__title">{t("write_foreground_realtime")}</span>
-                          <span className="write-generate-mode-btn__desc">{t("write_foreground_realtime_hint")}</span>
-                        </button>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={generateMode === "background"}
-                          className={`write-generate-mode-btn${generateMode === "background" ? " is-active" : ""}`}
-                          onClick={() => setGenerateMode("background")}
-                        >
-                          <span className="write-generate-mode-btn__title">{t("write_background_leave")}</span>
-                          <span className="write-generate-mode-btn__desc">{t("write_background_brief")}</span>
-                        </button>
-                      </div>
-                    </div>
+                    <fieldset className="write-generate-delivery" disabled={busy}>
+                      <legend className="sr-only">{t("write_generate_mode")}</legend>
+                      {(["foreground", "background"] as const).map((mode) => (
+                        <label key={mode}>
+                          <input type="radio" name="generate-delivery" value={mode} checked={generateMode === mode} onChange={() => setGenerateMode(mode)} />
+                          <span>{t(mode === "foreground" ? "write_delivery_here" : "write_delivery_background")}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                    <p className="write-generate-behavior">
+                      {generateMode === "background" ? t("write_delivery_background_hint") : t("write_preview_behavior")}
+                    </p>
                     <button
                       type="button"
                       className="btn btn-primary write-generate-submit"
-                      disabled={busy}
+                      disabled={busy || (singleGenerateLockTitle && !singleGenerateTitle.trim())}
                       onClick={generateMode === "background" ? () => void onGenerateBackground() : onGenerate}
                     >
-                      {busy ? t("write_generating") : generateMode === "background" ? t("write_submit_background") : user?.preview_before_save !== false ? t("write_generate_preview") : hasBody ? t("write_regenerate_overwrite") : t("write_generate")}
+                      {busy ? t("write_generating") : generateMode === "background" ? t("write_submit_background") : t("write_generate_preview")}
                     </button>
 
-                    {generateMode === "foreground" && busy && currentProgress ? (
-                      <div className="write-generate-log" role="status" aria-live="polite">
-                        {currentProgress.message}
-                      </div>
-                    ) : null}
 
                     {previewResult ? (
                       <div className="stack-sm write-eval-block">
@@ -2270,31 +2205,18 @@ export default function NovelWrite() {
                         placeholder={t("write_batch_summary_placeholder")}
                       />
                     </div>
-                    <div className="field write-field-mb">
-                      <label>{t("write_generate_mode")}</label>
-                      <div className="write-generate-mode-row" role="radiogroup" aria-label={t("write_generate_mode")}>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={generateMode === "foreground"}
-                          className={`write-generate-mode-btn${generateMode === "foreground" ? " is-active" : ""}`}
-                          onClick={() => setGenerateMode("foreground")}
-                        >
-                          <span className="write-generate-mode-btn__title">{t("write_foreground_realtime")}</span>
-                          <span className="write-generate-mode-btn__desc">{t("write_foreground_realtime_hint")}</span>
-                        </button>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={generateMode === "background"}
-                          className={`write-generate-mode-btn${generateMode === "background" ? " is-active" : ""}`}
-                          onClick={() => setGenerateMode("background")}
-                        >
-                          <span className="write-generate-mode-btn__title">{t("write_background_leave")}</span>
-                          <span className="write-generate-mode-btn__desc">{t("write_background_batch_brief")}</span>
-                        </button>
-                      </div>
-                    </div>
+                    <fieldset className="write-generate-delivery" disabled={busy}>
+                      <legend className="sr-only">{t("write_generate_mode")}</legend>
+                      {(["foreground", "background"] as const).map((mode) => (
+                        <label key={mode}>
+                          <input type="radio" name="generate-delivery" value={mode} checked={generateMode === mode} onChange={() => setGenerateMode(mode)} />
+                          <span>{t(mode === "foreground" ? "write_delivery_here" : "write_delivery_background")}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                    <p className="write-generate-behavior">
+                      {generateMode === "background" ? t("write_delivery_background_hint") : t("write_direct_behavior")}
+                    </p>
                     <button
                       type="button"
                       className="btn btn-primary write-generate-submit"
@@ -2566,7 +2488,7 @@ export default function NovelWrite() {
         </div>
       )}
 
-      {!focusMode && !assistantOpen && !referenceOpen && !rightTool && !selectionPanel && evaluateResult && evaluatePanelPosition ? (
+      {!focusMode && !assistantOpen && !referenceOpen && !rightTool && !selectionPanel && evaluateResult && ai.operation?.kind !== "evaluate" && evaluatePanelPosition ? (
         <div
           ref={evaluatePanelRef}
           className={`write-evaluate-panel${evaluatePanelDragging ? " is-dragging" : ""}`}
@@ -2656,7 +2578,7 @@ export default function NovelWrite() {
           <div className="write-operation-context"><span>{t("write_operation_scope")}: {t("write_scope_selection")}</span><span>{t("ai_settings_model")}: {generationModelLabel}</span></div>
           <div className="write-selection-result-float__body">
             <details className="selection-original"><summary>{t("review_original")}</summary><p>{content.slice(selectionPanel.start, selectionPanel.end)}</p></details>
-            {selectionPanel.streaming || (busy ? t("write_generating") : "")}
+            {ai.operation?.kind === "selection" ? <AiOperationPanel operation={ai.operation} onCancel={ai.cancel} onDismiss={closeSelectionPanel} /> : selectionPanel.streaming || (busy ? t("write_generating") : "")}
           </div>
           <div className="write-selection-result-float__actions">
             <button

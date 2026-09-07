@@ -47,6 +47,7 @@ class ChapterUpdate(BaseModel):
 
 
 class ChapterReviseIn(BaseModel):
+    preview: bool = False
     instruction: str = Field(..., min_length=1, description="对当前章节的修改说明")
     llm_provider: str | None = Field(
         default=None,
@@ -67,6 +68,7 @@ class ChapterSuggestTitleOut(BaseModel):
 
 
 class ChapterGenerateIn(BaseModel):
+    preview: bool | None = None
     summary: str = Field(..., min_length=1, description="本章概要，用于生成正文")
     chapter_id: int | None = Field(
         default=None,

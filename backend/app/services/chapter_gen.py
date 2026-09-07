@@ -16,6 +16,7 @@ from app.agent.tools import (
 )
 from app.agent.ask_user import AskUserTool
 from app.llm.base import LLMProvider, calc_max_tokens_from_word_count
+from app.llm.json_stream import JsonStringStream
 from app.llm.ndjson_stream import filter_think_chunks
 from app.models import Chapter, Novel
 from app.services.chapter_llm import (
@@ -70,17 +71,17 @@ def _parse_status_chunk(chunk: str, language: Language) -> str | None:
     elif chunk.startswith("[调用工具]"):
         detail = chunk[len("[调用工具]"):].strip()
         tool_name = detail.split()[0] if detail else "unknown"
-        message = get_prompt("agent_progress_tool_call", language, tool=tool_name)
+        message = get_prompt({"get_novel_context": "agent_progress_settings", "get_previous_chapters": "agent_progress_previous", "get_character_profiles": "agent_progress_characters"}.get(tool_name, "agent_progress_context"), language)
         return _make_progress_event("tool_call", message, tool=tool_name, detail=detail)
     
     elif chunk.startswith("[工具结果]"):
         detail = chunk[len("[工具结果]"):].strip()
-        message = get_prompt("agent_progress_tool_result", language, tool="tool")
+        message = get_prompt("agent_progress_context", language)
         return _make_progress_event("tool_result", message, detail=detail)
     
     elif chunk.startswith("[开始生成正文]"):
         message = get_prompt("agent_progress_generating", language)
-        return _make_progress_event("generating", message)
+        return _make_progress_event("generating", message, reset=True)
     
     elif chunk.startswith("[完成]"):
         return _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
@@ -223,6 +224,7 @@ def run_react_chapter_generation(
 
     agent = ReActAgent(llm, tools, max_iterations=max_iterations)
 
+    projector = JsonStringStream()
     result_chunks: list[str] = []
     for chunk in filter_think_chunks(
         agent.run(
@@ -237,9 +239,11 @@ def run_react_chapter_generation(
                 yield progress
         else:
             result_chunks.append(chunk)
+            delta = projector.feed(chunk)
+            if delta:
+                yield delta
 
     body_text = _sanitize_generated_body("".join(result_chunks))
-    yield body_text
     yield _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
     
     if fixed_title is not None:
@@ -400,22 +404,29 @@ def run_flexible_chapter_generation(
         timeout_seconds=timeout_seconds,
     )
 
+    projector = JsonStringStream()
     all_chunks: list[str] = []
-    for chunk in agent.run(
+    for chunk in filter_think_chunks(agent.run(
         task,
         stream=True,
         fallback_params={"chapter_summary": chapter_summary, "fixed_title": fixed_title, "word_count": word_count, "language": language},
-    ):
+    )):
+        if chunk.startswith("[开始生成正文]"):
+            projector = JsonStringStream()
+            all_chunks = []
         all_chunks.append(chunk)
         if _is_status_chunk(chunk):
             progress_event = _parse_status_chunk(chunk, language)
             if progress_event:
                 yield progress_event
+        else:
+            delta = projector.feed(chunk)
+            if delta:
+                yield delta
 
     body_chunks, status_messages = _filter_flexible_agent_output(all_chunks)
     
     body_text = _sanitize_generated_body("".join(body_chunks))
-    yield body_text
     yield _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
     
     if fixed_title is not None:
@@ -636,10 +647,13 @@ def run_direct_chapter_generation(
 
     max_tokens = calc_max_tokens_from_word_count(word_count, language=language)
 
+    projector = JsonStringStream()
     body_chunks: list[str] = []
     for chunk in filter_think_chunks(llm.stream_complete(system, user, max_tokens=max_tokens)):
         body_chunks.append(chunk)
-        yield chunk
+        delta = projector.feed(chunk)
+        if delta:
+            yield delta
 
     raw = "".join(body_chunks).strip()
 
@@ -651,20 +665,17 @@ def run_direct_chapter_generation(
     elif target_chapter and (target_chapter.title or "").strip():
         title_out = target_chapter.title.strip()
     elif not title_out.strip():
-        yield from ([] if save_to_db else [])
-        for chunk in filter_think_chunks(_generate_chapter_title_stream(
-            db, llm, novel, target_chapter,
-            chapter_summary=chapter_summary, body_text=body_text, language=language
-        )):
-            if isinstance(chunk, str):
-                continue
-            else:
-                title_out = chunk
-                break
+        yield _make_progress_event("generating", get_prompt("agent_progress_finalizing", language))
+        title_out = _generate_chapter_title(
+            db, llm, novel, target_chapter, chapter_summary=chapter_summary,
+            body_text=body_text, language=language,
+        )
 
     if not save_to_db:
-        yield title_out
-        yield body_text
+        yield ChapterModel(
+            novel_id=novel.id, title=title_out, summary=chapter_summary.strip(),
+            content=body_text, sort_order=target_chapter.sort_order if target_chapter else (new_sort_order or 0),
+        )
         return
 
     if target_chapter is None:

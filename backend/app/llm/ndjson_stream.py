@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Iterator
 
 
@@ -12,49 +11,34 @@ def ndjson_line(obj: dict) -> bytes:
 
 
 def filter_think_chunks(chunks: Iterator[str]) -> Iterator[str]:
-    """过滤掉 LLM 输出中的思考标签内容。
-
-    状态机方式处理，支持跨 chunk 的 think 标签。
-    """
+    """Remove reasoning blocks even when tags cross transport chunk boundaries."""
+    starts = ("<think>", "<|im_start|>think")
+    ends = ("</think>", "<|im_end|>")
     buffer = ""
     in_think = False
 
-    # 预编译正则（用于快速检测）
-    think_start_re = re.compile(r'<think>|<THINK>|<\|im_start\|>think', re.IGNORECASE)
-    think_end_re = re.compile(r'</think>|</THINK>|<\|im_end\|>', re.IGNORECASE)
+    def suffix_length(text: str, tags: tuple[str, ...]) -> int:
+        lower = text.lower()
+        return max((size for tag in tags for size in range(1, len(tag))
+                    if lower.endswith(tag[:size])), default=0)
 
     for chunk in chunks:
         buffer += chunk
-
-        while True:
-            if in_think:
-                # 查找 think 块结束
-                end_match = think_end_re.search(buffer)
-                if end_match:
-                    # 找到结束，删除 think 部分
-                    buffer = buffer[end_match.end():]
-                    in_think = False
-                else:
-                    # 没找到结束，继续等待
-                    break
-            else:
-                # 查找 think 块开始
-                start_match = think_start_re.search(buffer)
-                if start_match:
-                    # 输出 think 之前的内容
-                    before = buffer[:start_match.start()]
-                    if before:
-                        yield before
-                    # 移动到 think 开始之后
-                    buffer = buffer[start_match.end():]
-                    in_think = True
-                else:
-                    # 没有 think 标签，输出所有
-                    if buffer:
-                        yield buffer
-                        buffer = ""
-                    break
-
-    # 处理剩余 buffer
+        while buffer:
+            tags = ends if in_think else starts
+            matches = [(buffer.lower().find(tag), tag) for tag in tags if tag in buffer.lower()]
+            if matches:
+                index, tag = min(matches)
+                if not in_think and index:
+                    yield buffer[:index]
+                buffer = buffer[index + len(tag):]
+                in_think = not in_think
+                continue
+            keep = suffix_length(buffer, tags)
+            available = buffer[:-keep] if keep else buffer
+            if not in_think and available:
+                yield available
+            buffer = buffer[-keep:] if keep else ""
+            break
     if buffer and not in_think:
         yield buffer

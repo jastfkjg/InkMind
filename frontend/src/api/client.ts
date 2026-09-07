@@ -41,7 +41,15 @@ export type ChapterPreviewResult = {
   needs_revision: boolean;
 };
 
+export type AiStreamOptions = {
+  onToken?: (chunk: string) => void;
+  onProgress?: (progress: ProgressEvent) => void;
+  onActivity?: () => void;
+  signal?: AbortSignal;
+};
+
 export type ProgressEvent = {
+  reset?: boolean;
   type: "thinking" | "tool_call" | "tool_result" | "generating" | "finished" | "info" | "step";
   message: string;
   detail?: string;
@@ -105,7 +113,7 @@ export function clearToken() {
 export async function postNdjsonAi(
   path: string,
   body: unknown,
-  options?: { onToken?: (chunk: string) => void; onProgress?: (progress: ProgressEvent) => void; signal?: AbortSignal }
+  options?: AiStreamOptions
 ): Promise<NdjsonAiResult> {
   const token = getToken();
   const url = `${baseURL}${path.startsWith("/") ? path : `/${path}`}`;
@@ -139,6 +147,7 @@ export async function postNdjsonAi(
   const onToken = options?.onToken;
   const onProgress = options?.onProgress;
   const applyObj = (obj: Record<string, unknown>) => {
+    if (obj.activity === true) options?.onActivity?.();
     if (typeof obj.t === "string") onToken?.(obj.t);
     if ("progress" in obj && obj.progress != null && typeof obj.progress === "object") {
       onProgress?.(obj.progress as ProgressEvent);
@@ -157,6 +166,7 @@ export async function postNdjsonAi(
       out.preview = obj.preview as ChapterPreviewResult;
     }
   };
+  try {
   while (true) {
     const { done, value } = await reader.read();
     if (value) buffer += dec.decode(value, { stream: true });
@@ -180,6 +190,10 @@ export async function postNdjsonAi(
     }
   }
   return out;
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
 }
 
 api.interceptors.request.use((config) => {
@@ -297,7 +311,7 @@ export async function deleteChapter(novelId: number, chapterId: number) {
 export async function generateChapter(
   novelId: number,
   summary: string,
-  options?: {
+  options?: AiStreamOptions & {
     chapterId?: number | null;
     title?: string | null;
     lockTitle?: boolean;
@@ -308,12 +322,13 @@ export async function generateChapter(
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/generate`,
     {
+      preview: true,
       summary,
       chapter_id: options?.chapterId ?? null,
       title: options?.title?.trim() ? options.title.trim() : null,
       lock_title: options?.lockTitle ?? false,
     },
-    { onToken: options?.onToken, onProgress: options?.onProgress }
+    options
   );
   return r;
 }
@@ -346,15 +361,23 @@ export async function generateChapterBatch(
     total_summary: string;
     after_chapter_id?: number | null;
   },
-  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+  options?: AiStreamOptions
 ) {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/generate-batch`,
     payload,
-    { onToken: options?.onToken, signal: options?.signal }
+    options
   );
   if (!r.chapters) throw new Error("未收到批量章节数据");
   return r.chapters;
+}
+
+export async function previewChapterRevision(novelId: number, chapterId: number, instruction: string,
+  llmProvider: string | null, mode: "rewrite" | "append", options: AiStreamOptions) {
+  const result = await postNdjsonAi(`/novels/${novelId}/chapters/${chapterId}/revise`,
+    { instruction, llm_provider: llmProvider, mode, preview: true }, options);
+  if (!result.preview) throw new Error("未收到修改预览");
+  return result.preview;
 }
 
 export async function reviseChapter(
@@ -381,7 +404,8 @@ export async function reviseChapter(
 export async function novelAiNaming(
   novelId: number,
   payload: { category: "character" | "item" | "skill" | "other"; description: string; hint?: string | null },
-  onToken?: (chunk: string) => void
+  onToken?: (chunk: string) => void,
+  options?: AiStreamOptions
 ) {
   const r = await postNdjsonAi(
     `/novels/${novelId}/ai-naming`,
@@ -390,7 +414,7 @@ export async function novelAiNaming(
       description: payload.description,
       hint: payload.hint?.trim() || null,
     },
-    { onToken }
+    { ...options, onToken }
   );
   const text = r.text ?? "";
   return { text };
@@ -409,12 +433,13 @@ export async function novelAiChat(
 export async function novelAiChapterSummaryInspire(
   novelId: number,
   payload: { chapter_id: number | null; chapter_count?: number },
-  onToken?: (chunk: string) => void
+  onToken?: (chunk: string) => void,
+  options?: AiStreamOptions
 ) {
   const r = await postNdjsonAi(
     `/novels/${novelId}/ai-chapter-summary-inspire`,
     payload,
-    { onToken }
+    { ...options, onToken }
   );
   const summary = r.summary ?? "";
   return { summary };
@@ -430,12 +455,12 @@ export async function evaluateChapter(
     content?: string;
     llm_provider?: string | null;
   },
-  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+  options?: AiStreamOptions
 ): Promise<ChapterEvaluateResult> {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/${chapterId}/ai-evaluate`,
     payload,
-    { onToken: options?.onToken, signal: options?.signal }
+    options
   );
   if (!r.evaluate) throw new Error("未收到评估结果");
   return r.evaluate;
@@ -451,12 +476,12 @@ export async function chapterSelectionAi(
     chapter_content: string;
     llm_provider?: string | null;
   },
-  options?: { onToken?: (chunk: string) => void; signal?: AbortSignal }
+  options?: AiStreamOptions
 ): Promise<{ text: string }> {
   const r = await postNdjsonAi(
     `/novels/${novelId}/chapters/${chapterId}/selection-ai`,
     payload,
-    { onToken: options?.onToken, signal: options?.signal }
+    options
   );
   const text = r.text ?? "";
   return { text };

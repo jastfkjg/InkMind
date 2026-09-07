@@ -408,6 +408,11 @@ PROMPTS: dict[str, dict[str, str]] = {
         "zh": "正在生成章节正文...",
         "en": "Generating chapter content...",
     },
+    "agent_progress_settings": {"zh": "正在读取作品设定…", "en": "Reading novel settings…"},
+    "agent_progress_previous": {"zh": "正在检索前文章节…", "en": "Reviewing previous chapters…"},
+    "agent_progress_characters": {"zh": "正在整理人物资料…", "en": "Reviewing character profiles…"},
+    "agent_progress_rewrite": {"zh": "正在改写正文…", "en": "Rewriting the draft…"},
+    "agent_progress_append": {"zh": "正在续写正文…", "en": "Continuing the draft…"},
     "agent_progress_context": {
         "zh": "正在整理创作资料…",
         "en": "Gathering writing context…",

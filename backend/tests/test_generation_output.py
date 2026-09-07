@@ -29,7 +29,7 @@ class GenerationOutputTests(DatabaseCase):
             result = events[-1]
             self.assertEqual(result.content, '雨声落下。\n\n他推开门。')
             texts = [event for event in events if isinstance(event, str) and not event.startswith('__PROGRESS__:')]
-            self.assertEqual(texts, [result.content])
+            self.assertEqual("".join(texts), result.content)
             self.db.refresh(target)
             self.assertEqual(target.content, result.content if save else original)
 
