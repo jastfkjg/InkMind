@@ -1,3 +1,4 @@
+import { theme as antdTheme } from "antd";
 import type { ThemeConfig } from "antd";
 import type { ThemeId } from "@/context/ThemeContext";
 
@@ -278,6 +279,7 @@ export const inkMindLightTheme: ThemeConfig = {
 };
 
 export const inkMindDarkTheme: ThemeConfig = {
+  algorithm: antdTheme.darkAlgorithm,
   token: {
     colorPrimary: "#cc785c",
     colorPrimaryHover: "#d88a6d",

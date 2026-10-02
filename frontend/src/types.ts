@@ -186,6 +186,8 @@ export type TaskItem = {
 };
 
 export type BackgroundTask = {
+  novel_title: string;
+  retryable: boolean;
   id: number;
   user_id: number;
   novel_id: number;

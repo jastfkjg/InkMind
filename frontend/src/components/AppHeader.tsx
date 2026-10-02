@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode, useMemo } from "react";
 import { Layout, Button, Space, Typography, Dropdown, Avatar } from "antd";
 import {
   UserOutlined,
+  ArrowLeftOutlined,
   LogoutOutlined,
   BarChartOutlined,
   SunOutlined,
@@ -16,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useI18n } from "@/i18n";
 import { useNavigation } from "@/context/NavigationContext";
+import AssistantEntry from "@/components/AssistantEntry";
 import { isDesktopApp } from "@/api/client";
 
 const { Header } = Layout;
@@ -59,6 +61,8 @@ export function useHeaderTheme(): HeaderThemeColors {
 
 export interface AppHeaderProps {
   leftContent: ReactNode;
+  back?: { label: string; onClick: () => void };
+  showAssistant?: boolean;
   extraActions?: ReactNode;
   disabledMenuItem?: "settings" | "usage" | "tasks";
   height?: number;
@@ -69,6 +73,8 @@ export interface AppHeaderProps {
 
 export default function AppHeader({
   leftContent,
+  back,
+  showAssistant = false,
   extraActions,
   disabledMenuItem,
   height = 72,
@@ -166,10 +172,14 @@ export default function AppHeader({
         ...headerStyle,
       }}
     >
-      <div className="app-header__left">{leftContent}</div>
+      <div className="app-header__left">
+        {back && <Button type="text" className="app-header__back" icon={<ArrowLeftOutlined />} onClick={back.onClick} aria-label={back.label}>{back.label}</Button>}
+        {leftContent}
+      </div>
 
       <Space size="middle" className="app-header__actions">
         {extraActions}
+        {showAssistant && <AssistantEntry />}
 
         <Dropdown menu={{ items: languageMenuItems }} placement="bottomRight" trigger={["click"]}>
           <Button

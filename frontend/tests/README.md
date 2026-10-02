@@ -16,7 +16,7 @@ VITE_API_URL=http://127.0.0.1:18991 npm run dev -- --host 127.0.0.1 --port 5198 
 
 Open `http://127.0.0.1:5198`. Sign in with `writer@example.invalid` and any nonempty test password. The fixture stores everything in memory and never connects to a real database or model. Stop both processes after testing. Never expose the fixture beyond localhost.
 
-The fixture's `/__test/control` endpoint accepts JSON `{ "failSaves": true, "failMemos": true, "delay": 2500 }` to simulate failures and latency. Reset with `{ "failSaves": false, "failMemos": false, "delay": 0 }`. `/__test/state` exposes the in-memory chapters, user settings, memos, PATCH log and preview confirmations for verification. These endpoints exist only in the fixture, not the application.
+The fixture's `/__test/control` endpoint accepts JSON `{ "failSaves": true, "failMemos": true, "delay": 2500 }`（模型配置还支持 `emptyProviders`、`failSettings`、`failProbe`，任务重试支持 `failRetry`） to simulate failures and latency. Reset with `{ "failSaves": false, "failMemos": false, "delay": 0 }`. `/__test/state` exposes the in-memory chapters, user settings, memos, PATCH log and preview confirmations for verification. These endpoints exist only in the fixture, not the application.
 
 ## Smoke checklist
 
@@ -50,7 +50,9 @@ playwright-cli -s=inkmind-ui-work run-code --filename=frontend/tests/browser/lib
 ```
 
 - `library-checks.js` creates an isolated work and checks first-chapter creation, search/list progress, delayed and failed saves, resume, export opening and deletion cancellation.
-- `review-checks.js` requires a fresh `--demo` fixture, chapter 901 open, and the Generate panel open. It checks partial acceptance, title/summary choice, failed confirmation retry and cancel. Run once per fixture reset.
+- `review-checks.js` requires a fresh `--demo` fixture, chapter 901 open, and the Generate panel open. It checks partial acceptance, independent title/summary choice, central comparison navigation, failed confirmation retry and cancel. Run once per fixture reset.
+- `setup-checks.js` requires the AI Settings connections section open. It creates a fake connection, checks protocol-compatible role assignment, retains choices after a failed save, and retries successfully.
+- `reading-anchor-checks.js` requires demo data and Chinese UI. It temporarily fills chapter 901 with long prose, verifies the 820px default, side-panel reading position and preview-cancel restoration, then restores the fixture content.
 - `reference-checks.js` requires demo chapter 901, light theme, and the References panel open on People. It checks search, memo draft/retry, mutually exclusive panels, docking at 1440/1280/1180px, dark theme and focus mode.
 
 Scripts write optional screenshots to `/tmp`, modify only the in-memory fixture and return a PASS result when all assertions succeed. Real model/provider execution and Electron packaging are separate integration checks. Mobile-specific changes are outside this desktop iteration.

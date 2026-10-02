@@ -25,6 +25,8 @@ class TaskItemOut(BaseModel):
 
 
 class BackgroundTaskOut(BaseModel):
+    novel_title: str = ""
+    retryable: bool = False
     id: int
     user_id: int
     novel_id: int

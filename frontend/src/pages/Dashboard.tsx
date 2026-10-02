@@ -162,6 +162,7 @@ export default function Dashboard() {
       {modalContextHolder}
       {messageContextHolder}
       <AppHeader
+        showAssistant
         leftContent={<div className="library-brand"><BookOutlined /><Title level={3}>{t("app_name")}</Title></div>}
         onLogout={logout}
       />
@@ -179,7 +180,7 @@ export default function Dashboard() {
               <Link to={writingEntry(recentNovel)}>{recentNovel.title || t("dashboard_untitled")}</Link>
               <p>{recentNovel.last_chapter_title || t("write_chapter_title_placeholder")}<span aria-hidden="true"> · </span>{relativeEditTime(recentNovel.last_edited_at || recentNovel.updated_at, language)}</p>
             </div>
-            <Button onClick={() => nav(writingEntry(recentNovel))}>{t("dashboard_write")}</Button>
+            <Button onClick={() => nav(writingEntry(recentNovel))}>{t(recentNovel.chapter_count ? "dashboard_write" : "library_start_writing")}</Button>
           </section>
         )}
         <div className="library-scope-tabs" role="group" aria-label={t("library_organization")}>
@@ -228,12 +229,13 @@ export default function Dashboard() {
                         <span>{t("library_chapters").replace("{count}", String(novel.chapter_count ?? 0))}</span>
                       </div>
                       <p className="library-item__chapter" title={novel.last_chapter_title || undefined}>
-                        {novel.last_chapter_id ? t("library_last_chapter").replace("{title}", novel.last_chapter_title || t("write_chapter_title_placeholder")) : t("library_ready_to_write")}
+                        {novel.last_chapter_id ? novel.last_chapter_title || t("write_chapter_title_placeholder") : t("library_ready_to_write")}
+                        <span aria-hidden="true"> · </span>
+                        <Tooltip title={new Date(edited).toLocaleString(language)}><time dateTime={edited}>{relativeEditTime(edited, language)}</time></Tooltip>
                       </p>
-                      <Tooltip title={new Date(edited).toLocaleString(language)}><time dateTime={edited}>{t("dashboard_updated")}{relativeEditTime(edited, language)}</time></Tooltip>
                     </div>
                     <div className="library-item__actions">
-                      <Link to={entry} className="library-continue"><EditOutlined />{t("dashboard_write")}</Link>
+                      <Link to={entry} className="library-continue"><EditOutlined />{t(novel.chapter_count ? "dashboard_write" : "library_start_writing")}</Link>
                       <Dropdown trigger={["click"]} menu={{ items: [
                         { key: "pin", icon: novel.is_pinned ? <PushpinFilled /> : <PushpinOutlined />, label: t(novel.is_pinned ? "library_unpin" : "library_pin"), disabled: organizing.has(novel.id), onClick: () => organize(novel, { is_pinned: !novel.is_pinned }) },
                         { key: "archive", icon: novel.is_archived ? <UndoOutlined /> : <InboxOutlined />, label: t(novel.is_archived ? "library_restore" : "library_archive"), disabled: organizing.has(novel.id), onClick: () => organize(novel, { is_archived: !novel.is_archived }) },

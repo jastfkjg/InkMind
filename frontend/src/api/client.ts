@@ -1339,3 +1339,8 @@ export async function probeDraftLlm(payload: {
   const { data } = await api.post<LlmProbeResult>("/custom-llms/probe", payload, { timeout: 35000 });
   return data;
 }
+
+export async function retryBackgroundTask(taskId: number): Promise<BackgroundTask> {
+  const { data } = await api.post<BackgroundTask>(`/background-tasks/${taskId}/retry`);
+  return data;
+}

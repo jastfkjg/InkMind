@@ -1,3 +1,4 @@
+import { experienceTranslations } from "./experience";
 import { libraryOrganizeTranslations } from "./libraryOrganize";
 import { referenceFormsTranslations } from "./referenceForms";
 import { writingLayoutTranslations } from "./writingLayout";
@@ -6,6 +7,7 @@ export type Language = "zh" | "en";
 
 export const translations: Record<Language, Record<string, string>> = {
   zh: {
+    ...experienceTranslations.zh,
     ...libraryOrganizeTranslations.zh,
     ...referenceFormsTranslations.zh,
     ...writingLayoutTranslations.zh,
@@ -319,7 +321,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_model_placeholder: "选择模型",
     ai_settings_not_configured: "未配置",
     ai_settings_provider_placeholder: "选择已配置的供应商",
-    ai_settings_add_provider_hint: "请先在下方添加自定义 LLM，再选择供应商和模型。",
+    ai_settings_add_provider_hint: "请先在下方添加模型连接，再选择供应商和模型。",
     llm_probe_backend_outdated: "应用后端缺少测试接口。请完全退出并重新启动 InkMind；安装版需更新到对应版本。此次尚未验证供应商连接。",
     llm_probe_session_expired: "InkMind 本地会话或登录状态失效，请重新打开应用；不是供应商 Key 鉴权错误。",
     llm_probe_backend_validation: "应用后端拒绝了测试参数，请确认前后端版本一致。",
@@ -367,7 +369,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_builtin_provider: "内置供应商",
     ai_settings_using_builtin: "使用内置 API Key",
     ai_settings_custom_config: "自定义配置",
-    ai_settings_add_custom: "添加自定义 LLM",
+    ai_settings_add_custom: "添加连接",
     ai_settings_edit_custom: "编辑配置",
     ai_settings_remove_custom: "移除自定义",
     ai_settings_custom_removed: "自定义配置已移除",
@@ -378,11 +380,11 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_current_config: "当前 AI 配置",
     ai_settings_switch_success: "AI 配置已切换",
     ai_settings_switch_hint: "切换供应商或选择预置模型会自动保存；手动输入模型 ID 后请按 Enter 或保存",
-    ai_settings_custom_llm_management: "自定义 LLM 管理",
+    ai_settings_custom_llm_management: "模型连接",
     ai_settings_custom_llm_management_desc: "管理连接凭证与默认模型。",
-    ai_settings_no_custom_llms: "暂无自定义 LLM，点击上方按钮添加",
-    ai_settings_add_custom_llm_title: "添加自定义 LLM",
-    ai_settings_edit_custom_llm_title: "编辑自定义 LLM",
+    ai_settings_no_custom_llms: "还没有自定义连接",
+    ai_settings_add_custom_llm_title: "添加模型连接",
+    ai_settings_edit_custom_llm_title: "编辑模型连接",
     ai_settings_custom_added: "自定义 LLM 已添加",
     ai_settings_custom_updated: "自定义 LLM 已更新",
     ai_settings_delete_custom_confirm: "确定要删除此自定义 LLM 吗？如果正在使用中，将自动切换回内置供应商。",
@@ -1394,6 +1396,7 @@ export const translations: Record<Language, Record<string, string>> = {
     agent_task_section_generating: "正在生成...",
   },
   en: {
+    ...experienceTranslations.en,
     ...libraryOrganizeTranslations.en,
     ...referenceFormsTranslations.en,
     ...writingLayoutTranslations.en,
@@ -1755,7 +1758,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_builtin_provider: "Built-in Provider",
     ai_settings_using_builtin: "Using built-in API Key",
     ai_settings_custom_config: "Custom Configuration",
-    ai_settings_add_custom: "Add Custom LLM",
+    ai_settings_add_custom: "Add connection",
     ai_settings_edit_custom: "Edit Configuration",
     ai_settings_remove_custom: "Remove Custom",
     ai_settings_custom_removed: "Custom configuration removed",
@@ -1766,11 +1769,11 @@ export const translations: Record<Language, Record<string, string>> = {
     ai_settings_current_config: "Current AI Configuration",
     ai_settings_switch_success: "AI configuration switched",
     ai_settings_switch_hint: "Provider and preset changes save automatically; press Enter or Save after entering a model ID",
-    ai_settings_custom_llm_management: "Custom LLM Management",
+    ai_settings_custom_llm_management: "Model connections",
     ai_settings_custom_llm_management_desc: "Manage connection credentials and default models.",
     ai_settings_no_custom_llms: "No custom LLMs yet. Click the button above to add one.",
-    ai_settings_add_custom_llm_title: "Add Custom LLM",
-    ai_settings_edit_custom_llm_title: "Edit Custom LLM",
+    ai_settings_add_custom_llm_title: "Add connection",
+    ai_settings_edit_custom_llm_title: "Edit connection",
     ai_settings_custom_added: "Custom LLM added",
     ai_settings_custom_updated: "Custom LLM updated",
     ai_settings_delete_custom_confirm: "Are you sure you want to delete this custom LLM? If it's currently in use, it will automatically switch back to the built-in provider.",

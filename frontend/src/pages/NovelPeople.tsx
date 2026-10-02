@@ -50,7 +50,7 @@ export default function NovelPeople() {
   }
   const addAction = <Link className="novel-add-link" to={`/novels/${id}/people/new`}><PlusOutlined />{t("people_create_character")}</Link>;
   return (
-    <ManagementPage title={t("people_title")} description={t("reference_read_hint")}
+    <ManagementPage title={t("people_title")}
       count={loading ? undefined : t("people_character_count").replace("{count}", String(characters.length))}
       action={characters.length > 0 ? addAction : undefined}>
       {modalContextHolder}

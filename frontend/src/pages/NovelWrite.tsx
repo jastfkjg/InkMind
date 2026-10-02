@@ -47,6 +47,9 @@ import "@/styles/writing-layout.css";
 import ChapterSidebar from "@/components/write/ChapterSidebar";
 import AiOperationPanel from "@/components/write/AiOperationPanel";
 import { useAiOperation } from "@/components/write/useAiOperation";
+import ReviewDocument, { type ReviewView } from "@/components/write/ReviewDocument";
+import { useReadingAnchor } from "@/components/write/useReadingAnchor";
+import { reviewSegments } from "@/utils/previewReview";
 import GenerationReview from "@/components/write/GenerationReview";
 import ReferencePanel from "@/components/write/ReferencePanel";
 import { llmSelection } from "@/utils/llmSelection";
@@ -177,6 +180,7 @@ export default function NovelWrite() {
   const [editorChapterId, setEditorChapterId] = useState<number | null>(null);
   const [recoveryDraft, setRecoveryDraft] = useState<WritingDraft | null>(null);
   const restorePositionRef = useRef<WritingPosition | null>(null);
+  const prePreviewPositionRef = useRef<WritingPosition | null>(null);
   const [referenceOpen, setReferenceOpen] = useState(false);
   const [providerMeta, setProviderMeta] = useState<LlmProvidersResponse | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -184,7 +188,10 @@ export default function NovelWrite() {
 
   const [previewResult, setPreviewResult] = useState<ChapterPreviewResult | null>(null);
   const [reviewRejected, setReviewRejected] = useState<Set<number>>(new Set());
-  const [reviewMetadata, setReviewMetadata] = useState(true);
+  const [reviewTitle, setReviewTitle] = useState(true);
+  const [reviewSummary, setReviewSummary] = useState(true);
+  const [reviewView, setReviewView] = useState<ReviewView>("draft");
+  const [activeReviewChange, setActiveReviewChange] = useState(-1);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewLeaveOpen, setPreviewLeaveOpen] = useState(false);
@@ -219,6 +226,12 @@ export default function NovelWrite() {
     desktop: !narrow,
   });
   const { sidebarOpen, closeOverlay } = layout;
+  useReadingAnchor(bodyTextareaRef, `${id}:${activeId}`, !loading && !isPreviewMode);
+  const reviewParts = useMemo(() => previewResult ? reviewSegments(preGenerateSnapshotRef.current.content, normalizeBodyParagraphIndent(previewResult.content)) : [], [previewResult]);
+  const locateReviewChange = (index: number) => {
+    setActiveReviewChange(index); setReviewView("diff");
+    if (narrow) setRightTool(null);
+  };
   const handleDrawerClose = useCallback(() => setRightTool(null), []);
   const handleOpenSmartWriterPrompt = useCallback((prompt: string) => {
     setRightTool(null);
@@ -683,7 +696,7 @@ export default function NovelWrite() {
   }, [activeId, chapters]);
 
   useLayoutEffect(() => {
-    if (editorChapterId !== activeId || loading) return;
+    if (editorChapterId !== activeId || loading || isPreviewMode) return;
     const previous = restorePositionRef.current;
     const textarea = bodyTextareaRef.current;
     if (!textarea) return;
@@ -695,7 +708,7 @@ export default function NovelWrite() {
       textarea.scrollTop = 0;
     }
     restorePositionRef.current = null;
-  }, [editorChapterId, activeId, loading]);
+  }, [editorChapterId, activeId, loading, isPreviewMode]);
 
   const rememberPosition = useCallback(() => {
     const textarea = bodyTextareaRef.current;
@@ -1085,9 +1098,9 @@ export default function NovelWrite() {
     try {
       const ch = await confirmChapterGeneration(nid, {
         chapter_id: activeId,
-        title: reviewMetadata ? previewResult.title : title,
+        title: reviewTitle ? previewResult.title : title,
         content: reviewedDraft,
-        summary: reviewMetadata ? previewResult.summary : summary,
+        summary: reviewSummary ? previewResult.summary : summary,
       });
       if (novelIdRef.current !== nid) return false;
       const full = await loadChapters();
@@ -1110,11 +1123,12 @@ export default function NovelWrite() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [activeId, ai, id, loadChapters, previewResult, reviewMetadata, reviewedDraft, summary, title]);
+  }, [activeId, ai, id, loadChapters, previewResult, reviewTitle, reviewSummary, reviewedDraft, summary, title]);
 
   const onCancelPreview = useCallback(() => {
     ai.dismiss();
     setErr("");
+    restorePositionRef.current = prePreviewPositionRef.current;
     const { title: savedTitle, summary: savedSummary, content: savedContent } = preGenerateSnapshotRef.current;
     setPreviewResult(null);
     setEvaluateResult(null);
@@ -1404,6 +1418,8 @@ export default function NovelWrite() {
     if (!activeId) return;
     try { await flushSave(); } catch (error) { setErr(apiErrorMessage(error)); return; }
     preGenerateSnapshotRef.current = { title, summary, content };
+    const editor = bodyTextareaRef.current;
+    prePreviewPositionRef.current = editor ? { chapterId: activeId, start: editor.selectionStart, end: editor.selectionEnd, scrollTop: editor.scrollTop } : null;
     const savedContent = content;
     const savedTitle = title;
     bodyStreamingRef.current = true;
@@ -1425,7 +1441,7 @@ export default function NovelWrite() {
       if (result.preview) {
         setIsPreviewMode(true);
         setReviewRejected(new Set());
-        setReviewMetadata(true);
+        setReviewTitle(true); setReviewSummary(true); setReviewView("draft"); setActiveReviewChange(-1);
         setPreviewResult(result.preview);
         setReviewedDraft(normalizeBodyParagraphIndent(result.preview.content));
         request.complete(normalizeBodyParagraphIndent(result.preview.content), true);
@@ -1594,6 +1610,8 @@ export default function NovelWrite() {
     if (!instruction) { setErr(t(mode === "rewrite" ? "write_err_rewrite_instr_required" : "write_err_append_instr_required")); return; }
     if (mode === "rewrite" && !hasBody) { setErr(t("write_err_rewrite_needs_body")); return; }
     const nid = id;
+    const editor = bodyTextareaRef.current;
+    prePreviewPositionRef.current = editor ? { chapterId: activeId, start: editor.selectionStart, end: editor.selectionEnd, scrollTop: editor.scrollTop } : null;
     setBusy(true); setErr("");
     if (narrow) setRightTool(null);
     const request = ai.begin(mode, t(mode === "rewrite" ? "write_ai_rewrite" : "write_ai_append"), t("ai_stream_context"));
@@ -1604,7 +1622,7 @@ export default function NovelWrite() {
       bodyStreamingRef.current = true;
       const preview = await previewChapterRevision(nid, activeId, instruction, preferredLlm, mode, request.options);
       if (!request.isCurrent()) return;
-      setPreviewResult(preview); setIsPreviewMode(true); setReviewRejected(new Set()); setReviewMetadata(true);
+      setPreviewResult(preview); setIsPreviewMode(true); setReviewRejected(new Set()); setReviewTitle(true); setReviewSummary(true); setReviewView("draft"); setActiveReviewChange(-1);
       const draft = normalizeBodyParagraphIndent(preview.content);
       setReviewedDraft(draft); request.complete(draft, true);
       setRightTool(narrow ? null : "generate");
@@ -1716,7 +1734,7 @@ export default function NovelWrite() {
 
   const generationModelLabel = modelSelection?.generationModel || t("ai_settings_not_configured");
   const drawerOpen = Boolean(rightTool && activeId !== null);
-  const drawerTitle = rightTool
+  const drawerTitle = isPreviewMode && rightTool === "generate" ? t("review_workspace") : rightTool
     ? ({
         generate: t("write_ai_generate"),
         rewrite: t("write_ai_rewrite"),
@@ -1953,9 +1971,15 @@ export default function NovelWrite() {
                     <p className="write-ai-unavailable">{t("write_ai_unavailable")} <button type="button" className="write-retry-save" onClick={() => nav("/settings")}>{t("nav_ai_settings")}</button></p>
                   )}
                 </div>
-                {ai.operation && !(ai.operation.kind === "selection" && selectionPanel && !focusMode) && <AiOperationPanel operation={ai.operation} onCancel={ai.cancel} onDismiss={ai.dismiss}
-                  report={isPreviewMode ? previewResult?.evaluate_result : ai.operation.kind === "evaluate" ? evaluateResult : null}
-                  onEdit={isPreviewMode && !previewLoading ? (text) => { setReviewedDraft(text); ai.replaceText(text); setPreviewResult((preview) => preview ? { ...preview, content: text } : null); setReviewRejected(new Set()); } : undefined} />}
+                {ai.operation && !isPreviewMode && !(ai.operation.kind === "selection" && selectionPanel && !focusMode) && <AiOperationPanel operation={ai.operation} onCancel={ai.cancel} onDismiss={ai.dismiss}
+                  report={ai.operation.kind === "evaluate" ? evaluateResult : null} />}
+                {isPreviewMode && previewResult ? <ReviewDocument
+                  original={preGenerateSnapshotRef.current.content} draft={reviewedDraft} segments={reviewParts} rejected={reviewRejected}
+                  view={reviewView} activeChange={activeReviewChange} disabled={previewLoading} fontSize={bodyFontSizePx}
+                  lineHeight={{ compact: 1.6, normal: 1.85, relaxed: 2, loose: 2.2 }[lineHeightId]}
+                  onView={setReviewView} onLocate={locateReviewChange}
+                  onEdit={(text) => { setReviewedDraft(text); ai.replaceText(text); setPreviewResult((preview) => preview ? { ...preview, content: text } : null); setReviewRejected(new Set()); setActiveReviewChange(-1); }}
+                /> : (
                 <div className={`write-body-wrapper write-body-wrapper--${lineWidthId}`}>
                   <div className="field write-body-field">
                     <textarea
@@ -1976,6 +2000,7 @@ export default function NovelWrite() {
                     />
                   </div>
                 </div>
+                )}
                 {isPreviewMode ? (
                   <div className="write-preview-resolution">
                     <div className="write-preview-resolution__message" role="status" aria-live="polite" aria-atomic="true">
@@ -1990,7 +2015,7 @@ export default function NovelWrite() {
                         if (focusMode) setFocusMode(() => false);
                         setRightTool("generate");
                       }}>
-                        {t("write_preview_review")}
+                        {t("review_workspace")}
                       </button>
                       <button type="button" className="btn btn-ghost" disabled={previewLoading} onClick={onCancelPreview}>
                         {t("write_discard_preview")}
@@ -2051,9 +2076,10 @@ export default function NovelWrite() {
           <div className="write-ai-drawer-body">
             {rightTool === "generate" && isPreviewMode && previewResult && <GenerationReview
               original={preGenerateSnapshotRef.current} proposal={{ ...previewResult, content: normalizeBodyParagraphIndent(previewResult.content) }}
-              rejected={reviewRejected} useMetadata={reviewMetadata} disabled={previewLoading}
+              report={previewResult.evaluate_result}
+              segments={reviewParts} rejected={reviewRejected} useTitle={reviewTitle} useSummary={reviewSummary} disabled={previewLoading} activeChange={activeReviewChange}
               onReview={(rejected, next) => { setReviewRejected(rejected); setReviewedDraft(next); ai.replaceText(next); }}
-              onMetadata={setReviewMetadata}
+              onTitle={setReviewTitle} onSummary={setReviewSummary} onLocate={locateReviewChange}
             />}
             {rightTool === "generate" && activeId && !isPreviewMode ? (
               <div className="write-ai-section">

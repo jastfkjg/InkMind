@@ -37,10 +37,12 @@ const people = demo ? [{ id: 901, novel_id: 901, name: '林照', profile: '年�
 const memos = demo ? [{ id: 901, novel_id: 901, title: '北门与旧邮路', body: '老人提醒林照今天别走北门。后续在第三章回收这个伏笔。', created_at: novel.created_at, updated_at: novel.updated_at }] : [];
 const writes = [];
 const confirmations = [];
-let failSaves = false, failMemos = false, delay = 0;
+let failSaves = false, failMemos = false, delay = 0, emptyProviders = false, failSettings = false, failProbe = false, failRetry = false;
+const customLlms = [];
+const retries = [];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 Object.assign(user, { agent_mode: 'flexible', max_llm_iterations: 10, max_tokens_per_task: 50000, enable_auto_audit: true, auto_audit_min_score: 60, ai_language: null });
-const tasks = demo ? ['completed', 'failed', 'running'].map((status, i) => ({ id: i + 1, user_id: 901, novel_id: 901, task_type: 'single_chapter', status, title: ['旧驿站的来客', '失落的邮袋', '听潮的人'][i], summary: '演示任务', batch_count: 1, current_index: 1, completed_count: status === 'completed' ? 1 : 0, error_message: status === 'failed' ? '演示连接中断，请重试。' : null, progress_message: null, total_tokens: 1200, created_at: novel.created_at, started_at: novel.created_at, completed_at: status === 'completed' ? novel.updated_at : null, task_items: [] })) : [];
+const tasks = demo ? ['completed', 'failed', 'running'].map((status, i) => ({ id: i + 1, user_id: 901, novel_id: 901, task_type: 'single_chapter', status, title: ['旧驿站的来客', '失落的邮袋', '听潮的人'][i], summary: '演示任务', batch_count: 1, current_index: 1, completed_count: status === 'completed' ? 1 : 0, error_message: status === 'failed' ? '演示连接中断，请重试。' : null, progress_message: null, total_tokens: 1200, created_at: novel.created_at, started_at: novel.created_at, completed_at: status === 'completed' ? novel.updated_at : null, novel_title: novel.title, retryable: status === 'failed', task_items: [{ id: i + 1, chapter_id: status === 'completed' ? 901 : null, status: status === 'completed' ? 'completed' : 'failed', sort_order: 0, generated_title: status === 'completed' ? '山城来信' : null }] })) : [];
 
 createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1:5198');
@@ -52,10 +54,10 @@ createServer(async (req, res) => {
   const body = text ? JSON.parse(text) : {};
   const path = new URL(req.url, 'http://127.0.0.1').pathname;
   const json = (data, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(data)); };
-  if (path === '/__test/control') { failSaves = body.failSaves ?? failSaves; failMemos = body.failMemos ?? failMemos; delay = body.delay ?? delay; json({ failSaves, failMemos, delay }); return; }
-  if (path === '/__test/state') { json({ chapters: chapterStore.get(901), novels, writes, confirmations, people, memos, user }); return; }
+  if (path === '/__test/control') { failSaves = body.failSaves ?? failSaves; failMemos = body.failMemos ?? failMemos; delay = body.delay ?? delay; emptyProviders = body.emptyProviders ?? emptyProviders; failSettings = body.failSettings ?? failSettings; failProbe = body.failProbe ?? failProbe; failRetry = body.failRetry ?? failRetry; json({ failSaves, failMemos, delay, emptyProviders, failSettings, failProbe, failRetry }); return; }
+  if (path === '/__test/state') { json({ chapters: chapterStore.get(901), novels, writes, confirmations, people, memos, user, tasks, customLlms, retries }); return; }
   if (path === '/auth/login') { json({ access_token: 'local-fixture-only', user }); return; }
-  if (path === '/auth/me' || path === '/auth/me/ai-settings') { if (req.method === 'PATCH') Object.assign(user, body); json(user); return; }
+  if (path === '/auth/me' || path === '/auth/me/ai-settings') { if (req.method === 'PATCH') { if (failSettings) { json({ detail: '测试设置保存失败' }, 503); return; } Object.assign(user, body); } json(user); return; }
   if (path === '/auth/quota' || path === '/admin/me/quota') { json({ token_quota: null, token_quota_used: 0 }); return; }
   if (path === '/novels') {
     if (req.method === 'POST') {
@@ -65,9 +67,9 @@ createServer(async (req, res) => {
     json(novels.map(n => { const list = chapterStore.get(n.id) || []; const recent = [...list].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at))[0]; return { ...n, chapter_count: list.length, total_words: list.reduce((sum, c) => sum + Array.from(c.content.replace(/\s/g, '')).length, 0), last_chapter_id: recent?.id ?? null, last_chapter_title: recent?.title ?? null, last_edited_at: recent && Date.parse(recent.updated_at) > Date.parse(n.updated_at) ? recent.updated_at : n.updated_at }; })); return;
   }
   if (path === '/meta/llm-connection-test') { json({ status: body.target === 'generation' ? 'ok' : 'unconfigured' }); return; }
-  if (path === '/meta/llm-providers') { json({ builtin: [{ id: 'fixture', label: 'Local fixture', models: ['fixture', 'fixture-other'], default_model: 'fixture' }], default: 'fixture', custom_llms: [], agent_builtin: null, generation_custom_llm_id: null, agent_custom_llm_id: null }); return; }
+  if (path === '/meta/llm-providers') { json({ builtin: emptyProviders ? [] : [{ id: 'fixture', label: 'Local fixture', models: ['fixture', 'fixture-other'], default_model: 'fixture' }], default: emptyProviders ? '' : 'fixture', custom_llms: customLlms, agent_builtin: null, generation_custom_llm_id: null, agent_custom_llm_id: null }); return; }
   if (path === '/background-tasks') { json(tasks); return; }
-  if (path.startsWith('/background-tasks/')) { const task = tasks.find(t => t.id === Number(path.split('/')[2])); json(path.endsWith('/progress') ? { ...task, task_id: task.id, progress: 40 } : task); return; }
+  if (path.startsWith('/background-tasks/')) { const task = tasks.find(t => t.id === Number(path.split('/')[2])); if (path.endsWith('/retry')) { if (failRetry) { json({ detail: '测试重试失败' }, 503); return; } if (task.status !== 'failed') { json({ detail: '任务状态已变化' }, 409); return; } task.status = 'running'; task.error_message = null; task.retryable = false; retries.push(task.id); json(task); return; } json(path.endsWith('/progress') ? { ...task, task_id: task.id, progress: 40 } : task); return; }
   if (path.startsWith('/usage')) { json({ total_calls: 0, total_input_tokens: 0, total_output_tokens: 0, total_tokens: 0, builtin_calls: 0, builtin_input_tokens: 0, builtin_output_tokens: 0, builtin_total_tokens: 0, custom_calls: 0, custom_input_tokens: 0, custom_output_tokens: 0, custom_total_tokens: 0, items: [] }); return; }
   const novelId = Number(path.split('/')[2]);
   const currentNovel = novels.find(n => n.id === novelId);
@@ -81,7 +83,7 @@ createServer(async (req, res) => {
   if (route === '/novels/current/chapters/generate') {
     const ch = currentChapters.find(c => c.id === body.chapter_id);
     const proposal = ch.content ? ch.content.replace('雨停的时候', '风停的时候').replace('是盐。', '是海盐。') : '　　新的第一段。\n\n　　新的第二段。';
-    const result = { title: 'AI 预览标题', summary: body.summary, content: proposal, needs_revision: false };
+    const result = { title: 'AI 预览标题', summary: demo ? 'AI 预览概要' : body.summary, content: proposal, needs_revision: false };
     res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
     res.write(JSON.stringify({ t: proposal }) + '\n'); await wait(300);
     if (user.preview_before_save) res.end(JSON.stringify({ preview: result }) + '\n');
@@ -126,7 +128,11 @@ createServer(async (req, res) => {
     if (req.method === 'DELETE') { entries.splice(entries.indexOf(entry), 1); json({}); return; }
     json(entry); return;
   }
-  if (path === '/custom-llms') { json([]); return; }
+  if (path === '/meta/llm-probe' || path === '/custom-llms/probe') { json({ mode: body.mode, status: failProbe ? 'authentication' : 'ok', models: ['fixture-model'], http_status: failProbe ? 401 : 200, elapsed_ms: 120 }); return; }
+  if (path === '/custom-llms') {
+    if (req.method === 'POST') { const item = { id: customLlms.length + 1, provider: body.provider, provider_label: body.provider, protocol: body.protocol, claude_auth_mode: body.claude_auth_mode, default_model: body.default_model, base_url: body.base_url, api_key: '***fixture', models: [body.default_model] }; customLlms.push(item); json(item, 201); return; }
+    json(customLlms); return;
+  }
   if (route.endsWith('/agent/sessions')) { json({ session_id: 'fixture-session', novel_id: novelId, status: 'idle' }); return; }
   json({ detail: `No fixture for ${path}` }, 404);
 }).listen(18991, '127.0.0.1', () => console.log('Isolated UI fixture on http://127.0.0.1:18991'));

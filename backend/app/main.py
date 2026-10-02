@@ -98,6 +98,10 @@ def _migrate_sqlite() -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN agent_custom_llm_id INTEGER REFERENCES user_custom_llms(id) ON DELETE SET NULL"))
             if "generation_custom_llm_id" not in cols_users:
                 conn.execute(text("ALTER TABLE users ADD COLUMN generation_custom_llm_id INTEGER REFERENCES user_custom_llms(id) ON DELETE SET NULL"))
+            if "background_tasks" in table_names:
+                task_columns = {c["name"] for c in insp.get_columns("background_tasks")}
+                if "request_json" not in task_columns:
+                    conn.execute(text("ALTER TABLE background_tasks ADD COLUMN request_json TEXT"))
             if "novels" in table_names:
                 ncols = {c["name"] for c in insp.get_columns("novels")}
                 if "outline" in ncols and "background" not in ncols:

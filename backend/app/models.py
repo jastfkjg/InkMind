@@ -225,6 +225,7 @@ class BackgroundTask(Base):
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     
+    request_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     batch_plan_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     batch_count: Mapped[int] = mapped_column(Integer, default=1)
     current_index: Mapped[int] = mapped_column(Integer, default=0)
@@ -246,6 +247,15 @@ class BackgroundTask(Base):
         cascade="all, delete-orphan",
         order_by="TaskItem.sort_order"
     )
+
+
+    @property
+    def novel_title(self) -> str:
+        return self.novel.title if self.novel else ""
+
+    @property
+    def retryable(self) -> bool:
+        return bool(self.request_json) and self.status in ("failed", "cancelled")
 
 
 class TaskItem(Base):

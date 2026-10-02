@@ -1,3 +1,4 @@
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Layout,
@@ -15,9 +16,9 @@ import {
   Progress,
   Tooltip,
   Badge,
+  type TableColumnsType,
 } from "antd";
 import {
-  ArrowLeftOutlined,
   ReloadOutlined,
   ClockCircleOutlined,
   PlayCircleOutlined,
@@ -33,9 +34,10 @@ import { useNavigation } from "@/context/NavigationContext";
 import { backDestinationKey } from "@/utils/backDestination";
 import "@/styles/workspace-polish.css";
 import { useI18n } from "@/i18n";
-import { 
-  apiErrorMessage, 
-  fetchBackgroundTasks, 
+import {
+  apiErrorMessage,
+  fetchBackgroundTasks,
+  retryBackgroundTask,
   fetchTaskProgress,
   cancelBackgroundTask,
   deleteBackgroundTask,
@@ -51,6 +53,8 @@ interface TaskWithProgress extends BackgroundTask {
 
 export default function BackgroundTasksPage() {
   const { t, isZh } = useI18n();
+  const nav = useNavigate();
+  const [retrying, setRetrying] = useState<number | null>(null);
   const { goBackSmart, lastValidPage } = useNavigation();
   const colors = useHeaderTheme();
   const [tasks, setTasks] = useState<TaskWithProgress[]>([]);
@@ -134,7 +138,7 @@ export default function BackgroundTasksPage() {
     setErr("");
     try {
       const r = await fetchBackgroundTasks({ limit: 50 });
-      
+
       const tasksWithProgress: TaskWithProgress[] = await Promise.all(
         r.map(async (task) => {
           if (task.status === "pending" || task.status === "running") {
@@ -148,8 +152,9 @@ export default function BackgroundTasksPage() {
           return task;
         })
       );
-      
+
       setTasks(tasksWithProgress);
+      setSelectedTask((current) => current ? tasksWithProgress.find((task) => task.id === current.id) ?? current : null);
       setSelectedTask((current) => current ? tasksWithProgress.find((task) => task.id === current.id) ?? current : null);
     } catch (e) {
       setErr(apiErrorMessage(e));
@@ -161,11 +166,11 @@ export default function BackgroundTasksPage() {
 
   useEffect(() => {
     void loadTasks();
-    
+
     const interval = setInterval(() => {
       if (!document.hidden) void loadTasks();
     }, 3000);
-    
+
     return () => clearInterval(interval);
   }, [loadTasks]);
 
@@ -205,7 +210,32 @@ export default function BackgroundTasksPage() {
   const completedCount = tasks.filter((t) => t.status === "completed").length;
   const failedCount = tasks.filter((t) => t.status === "failed").length;
 
-  const columns = [
+  const retry = async (task: TaskWithProgress) => {
+    if (retrying !== null) return;
+    setRetrying(task.id); setErr("");
+    try {
+      const updated = await retryBackgroundTask(task.id);
+      setTasks((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setSelectedTask((current) => current?.id === updated.id ? updated : current);
+      void loadTasks();
+    } catch (error) { setErr(apiErrorMessage(error)); }
+    finally { setRetrying(null); }
+  };
+  const resultChapters = (task: TaskWithProgress) => task.task_items.filter((item) => item.status === "completed" && item.chapter_id);
+  const resultLink = (task: TaskWithProgress) => {
+    const chapter = resultChapters(task)[0];
+    return `/novels/${task.novel_id}/write${chapter ? `?chapter=${chapter.chapter_id}` : ""}`;
+  };
+  const taskActions = (task: TaskWithProgress) => <Space wrap size={4}>
+    {resultChapters(task).length > 0 && <Button type="link" size="small" onClick={() => nav(resultLink(task))}>{t("tasks_open_result")}</Button>}
+    {["failed", "cancelled"].includes(task.status) && <>
+      {task.retryable ? <Button size="small" loading={retrying === task.id} disabled={retrying !== null && retrying !== task.id} onClick={() => void retry(task)}>{t("tasks_retry")}</Button>
+        : <Tooltip title={t("tasks_legacy_retry")}><Button type="link" size="small" onClick={() => nav(resultLink(task))}>{t("tasks_return_work")}</Button></Tooltip>}
+      <Button type="link" size="small" onClick={() => nav("/settings")}>{t("tasks_fix_settings")}</Button>
+    </>}
+  </Space>;
+
+  const columns: TableColumnsType<TaskWithProgress> = [
     {
       title: t("tasks_table_task"),
       dataIndex: "task_type" as const,
@@ -213,6 +243,7 @@ export default function BackgroundTasksPage() {
       render: (type: string, record: TaskWithProgress) => (
         <div className="task-identity">
           <Text ellipsis title={record.title || `#${record.id}`}>{record.title || `#${record.id}`}</Text>
+          <Link className="task-work-link" to={`/novels/${record.novel_id}/write`}>{record.novel_title || t("novel_untitled")}</Link>
           <Text type="secondary">{getTaskTypeLabel(type)}</Text>
         </div>
       ),
@@ -225,42 +256,14 @@ export default function BackgroundTasksPage() {
       render: (status: string, record: TaskWithProgress) => {
         const info = getStatusInfo(status);
         const progress = record.progressData?.progress ?? 0;
-        
-        if (status === "running" && progress > 0) {
-          return (
-            <Space direction="vertical" size="small" style={{ width: 160 }}>
-              <Tag color={info.color}>
-                {info.icon} {info.label}
-              </Tag>
-              <Progress percent={Math.round(progress)} size="small" />
-            </Space>
-          );
-        }
-        
-        return (
-          <Tag color={info.color}>
-            {info.icon} {info.label}
-          </Tag>
-        );
+
+        return <Space direction="vertical" size={6} style={{ width: 150 }}>
+          <Tag color={info.color}>{info.icon} {info.label}</Tag>
+          {status === "running" && progress > 0 && <Progress percent={Math.round(progress)} size="small" />}
+          {record.batch_count > 1 && <Text type="secondary">{t("common_progress_chapters").replace("{completed}", String(record.completed_count)).replace("{total}", String(record.batch_count))}</Text>}
+        </Space>;
       },
-      width: 180,
-    },
-    {
-      title: t("tasks_table_progress"),
-      key: "progress",
-      render: (_: unknown, record: TaskWithProgress) => {
-        if (record.batch_count > 1) {
-          return (
-            <Text type="secondary">
-              {t("common_progress_chapters")
-                .replace("{completed}", String(record.completed_count))
-                .replace("{total}", String(record.batch_count))}
-            </Text>
-          );
-        }
-        return <Text type="secondary">-</Text>;
-      },
-      width: 100,
+      width: 170,
     },
     {
       title: t("tasks_table_progress_message"),
@@ -278,12 +281,13 @@ export default function BackgroundTasksPage() {
         }
         return translateProgressMessage(msg);
       },
-      width: 250,
+      width: 200,
     },
     {
       title: t("tasks_table_tokens"),
       dataIndex: "total_tokens" as const,
       key: "total_tokens",
+      responsive: ["lg"],
       render: (n: number) => {
         if (n === 0) return <Text type="secondary">-</Text>;
         return (
@@ -298,6 +302,7 @@ export default function BackgroundTasksPage() {
       title: t("tasks_table_created"),
       dataIndex: "created_at" as const,
       key: "created_at",
+      responsive: ["xl"],
       render: (time: string) => <Text type="secondary">{fmtTime(time)}</Text>,
       width: 180,
     },
@@ -305,8 +310,9 @@ export default function BackgroundTasksPage() {
       title: t("tasks_table_actions"),
       key: "actions",
       render: (_: unknown, record: TaskWithProgress) => (
-        <Space>
-          <Button type="link" size="small" onClick={() => openDetail(record)}>
+        <Space direction="vertical" size={4} align="start">
+          {taskActions(record)}
+          <Space size={4}><Button type="link" size="small" onClick={() => openDetail(record)}>
             {t("tasks_action_view")}
           </Button>
           {(record.status === "pending" || record.status === "running") && (
@@ -329,9 +335,10 @@ export default function BackgroundTasksPage() {
               {t("tasks_action_delete")}
             </Button>
           )}
+          </Space>
         </Space>
       ),
-      width: 180,
+      width: 230,
     },
   ];
 
@@ -345,12 +352,14 @@ export default function BackgroundTasksPage() {
       }}
     >
       <AppHeader
+        back={{ label: t(backDestinationKey(lastValidPage)), onClick: goBackSmart }}
+        showAssistant
         leftContent={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <HistoryOutlined style={{ fontSize: "1.75rem", color: primaryColor }} />
             <Title level={3} style={{
               margin: 0,
-              fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+              fontFamily: 'Inter, system-ui, sans-serif',
               color: textColor,
               fontSize: "1.35rem",
               transition: "color 0.3s ease",
@@ -364,9 +373,6 @@ export default function BackgroundTasksPage() {
         }
         extraActions={
           <>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => goBackSmart()} size="large" style={{ height: 40 }}>
-              {t(backDestinationKey(lastValidPage))}
-            </Button>
             <Button icon={<ReloadOutlined />} onClick={() => { setLoading(true); void loadTasks(); }} loading={loading} size="large" style={{ height: 40 }}>
               {t("common_refresh")}
             </Button>
@@ -418,7 +424,7 @@ export default function BackgroundTasksPage() {
                 level={4}
                 style={{
                   margin: 0,
-                  fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+                  fontFamily: 'Inter, system-ui, sans-serif',
                   color: textColor,
                   transition: "color 0.3s ease",
                 }}
@@ -467,7 +473,7 @@ export default function BackgroundTasksPage() {
                   showTotal: (total) => t("tasks_total_records").replace("{total}", String(total)),
                   pageSizeOptions: ["10", "20", "50"],
                 }}
-                scroll={{ x: 1100 }}
+                scroll={{ x: 780 }}
               />
             )}
           </Spin>
@@ -498,6 +504,9 @@ export default function BackgroundTasksPage() {
       >
         {selectedTask && (
           <div>
+            {err && <Alert type="error" showIcon message={err} style={{ marginBottom: 12 }} />}
+            <div className="task-detail-actions">{taskActions(selectedTask)}</div>
+            <p><Link to={`/novels/${selectedTask.novel_id}/write`}>{selectedTask.novel_title || t("novel_untitled")}</Link></p>
             <Row gutter={[16, 16]}>
               <Col span={12}>
                 <Text type="secondary" style={{ fontSize: "0.85rem" }}>
@@ -610,6 +619,7 @@ export default function BackgroundTasksPage() {
                         </Space>
                       }
                     >
+                      {item.status === "completed" && item.chapter_id && <Link to={`/novels/${selectedTask.novel_id}/write?chapter=${item.chapter_id}`}>{t("tasks_open_result")}</Link>}
                       {item.generated_title && (
                         <div>
                           <Text type="secondary">{t("tasks_details_chapter_title_label")}</Text>

@@ -2,11 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Layout, Card, Form, InputNumber, Button, Alert, Typography, Space,
   message, Row, Col, Select, Switch, Input, Tooltip, Modal, Tag, Spin,
-  Popconfirm,
+  Popconfirm, Checkbox, Steps,
 } from "antd";
 import type { FormInstance } from "antd";
 import {
-  SaveOutlined, ArrowLeftOutlined, SettingOutlined, RobotOutlined,
+  SaveOutlined, SettingOutlined, RobotOutlined,
   CheckCircleOutlined, SafetyOutlined, EyeOutlined, GoldOutlined,
   GlobalOutlined, ThunderboltOutlined, QuestionCircleOutlined,
   PlusOutlined, DeleteOutlined, EditOutlined, SwapOutlined,
@@ -22,6 +22,7 @@ import "@/styles/workspace-polish.css";
 import { useI18n } from "@/i18n";
 import {
   fetchLlmProviders,
+  apiErrorMessage,
   isDesktopApp,
   createCustomLLM,
   updateCustomLLM,
@@ -111,6 +112,15 @@ export default function AiSettings() {
   const [agentSaving, setAgentSaving] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addStep, setAddStep] = useState(0);
+  const [newConnection, setNewConnection] = useState<CustomLlmInfo | null>(null);
+  const [assignGeneration, setAssignGeneration] = useState(true);
+  const [assignAgent, setAssignAgent] = useState(false);
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [assignError, setAssignError] = useState("");
+  const [preferencesDirty, setPreferencesDirty] = useState(false);
+  const [genFeedback, setGenFeedback] = useState("");
+  const [agentFeedback, setAgentFeedback] = useState("");
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingCustom, setEditingCustom] = useState<CustomLlmInfo | null>(null);
   const [addForm] = Form.useForm();
@@ -171,7 +181,7 @@ export default function AiSettings() {
 
   const saveGenProviderModel = useCallback(
     async (pv: string, model: string | null) => {
-      setGenSaving(true);
+      setGenSaving(true); setGenFeedback("");
       try {
         const decoded = decodeProviderValue(pv);
         if (decoded.kind === "builtin") {
@@ -188,9 +198,11 @@ export default function AiSettings() {
             preferred_llm_model: model || null,
           });
         }
+        setGenFeedback("form_saved");
         message.success(t("ai_settings_switch_success"));
       } catch (e) {
-        message.error(String(e));
+        setGenFeedback("ai_settings_save_failed");
+        message.error(apiErrorMessage(e));
         if (user && providerInfo) {
           const selected = llmSelection(user, providerInfo, isDesktopApp);
           setGenProviderValue(selected.generationProvider);
@@ -223,7 +235,7 @@ export default function AiSettings() {
 
   const saveAgentProviderModel = useCallback(
     async (pv: string, model: string | null) => {
-      setAgentSaving(true);
+      setAgentSaving(true); setAgentFeedback("");
       try {
         const decoded = decodeProviderValue(pv);
         if (decoded.kind === "builtin") {
@@ -239,9 +251,11 @@ export default function AiSettings() {
             agent_model: model || null,
           });
         }
+        setAgentFeedback("form_saved");
         message.success(t("ai_settings_switch_success"));
       } catch (e) {
-        message.error(String(e));
+        setAgentFeedback("ai_settings_save_failed");
+        message.error(apiErrorMessage(e));
         if (user && providerInfo) {
           const selected = llmSelection(user, providerInfo, isDesktopApp);
           setAgentProviderValue(selected.agentProvider);
@@ -296,9 +310,10 @@ export default function AiSettings() {
       });
       message.success(t("ai_settings_save_success"));
       setSuccessMsg(t("ai_settings_save_success"));
+      setPreferencesDirty(Object.entries(values).some(([key, value]) => form.getFieldValue(key) !== value));
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (e) {
-      setErrorMsg(String(e) || t("ai_settings_save_failed"));
+      setErrorMsg(apiErrorMessage(e) || t("ai_settings_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -308,7 +323,7 @@ export default function AiSettings() {
     const values = await addForm.validateFields();
     setAddSaving(true);
     try {
-      await createCustomLLM({
+      const created = await createCustomLLM({
         provider: values.provider,
         protocol: values.protocol,
         claude_auth_mode: values.claude_auth_mode,
@@ -317,6 +332,7 @@ export default function AiSettings() {
         base_url: values.base_url?.trim() || null,
       });
       setAddModalOpen(false);
+      setNewConnection(created); setAssignGeneration(true); setAssignAgent(false); setAssignError("");
       addForm.resetFields();
       const newData = await loadProviderInfo();
       if (newData) {
@@ -324,10 +340,24 @@ export default function AiSettings() {
       }
       message.success(t("ai_settings_custom_added"));
     } catch (e) {
-      message.error(String(e));
+      message.error(apiErrorMessage(e));
     } finally {
       setAddSaving(false);
     }
+  };
+
+  const assignConnection = async () => {
+    if (!newConnection) return;
+    setAssignSaving(true); setAssignError("");
+    try {
+      await updateAiSettings({
+        ...(assignGeneration ? { generation_use_custom: true, generation_custom_llm_id: newConnection.id, preferred_llm_model: newConnection.default_model } : {}),
+        ...(assignAgent ? { agent_use_custom: true, agent_custom_llm_id: newConnection.id, agent_model: newConnection.default_model } : {}),
+      });
+      setNewConnection(null);
+      setGenFeedback(assignGeneration ? "form_saved" : ""); setAgentFeedback(assignAgent ? "form_saved" : "");
+    } catch (error) { setAssignError(apiErrorMessage(error)); }
+    finally { setAssignSaving(false); }
   };
 
   const handleEditCustomLlm = async () => {
@@ -355,7 +385,7 @@ export default function AiSettings() {
       await refreshUser();
       message.success(t("ai_settings_custom_updated"));
     } catch (e) {
-      message.error(String(e));
+      message.error(apiErrorMessage(e));
     } finally {
       setEditSaving(false);
     }
@@ -368,7 +398,7 @@ export default function AiSettings() {
       await refreshUser();
       message.success(t("ai_settings_custom_removed"));
     } catch (e) {
-      message.error(String(e));
+      message.error(apiErrorMessage(e));
     }
   };
 
@@ -386,6 +416,7 @@ export default function AiSettings() {
   };
 
   const openAddModal = () => {
+    setAddStep(0);
     addForm.setFieldsValue({
       provider: "openai",
       protocol: "openai",
@@ -444,6 +475,8 @@ export default function AiSettings() {
   const agentCurrentModels = agentProviderValue ? getModelsForProviderValue(agentProviderValue) : [];
 
   const agentCurrentModel = agentProviderValue ? agentModel : "";
+  const generationAvailable = Boolean(providerInfo && (providerInfo.builtin.length || providerInfo.custom_llms.length));
+  const agentAvailable = Boolean(providerInfo && (providerInfo.agent_builtin || providerInfo.custom_llms.some((connection) => connection.protocol === "anthropic")));
 
   return (
     <Layout className="settings-page"
@@ -455,6 +488,7 @@ export default function AiSettings() {
       }}
     >
       <AppHeader
+        back={{ label: t(backDestinationKey(lastValidPage)), onClick: goBackSmart }}
         leftContent={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <SettingOutlined style={{ fontSize: "1.75rem", color: primaryColor }} />
@@ -462,7 +496,7 @@ export default function AiSettings() {
               level={3}
               style={{
                 margin: 0,
-                fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+                fontFamily: 'Inter, system-ui, sans-serif',
                 color: textColor,
                 fontSize: "1.35rem",
               }}
@@ -470,16 +504,6 @@ export default function AiSettings() {
               {t("ai_settings_title")}
             </Title>
           </div>
-        }
-        extraActions={
-          <Button
-            icon={<ArrowLeftOutlined />}
-            onClick={() => goBackSmart()}
-            size="large"
-            style={{ height: 40 }}
-          >
-            {t(backDestinationKey(lastValidPage))}
-          </Button>
         }
         disabledMenuItem="settings"
       />
@@ -507,12 +531,15 @@ export default function AiSettings() {
           {(["connections", "preferences", "advanced"] as const).map((key) => <button key={key} aria-pressed={settingsSection === key} onClick={() => setSettingsSection(key)}>{t(`settings_section_${key}`)}</button>)}
         </div>
         <Card className="settings-form-card">
-          <Form form={form} name="aiSettings" onFinish={onFinish} layout="vertical" onFinishFailed={({ errorFields }) => {
+          <Form form={form} name="aiSettings" onFinish={onFinish} layout="vertical" onValuesChange={() => setPreferencesDirty(true)} onFinishFailed={({ errorFields }) => {
             const name = String(errorFields[0]?.name[0] || "");
             setSettingsSection(["agent_mode", "max_llm_iterations", "max_tokens_per_task"].includes(name) ? "advanced" : "preferences");
           }}>
-            <section hidden={settingsSection !== "connections"} aria-label={t("settings_section_connections")}>{/* ===== 正文生成 ===== */}
-            <Card
+            <section className={`settings-connections${!genProviderValue && !agentProviderValue ? " is-unconfigured" : ""}`} hidden={settingsSection !== "connections"} aria-label={t("settings_section_connections")}>
+            <div className="settings-connection-intro"><p>{t("settings_connection_flow")}</p><span>{t("settings_models_autosave")}</span></div>
+            {providerInfo && !genProviderValue && !agentProviderValue && <div className="settings-setup-start"><h2>{t("settings_setup_title")}</h2><p>{t("settings_setup_hint")}</p><Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>{t("settings_add_connection")}</Button></div>}
+            {/* ===== 正文生成 ===== */}
+            {generationAvailable && <Card
               type="inner"
               title={
                 <Space>
@@ -523,7 +550,7 @@ export default function AiSettings() {
               style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
             >
 
-              <Row gutter={24}>
+              {generationAvailable && <Row gutter={24}>
                 <Col xs={24} md={12}>
                   <div style={{ marginBottom: 8 }}>
                     <Text strong style={{ color: textColor }}>
@@ -598,11 +625,13 @@ export default function AiSettings() {
 
                   </Spin>
                 </Col>
-              </Row>
-            </Card>
+              </Row>}
+              {!genProviderValue && <div className="settings-role-empty"><Button type="link" onClick={openAddModal}>{t("settings_add_connection")}</Button></div>}
+              <p className="settings-role-feedback" role="status">{t(genSaving ? "form_saving" : genFeedback || "settings_models_autosave")}</p>
+            </Card>}
 
             {/* ===== AI 助手 (Agent) ===== */}
-            <Card
+            {(generationAvailable || agentAvailable) && <Card
               type="inner"
               title={
                 <Space>
@@ -613,7 +642,7 @@ export default function AiSettings() {
               style={{ marginBottom: "1.5rem", background: innerCardBg, borderRadius: 12 }}
             >
 
-              <Row gutter={24}>
+              {agentAvailable && <Row gutter={24}>
                 <Col xs={24} md={12}>
                   <div style={{ marginBottom: 8 }}>
                     <Text strong style={{ color: textColor }}>
@@ -688,12 +717,13 @@ export default function AiSettings() {
 
                   </Spin>
                 </Col>
-              </Row>
-              {!agentProviderValue && <Text type="secondary">{t("ai_settings_agent_setup_hint")}</Text>}
-            </Card>
+              </Row>}
+              {!agentProviderValue && <div className="settings-role-empty"><Text type="secondary">{t("settings_agent_connection_hint")}</Text><Button type="link" onClick={openAddModal}>{t("settings_add_connection")}</Button></div>}
+              <p className="settings-role-feedback" role="status">{t(agentSaving ? "form_saving" : agentFeedback || "settings_models_autosave")}</p>
+            </Card>}
 
             {/* ===== Custom LLM Management ===== */}
-            <Card
+            <Card className="settings-connection-library"
               type="inner"
               title={
                 <Space>
@@ -1086,7 +1116,7 @@ export default function AiSettings() {
 
             </section>
             {settingsSection !== "connections" && <>
-            <p className="settings-section-hint">{t("settings_preferences_save_hint")}</p>
+            <p className="settings-save-status" role="status">{t(saving ? "form_saving" : preferencesDirty ? "settings_preferences_unsaved" : "settings_preferences_hint")}</p>
             <Form.Item className="settings-save-row" style={{ marginBottom: 0, marginTop: "1rem" }}>
               <Button
                 type="primary"
@@ -1114,16 +1144,23 @@ export default function AiSettings() {
       <Modal
         title={t("ai_settings_add_custom_llm_title")}
         open={addModalOpen}
-        onOk={handleAddCustomLlm}
+        onOk={async () => {
+          if (addStep === 0) {
+            try { await addForm.validateFields(["provider", "protocol", "api_key", "base_url", "claude_auth_mode"]); setAddStep(1); } catch { /* Show field validation. */ }
+          } else { await handleAddCustomLlm(); }
+        }}
         onCancel={() => setAddModalOpen(false)}
-        okText={t("ai_settings_save_button")}
+        okText={t(addStep === 0 ? "settings_next_test" : "settings_save_assign")}
         confirmLoading={addSaving}
         destroyOnClose
         width={520}
         style={{ top: 24 }}
         styles={{ body: { maxHeight: "calc(100dvh - 180px)", overflowY: "auto", paddingRight: 8 } }}
       >
-        <Form form={addForm} layout="vertical">
+        <Steps size="small" current={addStep} items={[{ title: t("settings_step_connect") }, { title: t("settings_step_test") }, { title: t("settings_step_assign") }]} />
+        <Form form={addForm} layout="vertical" className="connection-setup-form">
+          <div hidden={addStep !== 0}>
+          <p className="workspace-hint">{t("settings_connection_example")}</p>
           <Form.Item
             name="provider"
             label={t("ai_settings_provider")}
@@ -1179,8 +1216,27 @@ export default function AiSettings() {
               style={{ height: 44 }}
             />
           </Form.Item>
-          <ConnectionModelFields form={addForm} />
+          </div>
+          <div hidden={addStep !== 1}>
+            <p className="workspace-hint">{t("settings_test_hint")}</p>
+            <ConnectionModelFields form={addForm} />
+            <Button type="text" onClick={() => setAddStep(0)}>{t("settings_edit_connection")}</Button>
+          </div>
         </Form>
+      </Modal>
+
+      <Modal title={t("settings_assign_title")} open={Boolean(newConnection)} onCancel={() => !assignSaving && setNewConnection(null)}
+        onOk={() => void assignConnection()} okText={t("settings_apply_roles")} cancelText={t("settings_assign_later")}
+        confirmLoading={assignSaving} okButtonProps={{ disabled: !assignGeneration && !assignAgent }}>
+        <Steps size="small" current={2} items={[{ title: t("settings_step_connect") }, { title: t("settings_step_test") }, { title: t("settings_step_assign") }]} />
+        <p>{newConnection?.provider_label} · {newConnection?.default_model}</p>
+        <p className="workspace-hint">{t("settings_assign_hint")}</p>
+        <div className="settings-assignment-options">
+          <Checkbox checked={assignGeneration} disabled={assignSaving} onChange={(e) => setAssignGeneration(e.target.checked)}>{t("ai_settings_generation_ai")}</Checkbox>
+          <Checkbox checked={assignAgent} disabled={assignSaving || newConnection?.protocol !== "anthropic"} onChange={(e) => setAssignAgent(e.target.checked)}>{t("ai_settings_agent_ai")}</Checkbox>
+        </div>
+        {newConnection?.protocol !== "anthropic" && <p className="workspace-hint">{t("settings_agent_protocol_hint")}</p>}
+        {assignError && <Alert type="error" showIcon title={assignError} />}
       </Modal>
 
       {/* Edit Custom LLM Modal */}

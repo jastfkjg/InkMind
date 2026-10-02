@@ -51,3 +51,39 @@
 .custom-llm-details { margin-top: 8px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .custom-llm-details summary { cursor: pointer; width: fit-content; }
 .custom-llm-details p { margin: 4px 0; }
+
+.app-header__left { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.app-header .app-header__back { flex-shrink: 0; height: 40px; color: var(--ink); }
+.app-header .app-assistant-entry { height: 40px; color: var(--muted); }
+:is(.settings-page, .management-page, .ops-page) .app-header h3 { font-family: var(--font-ui) !important; font-size: 21px !important; font-weight: 600; }
+:is(.settings-page, .management-page, .ops-page) .app-header__left > div > .anticon { font-size: 22px !important; }
+:is(.settings-page, .management-page, .ops-page) .ant-card-head .ant-typography { font-family: var(--font-ui); font-size: 17px !important; font-weight: 600; }
+.management-page .ant-card { border-radius: 12px !important; box-shadow: none !important; border: 1px solid var(--border) !important; }
+.management-page .ant-btn-link { color: var(--accent-active); }
+.theme--dark .management-page .ant-btn-link { color: var(--accent-soft); }
+.management-page .ant-btn-dangerous { color: var(--error); }
+.theme--dark .management-page .ant-btn-dangerous { color: var(--error-light); }
+.task-work-link { color: var(--muted); font-size: 12px; }
+.task-detail-actions { margin-bottom: 12px; }
+.settings-connections { display: flex; flex-direction: column; }
+.settings-connections[hidden] { display: none; }
+.settings-connection-intro { margin-bottom: 20px; font-size: 13px; color: var(--muted); }
+.settings-connection-intro p { margin: 0 0 6px; color: var(--ink); }
+.settings-setup-start { padding: 20px; background: var(--bg-hover); border-radius: 8px; margin-bottom: 24px; }
+.settings-setup-start h2 { font: 600 18px/1.5 var(--font-ui); }
+.settings-setup-start p { color: var(--muted); font-size: 14px; }
+.settings-connections.is-unconfigured .settings-connection-library { order: 1; }
+.settings-role-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.settings-role-feedback, .settings-save-status { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+.connection-setup-form { margin-top: 20px; }
+.settings-assignment-options { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; }
+@media (max-width: 760px) {
+  .app-header__left { gap: 8px; }
+  .app-header .app-header__back { max-width: 135px; overflow: hidden; }
+  .app-header .app-assistant-entry { min-width: 40px; padding-inline: 8px; }
+  .app-header .app-assistant-entry > span:not(.anticon):not(.ant-btn-icon) { display: none; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .app-header .app-assistant-entry { min-width: 40px; padding-inline: 8px; }
+  .app-header .app-assistant-entry > span:not(.anticon):not(.ant-btn-icon) { display: none; }
+}

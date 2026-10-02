@@ -1,0 +1,31 @@
+async (page) => {
+  if (!page.url().startsWith('http://127.0.0.1:5198/')) throw Error('Fixture only');
+  const base='http://127.0.0.1:18991';
+  const state=await (await page.request.get(base+'/__test/state')).json();
+  const original=state.chapters.find(c=>c.id===901);
+  const content=Array.from({length:100},(_,i)=>`　　第${i+1}段：${'林照沿着旧邮路穿过山城，寻找那封寄给明天的信。'.repeat(5)}`).join('\n\n');
+  await page.request.patch(base+'/novels/901/chapters/901',{data:{content}});
+  await page.goto('http://127.0.0.1:5198/novels/901/write?chapter=901');
+  const body=page.getByRole('textbox',{name:'章节正文',exact:true}); await body.waitFor();
+  const before=await body.evaluate(async el=>{const {getCaretViewportPoint}=await import('/src/utils/textareaCaretViewport.ts'); const index=el.value.indexOf('第40段'); el.focus(); el.setSelectionRange(index,index); el.scrollTop+=getCaretViewportPoint(el,index).top-el.getBoundingClientRect().top-100; el.dispatchEvent(new Event('scroll')); return {index,width:el.clientWidth};});
+  await page.waitForTimeout(150);
+  const position=()=>body.evaluate(async (el,index)=>{const {getCaretViewportPoint}=await import('/src/utils/textareaCaretViewport.ts');return {offset:getCaretViewportPoint(el,index).top-el.getBoundingClientRect().top,scroll:el.scrollTop,width:el.clientWidth}},before.index);
+  const initial=await position();
+  await page.getByRole('button',{name:'创作资料',exact:true}).click(); await page.waitForTimeout(300);
+  const opened=await position();
+  if(Math.abs(opened.offset-initial.offset)>38) throw Error('Reading anchor moved when opening: '+JSON.stringify({initial,opened}));
+  await page.getByRole('button',{name:'创作资料',exact:true}).click(); await page.waitForTimeout(300);
+  const closed=await position();
+  if(Math.abs(closed.offset-initial.offset)>38) throw Error('Reading anchor moved when closing: '+JSON.stringify({initial,closed}));
+  if(before.width>820) throw Error('Default reading width too wide: '+before.width);
+  await page.getByRole('button',{name:'生成',exact:true}).click();
+  await page.waitForTimeout(300);
+  const prePreview=await position();
+  await page.getByRole('button',{name:'生成预览',exact:true}).click();
+  await page.getByRole('button',{name:'放弃预览',exact:true}).click();
+  const restored=await position();
+  if(Math.abs(restored.scroll-prePreview.scroll)>2) throw Error('Cancel lost original scroll: '+JSON.stringify({prePreview,restored}));
+  await page.request.patch(base+'/novels/901/chapters/901',{data:{content:original.content}});
+  await page.reload();
+  return {result:'PASS: reading width, open/close anchor and preview-cancel position',initial,opened,closed};
+}

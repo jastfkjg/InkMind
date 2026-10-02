@@ -132,6 +132,7 @@ export default function NovelLayout() {
       }}
     >
       <AppHeader
+        showAssistant={!writeTabActive}
         height={64}
         padding="0 1.5rem"
         headerStyle={{ flexWrap: "wrap", gap: "1rem" }}

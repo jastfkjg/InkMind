@@ -14,7 +14,6 @@ import {
   Progress,
 } from "antd";
 import {
-  ArrowLeftOutlined,
   ReloadOutlined,
   RocketOutlined,
   InboxOutlined,
@@ -269,12 +268,14 @@ export default function UsageDashboard() {
       }}
     >
       <AppHeader
+        back={{ label: t(backDestinationKey(lastValidPage)), onClick: goBackSmart }}
+        showAssistant
         leftContent={
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <RocketOutlined style={{ fontSize: "1.75rem", color: primaryColor }} />
             <Title level={3} style={{
               margin: 0,
-              fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+              fontFamily: 'Inter, system-ui, sans-serif',
               color: textColor,
               fontSize: "1.35rem",
               transition: "color 0.3s ease",
@@ -285,9 +286,6 @@ export default function UsageDashboard() {
         }
         extraActions={
           <>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => goBackSmart()} size="large" style={{ height: 40 }}>
-              {t(backDestinationKey(lastValidPage))}
-            </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading} size="large" style={{ height: 40 }}>
               {t("common_refresh")}
             </Button>
@@ -343,7 +341,7 @@ export default function UsageDashboard() {
                 level={4}
                 style={{
                   margin: 0,
-                  fontFamily: '"Noto Serif SC", "DM Serif Display", Georgia, serif',
+                  fontFamily: 'Inter, system-ui, sans-serif',
                   color: textColor,
                   transition: "color 0.3s ease",
                 }}

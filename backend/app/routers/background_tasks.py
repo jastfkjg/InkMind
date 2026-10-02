@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import CurrentUser
-from app.models import BackgroundTask, Novel, User
+from app.models import BackgroundTask, Chapter, Novel, User
+from app.services.task_retry import retry_background_task
 from app.schemas.background_task import (
     BackgroundTaskOut,
     CreateBatchTaskIn,
@@ -79,6 +80,8 @@ def create_single_task(
             detail="作品不存在",
         )
     
+    if body.chapter_id is not None and not db.query(Chapter).filter_by(id=body.chapter_id, novel_id=novel.id).first():
+        raise HTTPException(404, "章节不存在")
     task = start_single_chapter_task(
         db,
         user_id=user.id,
@@ -168,6 +171,14 @@ def cancel_task(
     db.refresh(task)
     
     return task
+
+
+@router.post("/{task_id}/retry", response_model=BackgroundTaskOut)
+def retry_task(task_id: int, user: CurrentUser, db: Session = Depends(get_db)) -> BackgroundTask:
+    task = db.query(BackgroundTask).filter_by(id=task_id, user_id=user.id).first()
+    if not task:
+        raise HTTPException(404, "任务不存在")
+    return retry_background_task(db, task)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)

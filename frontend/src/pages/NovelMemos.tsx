@@ -52,7 +52,7 @@ export default function NovelMemos() {
   }
   const addAction = <Link className="novel-add-link" to={`/novels/${id}/memos/new`}><PlusOutlined />{t("memos_create_memo")}</Link>;
   return (
-    <ManagementPage title={t("memos_title")} description={t("reference_read_hint")}
+    <ManagementPage title={t("memos_title")}
       count={loading ? undefined : t("memos_count").replace("{count}", String(items.length))}
       action={items.length > 0 ? addAction : undefined}>
       {modalContextHolder}

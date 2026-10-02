@@ -79,7 +79,7 @@ function readStoredLineWidth(): LineWidthId {
       if (mapped) { localStorage.setItem(WRITE_LINE_WIDTH_KEY, mapped); return mapped; }
     }
   } catch { /* ignore */ }
-  return "full";
+  return "lg";
 }
 
 function readStoredFocusMode(): boolean {

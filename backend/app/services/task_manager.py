@@ -58,9 +58,8 @@ class TaskManager:
 
     def submit_task(self, task_id: int, task_func: Callable, *args, **kwargs) -> None:
         """提交任务到线程池执行"""
-        future = self._executor.submit(task_func, *args, **kwargs)
-        
         with self._running_lock:
+            future = self._executor.submit(task_func, *args, **kwargs)
             self._running_tasks[task_id] = RunningTask(
                 task_id=task_id,
                 future=future,
@@ -82,7 +81,7 @@ class TaskManager:
             if task_id not in self._running_tasks:
                 return False
             running_task = self._running_tasks[task_id]
-            return running_task.cancelled or not running_task.future.done()
+            return not running_task.future.done()
 
     def remove_task(self, task_id: int) -> None:
         """移除已完成的任务"""
@@ -222,7 +221,10 @@ def _run_single_chapter_task(
 
         target_chapter: Chapter | None = None
         if chapter_id:
-            target_chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+            target_chapter = db.query(Chapter).filter(Chapter.id == chapter_id, Chapter.novel_id == novel_id).first()
+            if not target_chapter:
+                _update_task_status_safe(db, task, "failed", error_message="目标章节已不存在，请返回作品重新生成。")
+                return
 
         _update_task_status_safe(db, task, "running", progress_message="准备生成章节...")
 
@@ -288,7 +290,7 @@ def _run_single_chapter_task(
                 logger.warning(f"Failed to flush accumulator for task {task_id}: {e}")
 
             if chapter_out:
-                task.total_tokens = accumulator.total_tokens
+                task.total_tokens = (task.total_tokens or 0) + accumulator.total_tokens
                 _update_task_status_safe(
                     db, task, "completed", 
                     progress_message=f"章节「{chapter_out.title}」生成完成",
@@ -327,6 +329,32 @@ def _run_single_chapter_task(
             pass
 
 
+def _reserve_batch_chapter_order(db: Session, task: BackgroundTask, index: int, anchor: Chapter | None) -> int:
+    """Insert retries among completed siblings rather than appending out of order."""
+    completed = []
+    for item in task.task_items:
+        if item.status == "completed" and item.chapter_id:
+            chapter = db.query(Chapter).filter_by(id=item.chapter_id, novel_id=task.novel_id).first()
+            if chapter:
+                completed.append((item.sort_order, chapter))
+    following = sorted((pair for pair in completed if pair[0] > index), key=lambda pair: pair[0])
+    preceding = sorted((pair for pair in completed if pair[0] < index), key=lambda pair: pair[0])
+    chapters = db.query(Chapter).filter_by(novel_id=task.novel_id).all()
+    if following:
+        order = following[0][1].sort_order
+    elif preceding:
+        order = preceding[-1][1].sort_order + 1
+    elif anchor:
+        order = anchor.sort_order + 1
+    else:
+        order = max((chapter.sort_order for chapter in chapters), default=-1) + 1
+    for chapter in chapters:
+        if chapter.sort_order >= order:
+            chapter.sort_order += 1
+    db.commit()
+    return order
+
+
 def _run_batch_chapters_task(
     task_id: int,
     user_id: int,
@@ -356,7 +384,7 @@ def _run_batch_chapters_task(
 
         after_chapter: Chapter | None = None
         if after_chapter_id:
-            after_chapter = db.query(Chapter).filter(Chapter.id == after_chapter_id).first()
+            after_chapter = db.query(Chapter).filter_by(id=after_chapter_id, novel_id=novel_id).first()
 
         _update_task_status_safe(db, task, "running", progress_message="正在规划批量章节...")
 
@@ -375,22 +403,28 @@ def _run_batch_chapters_task(
         try:
             logger.info(f"Starting batch chapter planning for task {task_id}, chapter_count={chapter_count}")
             
-            plan = plan_batch_chapters(
-                db=db,
-                novel=novel,
-                llm=llm,
-                total_summary=total_summary,
-                chapter_count=chapter_count,
-                after_chapter=after_chapter,
-            )
-            
-            task.batch_plan_json = json.dumps(plan, ensure_ascii=False)
-            db.commit()
+            if task.batch_plan_json:
+                plan = json.loads(task.batch_plan_json)
+            else:
+                plan = plan_batch_chapters(
+                    db=db, novel=novel, llm=llm, total_summary=total_summary,
+                    chapter_count=chapter_count, after_chapter=after_chapter,
+                )
+                task.batch_plan_json = json.dumps(plan, ensure_ascii=False)
+                for idx, chapter_plan in enumerate(plan):
+                    task_item = next((ti for ti in task.task_items if ti.sort_order == idx), None)
+                    if task_item:
+                        task_item.title = chapter_plan.get("title")
+                        task_item.summary = chapter_plan.get("summary", "")
+                db.commit()
 
             _update_task_status_safe(db, task, "running", progress_message="章节规划完成，开始逐章生成...")
 
-            completed_count = 0
+            completed_count = sum(item.status == "completed" for item in task.task_items)
             for idx, chapter_plan in enumerate(plan):
+                task_item = next((ti for ti in task.task_items if ti.sort_order == idx), None)
+                if task_item and task_item.status == "completed":
+                    continue
                 if task_manager.is_running(task_id):
                     with task_manager._running_lock:
                         if task_manager._running_tasks.get(task_id) and task_manager._running_tasks[task_id].cancelled:
@@ -426,6 +460,7 @@ def _run_batch_chapters_task(
                     chapter_out: Chapter | None = None
                     chapter_title = chapter_plan.get("title")
                     chapter_summary = chapter_plan.get("summary", "")
+                    new_sort_order = _reserve_batch_chapter_order(db, task, idx, after_chapter)
 
                     logger.info(f"Generating chapter {idx + 1}/{chapter_count} for task {task_id}")
 
@@ -435,6 +470,7 @@ def _run_batch_chapters_task(
                             novel=novel,
                             chapter_summary=chapter_summary,
                             target_chapter=None,
+                            new_sort_order=new_sort_order,
                             llm=chapter_llm,
                             fixed_title=chapter_title,
                             max_iterations=max_iterations,
@@ -448,6 +484,7 @@ def _run_batch_chapters_task(
                             novel=novel,
                             chapter_summary=chapter_summary,
                             target_chapter=None,
+                            new_sort_order=new_sort_order,
                             llm=chapter_llm,
                             fixed_title=chapter_title,
                             word_count=word_count,
@@ -461,6 +498,7 @@ def _run_batch_chapters_task(
                             novel=novel,
                             chapter_summary=chapter_summary,
                             target_chapter=None,
+                            new_sort_order=new_sort_order,
                             llm=chapter_llm,
                             fixed_title=chapter_title,
                             max_iterations=max_iterations,
@@ -500,10 +538,11 @@ def _run_batch_chapters_task(
             except Exception as e:
                 logger.warning(f"Failed to flush accumulator for batch task {task_id}: {e}")
             
-            task.total_tokens = accumulator.total_tokens
+            task.total_tokens = (task.total_tokens or 0) + accumulator.total_tokens
 
             _update_task_status_safe(
-                db, task, "completed",
+                db, task, "completed" if completed_count == chapter_count else "failed",
+                error_message=None if completed_count == chapter_count else "部分章节生成失败，可重试未完成章节。",
                 progress_message=f"批量生成完成！成功生成 {completed_count}/{chapter_count} 章",
                 current_index=chapter_count,
                 completed_count=completed_count,
@@ -546,6 +585,9 @@ def start_single_chapter_task(
         user_id=user_id,
         novel_id=novel_id,
         task_type="single_chapter",
+        request_json=json.dumps({"chapter_id": chapter_id, "title": title, "summary": summary,
+                                 "fixed_title": fixed_title, "word_count": word_count,
+                                 "agent_mode": agent_mode, "max_iterations": max_iterations}, ensure_ascii=False),
         status="pending",
         title=title,
         summary=summary,
@@ -557,6 +599,7 @@ def start_single_chapter_task(
 
     task_item = TaskItem(
         background_task_id=task.id,
+        chapter_id=chapter_id,
         sort_order=0,
         status="pending",
         title=title,
@@ -600,6 +643,9 @@ def start_batch_chapters_task(
         user_id=user_id,
         novel_id=novel_id,
         task_type="batch_chapters",
+        request_json=json.dumps({"after_chapter_id": after_chapter_id, "total_summary": total_summary,
+                                 "chapter_count": chapter_count, "word_count": word_count,
+                                 "agent_mode": agent_mode, "max_iterations": max_iterations}, ensure_ascii=False),
         status="pending",
         summary=total_summary,
         batch_count=chapter_count,

@@ -1354,7 +1354,7 @@ export default function AiAssistantFloating({ novelId }: AiAssistantFloatingProp
 
   return (
     <>
-      {!isOpen && !writingPage && !managementPage && (
+      {!isOpen && !writingPage && !managementPage && !["/", "/usage", "/tasks"].includes(location.pathname) && (
         <button
           type="button"
           className={`ai-assistant-float-btn${isIconDragging ? " ai-assistant-float-btn--dragging" : ""}`}
