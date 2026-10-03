@@ -87,3 +87,39 @@
   .app-header .app-assistant-entry { min-width: 40px; padding-inline: 8px; }
   .app-header .app-assistant-entry > span:not(.anticon):not(.ant-btn-icon) { display: none; }
 }
+
+/* Shared novel navigation stays compact across writing and reference pages. */
+.novel-layout > .app-header { gap: 16px !important; line-height: normal; }
+.novel-layout .novel-header__content { flex-wrap: nowrap; gap: 20px; }
+.novel-layout .novel-header__back { height: 34px; padding-inline: 8px; font-size: 13px; color: var(--muted); }
+.novel-layout .novel-header__work-switch { padding-inline: 0; height: 34px; max-width: 190px; }
+.novel-layout .novel-header__tabs { margin-left: 8px !important; }
+.novel-layout .novel-header__tabs .ant-tabs-nav::before { border: 0; }
+.novel-layout .novel-header__tabs .ant-tabs-tab { padding: 18px 2px; font-size: 13px; }
+.novel-layout .novel-header__tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 24px; }
+.novel-layout .novel-header__tabs .ant-tabs-tab-btn { color: var(--muted); }
+.novel-layout .novel-header__tabs .ant-tabs-tab-active .ant-tabs-tab-btn { color: var(--ink); text-shadow: none; }
+.novel-layout .novel-header__tabs .ant-tabs-ink-bar { height: 2px; }
+.novel-layout .app-header__actions { gap: 8px !important; }
+.novel-layout .app-header__preference { height: 34px; font-size: 13px; padding-inline: 10px; }
+.novel-layout .user-menu-trigger { padding: 4px !important; }
+.novel-layout .user-menu-trigger .ant-avatar { width: 30px; height: 30px; font-size: 16px; background: var(--bg-hover) !important; color: var(--muted); }
+.novel-layout .app-header__user-details { display: none; }
+@media (min-width: 900px) {
+  .novel-layout .novel-content--write { padding-top: 4px !important; }
+}
+@media (min-width: 768px) and (max-width: 1050px) {
+  .novel-layout .novel-header__content { gap: 12px; }
+  .novel-layout .novel-header__back { width: 34px; padding: 0; }
+  .novel-layout .novel-header__back > span:not(.ant-btn-icon) { display: none; }
+  .novel-layout .novel-header__work-switch { max-width: 140px; }
+  .novel-layout .novel-header__tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 18px; }
+}
+@media (max-width: 767px) {
+  .novel-layout > .app-header { padding: 8px 16px !important; gap: 8px !important; }
+  .novel-layout .novel-header__content { gap: 0 8px; }
+  .novel-layout .novel-header__back { height: 44px; }
+  .novel-layout .novel-header__work-switch { max-width: 100%; min-width: 0; font-size: 17px; }
+  .novel-layout .novel-header__tabs { margin-left: 0 !important; }
+  .novel-layout .novel-header__tabs .ant-tabs-tab { padding: 10px 2px !important; }
+}

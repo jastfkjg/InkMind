@@ -1856,14 +1856,6 @@ export default function NovelWrite() {
                 { key: "naming", label: t("write_ai_naming"), onClick: () => setRightTool("naming"), disabled: !hasLlm || busy },
               ] }}><button type="button" className="write-ai-quickbtn" aria-label={t("dashboard_more")}><MoreOutlined /></button></Dropdown>
             </div>
-            <button
-              type="button"
-              className={`write-history-btn${rightTool === "versions" ? " is-active" : ""}`}
-              disabled={!activeId}
-              onClick={toggleVersionsPanel}
-            >
-              {t("write_tool_versions")}
-            </button>
           </div>
         ) : null}
         {!focusMode && <div className="write-workspace-toolbar__actions">
@@ -1892,11 +1884,12 @@ export default function NovelWrite() {
         {!narrow && sidebarOpen && !layout.overlay && <WritingPaneResizeHandle pane="chapters" layout={layout} />}
 
         <div className="write-main write-main--with-rail">
-          <div className="card write-editor-card">
+          <div className={`card write-editor-card write-manuscript--${lineWidthId}`}>
             {activeId ? (
               <>
                 <div className="write-editor-header">
-                  <div className="write-editor-title-row">
+                  <div className="write-editor-chapter-row">
+                    <span className="write-editor-chapter-label">{t("write_chapter_number").replace("{number}", String(chapters.findIndex((chapter) => chapter.id === activeId) + 1))}</span>
                     <div className="write-editor-nav">
                       <button
                         type="button"
@@ -1919,6 +1912,8 @@ export default function NovelWrite() {
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3l5 5-5 5" /></svg>
                       </button>
                     </div>
+                  </div>
+                  <div className="write-editor-title-row">
                     <input
                       className="editor-title editor-title--improved"
                       aria-label={t("write_chapter_title_placeholder")}
@@ -1940,18 +1935,6 @@ export default function NovelWrite() {
                         <svg className={`write-summary-toggle__chevron${summaryOpen ? " is-open" : ""}`} width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5l3 3 3-3" /></svg>
                         <span className="write-summary-toggle__label">{t("write_chapter_summary")}</span>
                       </button>
-                      <span className={`write-save-status write-save-status--${isPreviewMode ? "preview" : saveStatus}`} role="status" aria-live="polite">
-                        {!isPreviewMode && saveStatus === "saving" && <span className="write-save-dot write-save-dot--saving" aria-hidden />}
-                        {!isPreviewMode && saveStatus === "saved" && <span className="write-save-dot write-save-dot--saved" aria-hidden />}
-                        {(isPreviewMode || saveStatus === "unsaved") && <span className="write-save-dot write-save-dot--unsaved" aria-hidden />}
-                        {isPreviewMode ? t("write_preview_not_saved") : busy ? t("write_ai_working") : saveStatus === "error" ? t("write_save_failed") : saveStatus === "saving" ? t("write_saving") : saveStatus === "saved" ? t("write_saved") : t("write_save_pending")}
-                      </span>
-                      {saveStatus === "error" && !busy && !isPreviewMode && (
-                        <button type="button" className="write-retry-save" onClick={() => {
-                          setErr(""); void flushSave().catch((error) => setErr(apiErrorMessage(error)));
-                        }}>{t("write_retry_save")}</button>
-                      )}
-                      <span className="write-meta-word-stat">{wordCountText}</span>
                     </div>
                   </div>
                   {summaryOpen && (
@@ -2026,17 +2009,36 @@ export default function NovelWrite() {
                     </div>
                   </div>
                 ) : null}
-                {focusMode ? (
-                  <div className="write-editor-footer">
-                    <button
-                      type="button"
-                      className="btn btn-ghost write-exit-focus-btn"
-                      onClick={() => setFocusMode(() => false)}
-                    >
+                <div className="write-editor-footer">
+                  <div className="write-editor-status">
+                    <span className={`write-save-status write-save-status--${isPreviewMode ? "preview" : saveStatus}`} role="status" aria-live="polite">
+                      {!isPreviewMode && saveStatus === "saving" && <span className="write-save-dot write-save-dot--saving" aria-hidden />}
+                      {!isPreviewMode && saveStatus === "saved" && <span className="write-save-dot write-save-dot--saved" aria-hidden />}
+                      {(isPreviewMode || saveStatus === "unsaved") && <span className="write-save-dot write-save-dot--unsaved" aria-hidden />}
+                      {isPreviewMode ? t("write_preview_not_saved") : busy ? t("write_ai_working") : saveStatus === "error" ? t("write_save_failed") : saveStatus === "saving" ? t("write_saving") : saveStatus === "saved" ? t("write_saved") : t("write_save_pending")}
+                    </span>
+                    {saveStatus === "error" && !busy && !isPreviewMode && (
+                      <button type="button" className="write-retry-save" onClick={() => {
+                        setErr(""); void flushSave().catch((error) => setErr(apiErrorMessage(error)));
+                      }}>{t("write_retry_save")}</button>
+                    )}
+                    <span className="write-meta-word-stat">{wordCountText}</span>
+                  </div>
+                  {focusMode ? (
+                    <button type="button" className="btn btn-ghost write-exit-focus-btn" onClick={() => setFocusMode(() => false)}>
                       {t("write_exit_focus_mode_esc")}
                     </button>
-                  </div>
-                ) : null}
+                  ) : (
+                    <button
+                      type="button"
+                      className={`write-history-btn${rightTool === "versions" ? " is-active" : ""}`}
+                      disabled={!activeId}
+                      onClick={toggleVersionsPanel}
+                    >
+                      {t("write_tool_versions")}
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <div className="write-empty-start"><h2>{t("write_empty_title")}</h2><p className="muted">{t("write_empty_desc")}</p><button className="btn btn-primary" onClick={() => void onAddChapter()}>{t("write_new_chapter")}</button></div>

@@ -112,7 +112,7 @@ export function useWritingLayout({ panelOpen, focusMode, desktop }: { panelOpen:
     style: {
       "--write-chapter-width": `${calculated.chapterWidth}px`,
       "--write-tools-width": `${calculated.toolsWidth}px`,
-      ...(desktop && frameHeight !== null ? { "--write-frame-height": `${frameHeight}px` } : {}),
+      ...(frameHeight !== null ? { "--write-frame-height": `${frameHeight}px` } : {}),
     } as CSSProperties,
   };
 }

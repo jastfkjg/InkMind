@@ -1,23 +1,79 @@
 /* Scope the adaptive pane layout to the writing page; management forms reuse other write controls. */
-.write-shell.write-layout { margin-left: 0; }
-.write-layout .write-workspace-toolbar { flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
-.write-layout .write-workspace-toolbar .write-sidenav-toggle { flex-basis: auto; align-self: center; }
-.write-layout .write-workspace-toolbar > .write-action-strip { flex: 1; min-width: 320px; }
-.write-layout .write-workspace-toolbar__actions { margin-left: auto; flex: 0 0 auto; }
-.write-layout .write-ai-quickbar { margin: 0; padding: 0; }
-.write-layout .write-ai-quickbtn { height: 32px; padding-inline: 9px; font-weight: 500; }
-.write-layout .write-ai-quickbtn:hover:not(:disabled) { transform: none; }
-.write-layout .write-editor-header { padding: 16px 24px 12px; gap: 6px; }
-.write-layout .write-body-wrapper { padding-top: 16px; }
-.write-layout .write-body-wrapper--md .write-body-field { max-width: 680px; }
-.write-layout .write-body-wrapper--lg .write-body-field { max-width: 820px; }
-.write-layout .write-editor-nav { margin-left: -6px; }
-.write-layout .editor-title--improved { font-size: 28px; }
+/* The toolbar frames the workspace; the manuscript owns the visual hierarchy. */
+.write-shell.write-layout { margin-left: 0; padding-top: 0; }
+.write-layout .write-workspace-toolbar { flex-wrap: wrap; gap: 8px 20px; min-height: 48px; margin-bottom: 12px; }
+.write-layout .write-workspace-toolbar .write-sidenav-toggle { flex-basis: auto; align-self: center; padding-right: 16px; border-right: 1px solid var(--write-hairline); border-radius: 0; }
+.write-layout .write-workspace-toolbar > .write-action-strip { flex: 1; min-width: 300px; }
+.write-layout .write-workspace-toolbar__actions { margin-left: auto; flex: 0 0 auto; gap: 4px; }
+.write-layout .write-ai-quickbar { margin: 0; padding: 3px; gap: 4px; }
+.write-layout .write-ai-quickbtn,
+.write-layout .write-workspace-toolbar__actions .btn { height: 34px; padding: 0 10px; font-size: 13px; font-weight: 500; border-color: transparent; background: transparent; color: var(--write-muted); box-shadow: none; }
+.write-layout .write-ai-quickbtn:hover:not(:disabled),
+.write-layout .write-workspace-toolbar__actions .btn:hover { transform: none; color: var(--write-ink); background: var(--write-surface); }
+.write-layout .write-ai-quickbtn:is(.is-primary, .is-active),
+.write-layout .write-workspace-toolbar__actions .btn.is-active { color: var(--write-accent-active); background: color-mix(in srgb, var(--write-accent) 10%, var(--write-canvas)); }
+.write-layout.write-theme--dark .write-ai-quickbtn:is(.is-primary, .is-active),
+.write-layout.write-theme--dark .write-workspace-toolbar__actions .btn.is-active { color: var(--accent-soft); }
+.write-layout .write-icon-hamburger { width: 17px; height: 14px; }
+.write-layout .write-icon-hamburger > span { height: 1.5px; }
+.write-layout .write-workspace-toolbar .write-icon-btn { color: var(--write-muted); }
+.write-layout .write-workspace-toolbar .write-icon-btn[aria-expanded="true"] { color: var(--write-ink); background: var(--write-surface); }
+
+/* Match title, synopsis and body to a single, user-adjustable reading measure. */
+.write-layout .write-editor-card.card { --manuscript-width: 820px; --manuscript-gutter: 48px; border: 1px solid var(--write-hairline-soft); border-radius: 12px; }
+.write-layout.write-theme--dark .write-editor-card.card { border-radius: 12px !important; box-shadow: none !important; }
+.write-layout .write-editor-card.write-manuscript--md { --manuscript-width: 660px; }
+.write-layout .write-editor-card.write-manuscript--full { --manuscript-width: 100%; }
+.write-layout .write-editor-header { width: calc(100% - var(--manuscript-gutter) * 2); max-width: var(--manuscript-width); margin: 0 auto; padding: 36px 0 20px; gap: 12px; border-bottom: 1px solid var(--write-hairline-soft); }
+.write-editor-chapter-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 28px; }
+.write-editor-chapter-label { color: var(--write-muted); font: 500 12px/1.5 var(--font-ui); letter-spacing: 0.06em; }
+.write-layout .write-editor-nav { margin: 0 -6px 0 0; }
+.write-layout .write-nav-btn { color: var(--write-muted); width: 28px; height: 28px; }
+.write-layout .editor-title--improved { font-size: 30px; line-height: 1.45; padding: 0 0 2px; }
+.write-layout .editor-title--improved::placeholder { color: var(--write-muted); opacity: 0.65; }
+.write-layout .write-summary-toggle { min-height: 28px; font-size: 12px; gap: 6px; }
+.write-layout .write-summary-toggle__label { font-weight: 400; }
+.write-layout .write-summary-textarea { border-radius: 8px !important; box-shadow: none; }
+.write-layout .write-body-wrapper { padding: 24px var(--manuscript-gutter) 16px; overflow: hidden; }
+.write-layout .write-body-wrapper .write-body-field { position: relative; max-width: var(--manuscript-width); }
+.write-layout .write-body-field .textarea.editor-body { padding: 0; border: 0; background: transparent; box-shadow: none; scrollbar-width: thin; scrollbar-color: var(--write-hairline) transparent; }
+/* A short margin mark keeps keyboard focus visible without boxing the whole page. */
+.write-layout .write-body-field .textarea.editor-body:focus-visible { outline: none; }
+.write-layout .write-body-field::before { content: ""; position: absolute; top: 4px; left: -16px; height: 24px; width: 2px; border-radius: 2px; background: var(--write-accent); opacity: 0; transition: opacity 150ms ease; }
+.write-layout .write-body-field:has(.editor-body:focus-visible)::before { opacity: 1; }
+.write-layout .editor-body::placeholder { color: var(--write-muted); opacity: 0.7; }
+.write-layout .write-editor-footer { min-height: 44px; padding: 6px 24px; gap: 12px; border-top-color: var(--write-hairline-soft); }
+.write-editor-status { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
+.write-layout .write-save-status, .write-layout .write-meta-word-stat { font-size: 12px; }
+.write-layout .write-history-btn { border-color: transparent; font-size: 12px; font-weight: 400; }
+
+/* A quiet table of contents, with enough room for real chapter titles. */
+.write-layout .write-left-head { padding: 8px 8px 12px; margin: 0; border: 0; min-height: 52px; }
+.write-chapter-heading { display: flex; align-items: center; gap: 10px; }
+.write-layout .write-left-head strong { font-size: 13px; font-weight: 600; }
+.write-chapter-count { color: var(--write-muted); font: 12px/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.write-layout .write-left-head .write-chapter-add-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; color: var(--write-muted); border-radius: 6px; }
+.write-layout .write-left-head .write-chapter-add-btn:hover { color: var(--write-ink); background: var(--write-surface); }
+.write-chapter-search-field { position: relative; margin: 0 6px 16px; flex: 0 0 auto; }
+.write-chapter-search-field > .anticon { position: absolute; z-index: 1; left: 10px; top: 50%; transform: translateY(-50%); color: var(--write-muted); font-size: 13px; pointer-events: none; }
+.write-layout .write-chapter-search { margin: 0; width: 100%; height: 34px; padding: 6px 8px 6px 30px; border-color: var(--write-hairline); border-radius: 6px; background: transparent; box-shadow: none; font-size: 12px; }
+.write-layout .write-chapter-search::placeholder { color: var(--write-muted); }
+.write-layout .chapter-list { padding: 3px 4px; gap: 4px; }
+.write-layout .chapter-row { position: relative; display: block; margin: 0; }
+.write-layout .chapter-item { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 100%; min-height: 68px; padding: 12px 38px 12px 14px; border: 0; border-radius: 8px; }
+.chapter-item__number { color: var(--write-muted); font-size: 12px; font-weight: 400; line-height: 1.4; }
+.chapter-item__title { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 400; line-height: 1.5; }
+.write-layout .chapter-item.active { background: var(--write-surface); box-shadow: none; }
+.write-layout .chapter-item.active::before { content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 2px; border-radius: 2px; background: var(--write-accent); }
+.write-layout .chapter-item.active .chapter-item__title { color: var(--write-ink); font-weight: 600; }
+.write-layout .chapter-del { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border-radius: 6px; }
+.write-layout .chapter-row:focus-within .chapter-del { opacity: 1; }
+.write-layout .write-chapter-empty-hint { padding: 12px 8px; font-size: 13px; line-height: 1.7; }
 .write-layout .write-workspace { position: relative; gap: 0; }
 .write-layout .write-chapter-pane[hidden] { display: none; }
 .write-layout .write-chapter-pane { width: var(--write-chapter-width); flex: 0 0 var(--write-chapter-width); margin-right: 12px; min-width: 0; }
 .write-layout .write-chapter-pane .write-left-sidebar { width: 100%; flex-basis: auto; height: 100%; transition: none; }
-.write-layout .write-left-inner.card { padding-right: 0 !important; }
+.write-layout .write-left-inner.card { padding: 0 6px 0 0 !important; border-radius: 0; }
 .write-layout .write-stage { position: relative; }
 .write-layout .write-pane-resize { display: none; }
 .write-layout-picker { position: relative; }
@@ -31,6 +87,7 @@
 .write-layout--resizing, .write-layout--resizing * { cursor: col-resize !important; user-select: none !important; }
 
 @media (min-width: 900px) {
+  .write-layout.write-theme--dark:not(.write-layout--sidebar-overlay) .write-left-inner.card { background: transparent !important; border-radius: 0 !important; }
   .write-layout .write-stage { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
   .write-layout .write-stage--with-panel { grid-template-columns: minmax(0, 1fr) var(--write-tools-width); }
   .write-layout .write-stage > .write-workspace { grid-column: 1; grid-row: 1; min-width: 0; }
@@ -63,11 +120,31 @@
   .write-layout .write-chapter-pane { flex-basis: 0; width: 0; margin: 0; }
   .write-layout .write-chapter-pane .write-left-sidebar { width: min(320px, calc(100vw - 24px)); height: auto; }
   .write-layout .write-workspace-toolbar > .write-action-strip { order: 3; flex-basis: 100%; min-width: 0; }
-  .write-layout .write-left-inner.card { padding: 12px !important; }
+  .write-layout .write-workspace-toolbar { gap: 6px; margin-bottom: 8px; }
+  .write-layout .write-workspace-toolbar .write-sidenav-toggle { padding-right: 0; border: 0; }
+  .write-layout .write-workspace-toolbar__actions .btn { padding-inline: 8px; }
+  .write-layout .write-editor-card.card { --manuscript-gutter: 24px; }
+  .write-layout .write-editor-header { padding-top: 24px; gap: 8px; }
+  .write-layout .editor-title--improved { font-size: 26px; }
+  .write-layout .write-editor-footer { padding-inline: 16px; }
+  .write-layout .write-left-sidebar { position: absolute; left: 0; top: 0; bottom: 0; }
+  .write-layout .write-chapter-pane .write-left-sidebar { height: 100%; }
+  .write-layout .write-left-head .write-chapter-add-btn { width: 44px; height: 44px; }
+  .write-layout .chapter-del { width: 44px; height: 44px; opacity: 1; }
+  .write-layout .chapter-item { padding-right: 52px; }
+  .write-layout .write-workspace-toolbar .write-icon-btn,
+  .write-layout .write-workspace-toolbar .write-ai-quickbtn,
+  .write-layout .write-workspace-toolbar__actions .btn { min-height: 44px; }
+  .write-layout .write-workspace-toolbar .write-icon-btn { width: 44px; }
+  .write-layout .write-nav-btn { width: 44px; height: 44px; }
+  .write-layout .write-history-btn { min-height: 44px; }
+  .write-layout .write-summary-toggle { min-height: 44px; }
+  .write-layout .write-left-inner.card { padding: 12px !important; border: 1px solid var(--write-hairline); border-radius: 12px; background: var(--write-canvas); box-shadow: var(--write-shadow); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .write-layout .write-ai-quickbtn, .write-layout .write-left-sidebar { transition: none; }
+  .write-layout .write-ai-quickbtn, .write-layout .write-left-sidebar, .write-layout .write-body-field::before { transition: none; }
+  .write-layout .write-summary-panel { animation: none; }
 }
 
 /* Review keeps one manuscript surface and a compact change index. */

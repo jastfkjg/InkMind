@@ -126,14 +126,14 @@ export default function NovelLayout() {
       className="novel-layout"
       style={{
         minHeight: "100vh",
-        background: bgColor,
-        backgroundImage: bgRadial ? `${bgRadial}, ${bgLinear}` : bgLinear,
+        backgroundColor: bgColor,
+        backgroundImage: writeTabActive ? "none" : bgRadial ? `${bgRadial}, ${bgLinear}` : bgLinear,
         transition: "background-color 0.3s ease",
       }}
     >
       <AppHeader
         showAssistant={!writeTabActive}
-        height={64}
+        height={60}
         padding="0 1.5rem"
         headerStyle={{ flexWrap: "wrap", gap: "1rem" }}
         leftContent={
@@ -158,7 +158,7 @@ export default function NovelLayout() {
               items={tabItems}
               onChange={handleTabChange}
               style={{ marginBottom: 0, marginLeft: "0.5rem" }}
-              size="large"
+              size="middle"
             />
           </div>
         }

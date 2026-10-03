@@ -1,5 +1,7 @@
 export const workspacePolishTranslations = {
   zh: {
+    write_chapter_number: "第{number}章",
+    write_untitled_chapter: "未命名章节",
     llm_compact_placeholder: "选择或输入模型 ID", llm_refresh_models: "刷新列表",
     llm_save_before_test: "请先保存模型", llm_test_cost_short: "测试消耗少量 Token",
     llm_list_count: "已获取 {count} 个模型", llm_request_ok: "请求成功",
@@ -25,6 +27,8 @@ export const workspacePolishTranslations = {
     workspace_usage_sources: "用量来源", workspace_usage_scope: "下方展示最近记录，累计用量包含全部历史记录。",
   },
   en: {
+    write_chapter_number: "Chapter {number}",
+    write_untitled_chapter: "Untitled chapter",
     llm_compact_placeholder: "Select or enter a model ID", llm_refresh_models: "Refresh list",
     llm_save_before_test: "Save the model first", llm_test_cost_short: "Testing uses a few tokens",
     llm_list_count: "Retrieved {count} models", llm_request_ok: "Request succeeded",
