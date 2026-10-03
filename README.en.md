@@ -27,7 +27,7 @@
 - **Novels and chapters**: search by title or genre, sort by recent edits, and return to where you left off.
 - **A comfortable editor**: chapter search, adjustable typography, and light and dark themes. Focus mode hides navigation and AI tools; press `Esc` to return.
 - **Autosave and version history**: track save status, recover local drafts, and review or restore earlier chapter versions. See [Saving and recovery](#saving-and-recovery).
-- **Characters and memos**: organize character profiles, worldbuilding, foreshadowing, and ideas alongside your prose.
+- **Novel settings, characters, and memos**: organize writing style, story background, characters, and ideas in compact forms, with guidance and AI naming tools available when needed.
 - **Export**: export completed chapters for backup, review, or publishing.
 
 ### AI Writing Assistance
@@ -45,7 +45,8 @@ Chat with the AI assistant about your novel using context from settings, chapter
 ### Models and Usage
 
 - Supports OpenAI, Anthropic, Qwen, DeepSeek, MiniMax, Kimi / Moonshot, and GLM.
-- Configure custom API keys, base URLs, model names, and Agent modes.
+- Choose separate connections and models for text generation and the assistant, with custom API keys, base URLs, and model IDs.
+- Manage generation previews, automatic evaluation, and language under Writing preferences; adjust Agent modes and task limits under Advanced.
 - Track calls, input/output tokens, quota usage, and model sources.
 - Run supported writing tasks in the background and monitor progress. Web deployments also provide user, quota, and usage-log administration.
 
@@ -90,6 +91,40 @@ Hide navigation and AI controls in focus mode; adjust line width for comfortable
 
 </details>
 
+### Novel references and AI settings
+
+Compact forms keep novel references easy to edit. AI settings group connections, writing preferences, and advanced options, with connection details available on demand.
+
+![AI settings with separate generation and assistant models and a compact connection list](images/readme/ai-settings.jpg)
+
+<details>
+<summary>Characters, memos, and novel settings</summary>
+
+Edit a character’s name, core profile, and additional notes together; AI inspiration and naming tools start collapsed.
+
+![Character form with name, profile, and additional notes](images/readme/character.jpg)
+
+Memos keep an optional title and a body for ideas and plot threads.
+
+![Memo form with optional title and body](images/readme/memo.jpg)
+
+Manage the title, genre, writing style, and background in one form, with save status at the bottom.
+
+![Novel settings with basic information, writing style, and story background](images/readme/novel-settings.jpg)
+
+</details>
+
+<details>
+<summary>Writing preferences in dark mode</summary>
+
+Set preview confirmation, automatic evaluation, scores, and language; click Save Settings after making changes.
+
+![Dark AI writing preferences with save status](images/readme/ai-preferences-dark.jpg)
+
+</details>
+
+Screenshots use fictional demo data; model connections are illustrative. See [capture notes and reproduction steps](images/readme/README.md).
+
 ## Quick Start
 
 ### Local macOS Desktop App
@@ -98,7 +133,7 @@ Hide navigation and AI controls in focus mode; adjust line width for comfortable
 
 The desktop app requires no registration or login. Works are stored locally and do not sync with Web deployments. The installer includes the Python backend, so no additional runtime is needed.
 
-To set up AI, add your API key and service URL under **AI Settings → Custom LLM Management**, then select a provider and model separately for the assistant and text generation. The assistant requires an Anthropic-compatible configuration. Desktop provides no built-in models and does not read model credentials from `.env`.
+Open **AI Settings → Models & connections**, click Add connection, and enter your credentials. Then choose separate models for text generation and the assistant. The assistant requires an Anthropic-compatible connection; see [in-app AI settings](#in-app-ai-settings). Desktop provides no built-in models and does not read model credentials from `.env`.
 
 Prose, settings, characters, memos, versions, and usage records stay on this Mac. When using an online model, AI requests are sent to your selected provider.
 
@@ -188,6 +223,14 @@ VITE_FRONTEND_PORT=5174 VITE_BACKEND_PORT=8001 ./start-dev.sh
 ```
 
 ## Configuration
+
+### In-app AI settings
+
+1. **Models & connections**: click Add connection, enter the provider, API protocol, key, service URL, and default model, then assign its purpose. You can refresh the model list or test a model; testing consumes a small number of tokens.
+2. **Choose models separately**: text generation and the assistant have independent selections. The assistant requires the Anthropic-compatible protocol. Provider and preset-model changes save immediately; after typing a model ID, press `Enter` or click Save beside the model field.
+3. **Writing preferences and Advanced**: after adjusting previews, automatic evaluation, language, Agent mode, or task limits, click Save Settings. Switching categories preserves edits. When leaving, you can save or discard changes; failed saves can be retried.
+
+### Web environment variables
 
 The repository includes two environment templates:
 
@@ -301,7 +344,8 @@ See [DESIGN.md](DESIGN.md) for visual guidelines and the [desktop guide](docs/DE
 
 ### Saving and recovery
 
-- Ordinary edits are saved automatically. If saving fails, stay on the page and use Retry; in-app navigation and logout are blocked until pending changes save.
+- Ordinary chapter edits are saved automatically. If saving fails, stay on the page and use Retry; in-app navigation and logout are blocked until pending prose saves.
+- Novel settings, characters, memos, and AI writing preferences use their Save buttons, with a prompt for unsaved changes when leaving. AI provider and preset-model selections save immediately.
 - Unsynced text is also kept in browser-local storage when available. Reopening offers Restore or Keep server version, rather than silently overwriting either version.
 - Local drafts and reading position belong to this browser and account. They are not cross-device sync or a backup guarantee: private browsing, cleared storage, or storage limits can prevent recovery. Export important work regularly.
 - AI streaming and unconfirmed generation previews are not treated as ordinary edits by autosave. Review and confirm or cancel the preview before continuing to edit.
@@ -315,7 +359,7 @@ The desktop app does not show a login page. If it cannot enter the novel library
 
 ### AI features say no model is configured
 
-On desktop, add a custom model in AI Settings and check the model selections for both the assistant and text generation. On Web, configure a custom model in AI Settings or check that the API key in `backend/.env` matches `DEFAULT_LLM_PROVIDER`.
+Under **AI Settings → Models & connections**, check both model selections and make sure the protocol, URL, and credentials match. Desktop requires your own connections. Web users can also check that the API key in `backend/.env` matches `DEFAULT_LLM_PROVIDER`. See [in-app AI settings](#in-app-ai-settings) for setup steps.
 
 ### CORS errors
 

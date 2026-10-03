@@ -1,8 +1,8 @@
 # README 展示图片 / Screenshot notes
 
-这些 JPEG 是当前应用的真实浏览器截图，未拼接或修改界面。截图使用中文 UI 和虚构作品《山海来信》，账户 `writer@example.invalid` 为本地演示身份；没有访问生产数据库或调用真实模型。中英文 README 共用这组图片。
+这些 JPEG 是当前应用的真实浏览器截图，未拼接或修改界面。截图使用中文 UI 和虚构作品《山海来信》，账户 `writer@example.invalid` 为本地演示身份；没有访问生产数据库或调用真实模型。模型连接使用虚构凭据和 `.invalid` 服务地址，模型名称仅作界面示例，不表示已经测试可用。中英文 README 共用这组图片。
 
-These are unedited browser captures of the application, using the Chinese UI and fictional in-memory data. Both READMEs share the same images. No production data or live model responses are shown.
+These are unedited browser captures of the application, using the Chinese UI and fictional in-memory data. Both READMEs share the same images. Model connections use fake credentials and `.invalid` endpoints; model names are illustrative, with no live compatibility test. No production data or live model responses are shown.
 
 ## 本地复现 / Reproduce locally
 
@@ -30,6 +30,15 @@ Open the URL above and sign in with the demo email and any nonempty test passwor
 | `focus-dark.jpg` | 1440 × 900 | 深色专注模式，行宽“适中” / Dark focus, medium line width |
 | `mobile-light.jpg` | 390 × 844 | 浅色写作，侧栏关闭 / Light editor, sidebar closed |
 | `mobile-dark.jpg` | 390 × 844 | 深色生成底部面板 / Dark generation bottom panel |
+| `character.jpg` | 1440 × 900 | 浅色编辑林照，AI 取名收起，已保存 / Light character form, AI naming collapsed, saved |
+| `memo.jpg` | 1440 × 900 | 浅色编辑“北门与旧邮路”，已保存 / Light memo form, saved |
+| `novel-settings.jpg` | 1440 × 900 | 浅色作品设定，已保存 / Light novel settings, saved |
+| `ai-settings.jpg` | 1440 × 1000 | 浅色模型与连接，两条演示连接，详情收起 / Light connections, two demo connections, details collapsed |
+| `ai-preferences-dark.jpg` | 1440 × 900 | 深色写作偏好，预览与审核开启，已保存 / Dark preferences, preview and audit enabled, saved |
+
+新增资料与 AI 设置截图可直接用 `--demo` 的初始数据复现：依次访问 `/novels/901/people/901/edit`、`/novels/901/memos/901/edit`、`/novels/901/settings` 和 `/settings`。AI 设置默认显示“模型与连接”；切换到“写作偏好”并开启深色主题即可复现偏好截图。拍摄连接页时不要刷新模型列表或执行模型测试，以保留演示模型名。
+
+The reference and AI settings captures use the initial `--demo` data at the routes above. AI settings open on Models & connections; switch to Writing preferences and dark mode for the preference capture. Do not refresh model lists or run model tests when capturing the connections page, so the illustrative model IDs remain intact.
 
 正文使用 17px 字号、1.85 行高。常规桌面截图使用“铺满”行宽，专注截图使用“适中”。等待字体、页面切换动画与保存状态稳定，关闭菜单和提示，再捕获视口（不是整页长截图）。不要为截图修改 DOM，也不要把测试流式输出当作真实生成效果。
 

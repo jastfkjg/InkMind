@@ -35,7 +35,7 @@ The fixture validates frontend behavior only. Real model streaming, database per
 
 ## README screenshot profile
 
-Run `node tests/ui-fixture.mjs --demo` instead of the default fixture command to load the fictional novel “山海来信” with four chapters and readable sample prose. The other two works start without chapters and support testing the empty state. All demo data is held in memory and resets when the process restarts. Default smoke-test data and failure controls are unchanged when `--demo` is omitted.
+Run `node tests/ui-fixture.mjs --demo` instead of the default fixture command to load the fictional novel “山海来信” with four chapters, readable sample prose, a character, a memo, and two illustrative model connections. Connection credentials and `.invalid` endpoints are fake; no live model is called. The other two works start without chapters and support testing the empty state. All demo data is held in memory and resets when the process restarts. Default smoke-test data and failure controls are unchanged when `--demo` is omitted. See [README capture notes](../../images/readme/README.md) for screenshot states and routes.
 
 The same Vite command and test login above apply. Use a fresh browser profile if earlier smoke tests left local drafts or editor preferences. See [capture notes](../../images/readme/README.md) for exact screenshot states. This fixture covers selected UI flows only: it is not a complete backend, offline mode, or evidence of live model behavior.
 
@@ -51,6 +51,7 @@ playwright-cli -s=inkmind-ui-work run-code --filename=frontend/tests/browser/lib
 
 - `library-checks.js` creates an isolated work and checks first-chapter creation, search/list progress, delayed and failed saves, resume, export opening and deletion cancellation.
 - `review-checks.js` requires a fresh `--demo` fixture, chapter 901 open, and the Generate panel open. It checks partial acceptance, independent title/summary choice, central comparison navigation, failed confirmation retry and cancel. Run once per fixture reset.
+- `settings-preferences-checks.js` requires AI Settings open in Chinese with the default fixture provider. It checks dirty/reverted states, audit controls, model Enter commits without saving preference drafts, cross-tab retention, failed-save retry, AI language selection and save-and-leave protection.
 - `setup-checks.js` requires the AI Settings connections section open. It creates a fake connection, checks protocol-compatible role assignment, retains choices after a failed save, and retries successfully.
 - `reading-anchor-checks.js` requires demo data and Chinese UI. It temporarily fills chapter 901 with long prose, verifies the 820px default, side-panel reading position and preview-cancel restoration, then restores the fixture content.
 - `reference-checks.js` requires demo chapter 901, light theme, and the References panel open on People. It checks search, memo draft/retry, mutually exclusive panels, docking at 1440/1280/1180px, dark theme and focus mode.

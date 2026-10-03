@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import { ConfigProvider } from "antd";
+import { App as AntApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
 import { AuthProvider } from "@/context/AuthContext";
@@ -19,9 +19,11 @@ function AppWithTheme() {
 
   return (
     <ConfigProvider theme={themeConfig} locale={isZh ? zhCN : enUS}>
+      <AntApp>
         <NavigationProvider>
           <App />
         </NavigationProvider>
+      </AntApp>
     </ConfigProvider>
   );
 }

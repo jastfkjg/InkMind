@@ -1,8 +1,8 @@
 name: Deploy
 
 on:
-  push:
-    branches: [main]
+  # Automatic production deployment is disabled. Keep manual dispatch available
+  # in the source; GitHub's workflow is also disabled until explicitly re-enabled.
   workflow_dispatch:
 
 jobs:

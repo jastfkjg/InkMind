@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { Spin } from "antd";
 
-export function ManagementPage({ title, description, count, action, children }: {
-  title: string; description?: string; count?: string; action?: ReactNode; children: ReactNode;
+export function ManagementPage({ title, description, count, action, className = "", children }: {
+  title: string; description?: string; count?: string; action?: ReactNode; className?: string; children: ReactNode;
 }) {
-  return <div className="novel-management-page">
+  return <div className={`novel-management-page ${className}`}>
     <header className="novel-page-heading">
       <div><div className="novel-page-heading__title"><h1>{title}</h1>{count && <span className="novel-page-count">{count}</span>}</div>
         {description && <p>{description}</p>}

@@ -125,3 +125,24 @@
   .novel-reference-detail__heading { padding: 20px; }
   .novel-reference-detail__content { padding: 20px; }
 }
+
+/* Editing keeps labels close to content; secondary guidance is available on demand. */
+.novel-management-page--form { max-width: 880px; }
+.novel-form-surface--compact { padding: 28px 32px 0; }
+.novel-form-surface--compact .novel-form-grid { margin-bottom: 24px; }
+.novel-form-surface--compact > .ant-form-item { margin-bottom: 24px; }
+.novel-form-surface--compact .novel-ai-tools { margin: -8px 0 24px; }
+.novel-form-surface--compact .novel-ai-tools > summary { min-height: 32px; display: list-item; align-content: center; }
+.novel-form-surface--compact .novel-form-footer { padding: 16px 0 20px; }
+@media (max-width: 760px) {
+  .novel-form-surface--compact { padding: 20px 20px 0; }
+  .novel-form-surface--compact .novel-form-grid { gap: 24px; }
+  .novel-form-surface--compact .novel-form-footer { gap: 12px; }
+  .novel-form-surface--compact .novel-form-footer__actions .ant-btn { min-height: 44px; }
+}
+@media (max-width: 480px) {
+  .novel-form-surface--compact { padding: 20px 16px 0; }
+  .novel-management-page--form .novel-page-heading h1 { font-size: 21px; }
+  .novel-management-page--form .novel-page-heading { gap: 12px; }
+  .novel-management-page--form .novel-back-link { font-size: 13px; }
+}

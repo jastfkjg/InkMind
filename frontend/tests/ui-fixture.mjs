@@ -33,15 +33,20 @@ const novels = demo ? [novel,
   { ...novel, id: 906, title: '第七次日出', genre: '科幻', background: '在没有黎明的星球上培育第一粒种子。', updated_at: '2026-09-02T09:15:00Z' },
 ] : [novel];
 const chapterStore = new Map([[901, chapters], [905, []], [906, []]]);
-const people = demo ? [{ id: 901, novel_id: 901, name: '林照', profile: '年轻的修信师，沿着失落的邮路寻找父亲。', notes: '知道银杏叶上的盐来自海。', created_at: novel.created_at, updated_at: novel.updated_at }] : [];
-const memos = demo ? [{ id: 901, novel_id: 901, title: '北门与旧邮路', body: '老人提醒林照今天别走北门。后续在第三章回收这个伏笔。', created_at: novel.created_at, updated_at: novel.updated_at }] : [];
+const people = demo ? [{ id: 901, novel_id: 901, name: '林照', profile: '身份：年轻的修信师，沿着失落的邮路寻找父亲。\n性格：安静、敏锐，对未说出口的话格外在意。\n习惯：读信前会先抚平信封的折痕。', notes: '父亲留下的地图，是她寻找旧邮路的线索。\n她知道银杏叶上的盐来自海，却还没有告诉任何人。', created_at: novel.created_at, updated_at: novel.updated_at }] : [];
+const memos = demo ? [{ id: 901, novel_id: 901, title: '北门与旧邮路', body: '老人提醒林照：“今天别走北门。”\n\n第三章让她在旧驿站发现北门的邮戳，回收这个伏笔。\n银杏叶上的盐与父亲地图里的蓝线，都指向同一条被遗忘的路。', created_at: novel.created_at, updated_at: novel.updated_at }] : [];
 const writes = [];
 const confirmations = [];
 let failSaves = false, failMemos = false, delay = 0, emptyProviders = false, failSettings = false, failProbe = false, failRetry = false;
-const customLlms = [];
+// Illustrative connections for README captures; credentials and endpoints are fake.
+const customLlms = demo ? [
+  { id: 1, provider: 'deepseek', provider_label: 'DeepSeek', protocol: 'openai', claude_auth_mode: 'auto', default_model: 'deepseek-chat', base_url: 'https://writing.example.invalid/v1', api_key: '***demo', models: ['deepseek-chat'] },
+  { id: 2, provider: 'anthropic', provider_label: 'Anthropic', protocol: 'anthropic', claude_auth_mode: 'auto', default_model: 'claude-sonnet-4-20250514', base_url: 'https://assistant.example.invalid', api_key: '***demo', models: ['claude-sonnet-4-20250514'] },
+] : [];
 const retries = [];
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 Object.assign(user, { agent_mode: 'flexible', max_llm_iterations: 10, max_tokens_per_task: 50000, enable_auto_audit: true, auto_audit_min_score: 60, ai_language: null });
+if (demo) Object.assign(user, { generation_use_custom: true, generation_custom_llm_id: 1, preferred_llm_model: null, agent_use_custom: true, agent_custom_llm_id: 2, agent_model: null });
 const tasks = demo ? ['completed', 'failed', 'running'].map((status, i) => ({ id: i + 1, user_id: 901, novel_id: 901, task_type: 'single_chapter', status, title: ['旧驿站的来客', '失落的邮袋', '听潮的人'][i], summary: '演示任务', batch_count: 1, current_index: 1, completed_count: status === 'completed' ? 1 : 0, error_message: status === 'failed' ? '演示连接中断，请重试。' : null, progress_message: null, total_tokens: 1200, created_at: novel.created_at, started_at: novel.created_at, completed_at: status === 'completed' ? novel.updated_at : null, novel_title: novel.title, retryable: status === 'failed', task_items: [{ id: i + 1, chapter_id: status === 'completed' ? 901 : null, status: status === 'completed' ? 'completed' : 'failed', sort_order: 0, generated_title: status === 'completed' ? '山城来信' : null }] })) : [];
 
 createServer(async (req, res) => {

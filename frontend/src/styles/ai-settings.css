@@ -1,0 +1,92 @@
+/* Settings use the same quiet surfaces and controls as the writing workspace. */
+.settings-page.ai-settings-page { min-height: 100dvh; background: var(--bg); color: var(--ink); }
+.ai-settings-page > main { width: 100%; margin: 0 auto; }
+.ai-settings-title { display: flex; align-items: center; gap: 12px; }
+.ai-settings-title > .anticon { color: var(--muted); }
+.ai-settings-title h3.ant-typography { margin: 0; color: var(--ink); }
+.ai-settings-page .settings-section-nav { gap: 28px; margin-bottom: 20px; }
+.ai-settings-page .settings-section-nav button { min-height: 44px; white-space: nowrap; }
+.ai-settings-surface { padding: 24px 28px 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+.ai-settings-surface > section { padding-bottom: 24px; }
+.ai-settings-surface section[hidden] { display: none; }
+.ai-settings-surface > .ant-alert { margin-bottom: 20px; }
+.ai-settings-surface h2 { margin: 0; font: 600 15px/1.6 var(--font-ui); color: var(--ink); }
+.ai-section-toolbar, .ai-model-role__heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ai-section-toolbar { margin-bottom: 20px; }
+.ai-section-toolbar p { margin: 0; color: var(--muted); font-size: 12px; }
+.ai-model-role__heading { margin-bottom: 16px; }
+.ai-feedback { font-size: 12px; color: var(--muted); }
+.ai-feedback.is-error { color: var(--error); }
+.ai-model-role + .ai-model-role, .ai-connection-library { border-top: 1px solid var(--border); padding-top: 24px; margin-top: 24px; }
+.ai-model-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.ai-model-fields > .ant-form-item { min-width: 0; margin-bottom: 0; }
+.ai-settings-surface .ant-form-item-label > label { font-size: 14px; color: var(--ink); }
+.ai-settings-surface .ant-form-item-extra { margin-top: 8px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.ai-settings-surface .ant-select, .ai-settings-surface .ant-input-number-group-wrapper, .ai-settings-surface .ant-input-number { width: 100%; }
+.ai-settings-surface .ant-btn { box-shadow: none; }
+.ai-role-empty { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ai-role-empty p, .ai-library-empty { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.ai-role-empty .ant-btn { flex-shrink: 0; }
+.ai-connection-list { list-style: none; padding: 0; margin: 0; }
+.ai-connection-list > li { padding: 16px 0; }
+.ai-connection-list > li:first-child { padding-top: 0; }
+.ai-connection-list > li:last-child { padding-bottom: 0; }
+.ai-connection-list > li + li { border-top: 1px solid var(--border-soft); }
+.ai-connection-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ai-connection-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.ai-connection-identity strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ai-protocol-label { padding: 2px 6px; background: var(--bg-hover); color: var(--muted); border-radius: 6px; font-size: 12px; }
+.ai-connection-identity .ant-tag { margin: 0; color: var(--ink-soft); background: var(--bg-hover); border: 0; font-size: 12px; }
+.ai-connection-model { flex-basis: 100%; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.ai-connection-actions { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
+.theme--dark .ai-connection-actions .ant-btn-dangerous { color: var(--error-light); }
+.ai-connection-details { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.ai-connection-details summary { cursor: pointer; width: fit-content; padding: 4px 0; }
+.ai-connection-details dl { margin: 8px 0 0; }
+.ai-connection-details dl > div { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; padding: 4px 0; }
+.ai-connection-details dd { margin: 0; overflow-wrap: anywhere; line-height: 1.7; }
+.ai-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; }
+.ai-setting-row:first-child { padding-top: 4px; }
+.ai-setting-row:last-child { padding-bottom: 4px; }
+.ai-setting-row + .ai-setting-row { border-top: 1px solid var(--border-soft); }
+.ai-setting-row label { color: var(--ink); font-size: 14px; font-weight: 500; }
+.ai-setting-row p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.ai-setting-row > .ant-switch { flex-shrink: 0; }
+.ai-setting-control.ant-form-item { flex: 0 0 260px; margin: 0; }
+.ai-setting-control .ant-form-item-explain { font-size: 12px; }
+.ai-resource-settings { border-top: 1px solid var(--border); margin-top: 24px; padding-top: 24px; }
+.ai-resource-settings h2 { margin-bottom: 16px; }
+.ai-settings-footer { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid var(--border); background: var(--card); z-index: 2; }
+.ai-settings-footer p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.6; }
+.ai-settings-footer .is-dirty { color: var(--accent-active); }
+.theme--dark .ai-settings-footer .is-dirty { color: var(--accent-soft); }
+.ai-settings-footer .ant-btn { flex-shrink: 0; }
+.ai-settings-surface :is(input, button, .ant-select) { scroll-margin-bottom: 100px; }
+.ai-settings-loading, .ai-setup-empty { padding: 32px 0; text-align: center; }
+.ai-settings-loading { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--muted); }
+.ai-setup-empty h2 { font-size: 18px; }
+.ai-setup-empty p { max-width: 430px; margin: 10px auto 20px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.ai-connection-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .settings-page.ai-settings-page > main { padding: 20px 16px !important; }
+  .ai-settings-page .settings-section-nav { gap: 20px; }
+  .ai-settings-surface { padding: 20px 20px 0; }
+  .ai-model-fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ai-setting-row { gap: 16px; }
+  .ai-setting-control.ant-form-item { flex-basis: 180px; }
+  .ai-role-empty { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .ai-connection-row { flex-wrap: wrap; gap: 8px; }
+  .ai-connection-actions { margin-left: auto; }
+  .ai-settings-surface .ant-btn { min-height: 40px; }
+}
+@media (max-width: 480px) {
+  .ai-settings-page .settings-section-nav { gap: 12px; }
+  .ai-settings-page .settings-section-nav button { flex: 1; min-width: 0; white-space: normal; text-align: left; font-size: 13px; line-height: 1.4; }
+  .ai-settings-surface { padding: 20px 16px 0; }
+  .ai-setting-row:has(.ai-setting-control) { align-items: stretch; flex-direction: column; gap: 12px; }
+  .ai-setting-control.ant-form-item { flex-basis: auto; width: 100%; }
+  .ai-section-toolbar { gap: 8px; flex-wrap: wrap; }
+  .ai-settings-footer { align-items: flex-start; }
+  .ai-settings-footer p { max-width: 180px; }
+  .ai-settings-surface .ant-btn { min-height: 44px; }
+}

@@ -4,7 +4,7 @@ import { Form, Input, Button, Alert, App as AntApp } from "antd";
 import { SaveOutlined, ArrowLeftOutlined } from "@ant-design/icons";
 import { useUnsavedForm } from "@/hooks/useUnsavedForm";
 import { useI18n } from "@/i18n";
-import { FormSection, ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
+import { ManagementLoading, ManagementPage } from "@/components/novel/ManagementLayout";
 import NovelAiNamingAskDock from "@/components/NovelAiNamingAskDock";
 import { apiErrorMessage, createCharacter, fetchCharacters, updateCharacter } from "@/api/client";
 const { TextArea } = Input;
@@ -56,34 +56,30 @@ export default function NovelPeopleForm() {
   async function onFinish() { await saveAndContinue(() => nav(returnPath)); }
   return (
     <ManagementPage title={t(isEdit ? "peopleform_edit_character" : "peopleform_new_character")}
-      description={t("management_people_hint")}
+      className="novel-management-page--form"
       action={<Link className="novel-back-link" to={returnPath}><ArrowLeftOutlined />{t("peopleform_back_to_list")}</Link>}>
       {leaveDialog}
       {notFound && <Alert type="error" showIcon title={t("peopleform_character_not_found")} />}
       {errorMsg && <Alert title={t("peopleform_save_failed")} description={errorMsg} type="error" showIcon />}
       {loading && <ManagementLoading label={t("peopleform_loading_character")} />}
       <Form hidden={loading} form={form} name="characterForm" onFinish={onFinish} onValuesChange={refreshDirty} disabled={saving || !ready} layout="vertical"
-        className="novel-form-surface" initialValues={{ name: "", profile: "", notes: "" }}>
-        <FormSection title={t("peopleform_basic_info")} description={t("management_character_name_hint")}>
-          <Form.Item name="name" label={t("peopleform_character_name")} tooltip={t("peopleform_name_tooltip")}
-            rules={[{ required: true, message: t("peopleform_name_required") }]}>
+        className="novel-form-surface novel-form-surface--compact" initialValues={{ name: "", profile: "", notes: "" }}>
+          <Form.Item name="name" label={t("peopleform_character_name")}
+            rules={[{ required: true, whitespace: true, message: t("peopleform_name_required") }]}>
             <Input placeholder={t("peopleform_name_placeholder")} />
           </Form.Item>
           <details className="novel-ai-tools">
             <summary>{t("management_ai_inspiration")}</summary>
             <NovelAiNamingAskDock novelId={id} />
           </details>
-        </FormSection>
-        <FormSection title={t("peopleform_character_profile")} description={t("management_character_profile_hint")}>
           <Form.Item name="profile" label={t("peopleform_personality")} tooltip={t("peopleform_personality_tooltip")}>
-            <TextArea rows={5} placeholder={t("peopleform_personality_placeholder")} />
+            <TextArea autoSize={{ minRows: 6, maxRows: 16 }} placeholder={t("peopleform_personality_placeholder")} />
           </Form.Item>
           <Form.Item name="notes" label={t("peopleform_other_notes")} tooltip={t("peopleform_notes_tooltip")}>
-            <TextArea rows={3} placeholder={t("management_character_notes_placeholder")} />
+            <TextArea autoSize={{ minRows: 3, maxRows: 10 }} placeholder={t("management_character_notes_placeholder")} />
           </Form.Item>
-        </FormSection>
         <footer className="novel-form-footer">
-          <p role="status" className={dirty ? "novel-form-status is-dirty" : "novel-form-status"}>{t(saving ? "form_saving" : dirty ? "form_unsaved" : isEdit ? "form_saved" : "form_new_draft")}</p>
+          <p role="status" className={dirty ? "novel-form-status is-dirty" : "novel-form-status"}>{saving || dirty || isEdit ? t(saving ? "form_saving" : dirty ? "form_unsaved" : "form_saved") : ""}</p>
           <div className="novel-form-footer__actions">
             <Button onClick={() => nav(returnPath)}>{t("peopleform_cancel")}</Button>
             <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>

@@ -6,7 +6,7 @@ import { useNavigation } from "@/context/NavigationContext";
 import { useI18n } from "@/i18n";
 
 /** A saved snapshot, rather than touched fields, determines whether a draft is dirty. */
-export function useUnsavedForm<T extends Record<string, string>>({ form, emptyValues, onSave }: {
+export function useUnsavedForm<T extends Record<string, string | number | boolean | null>>({ form, emptyValues, onSave }: {
   form: FormInstance<T>;
   emptyValues: T;
   onSave: (values: T) => Promise<void>;
@@ -26,10 +26,12 @@ export function useUnsavedForm<T extends Record<string, string>>({ form, emptyVa
 
   const refreshDirty = useCallback(() => {
     const values = form.getFieldsValue(true);
-    const next = Object.keys(baseline.current).some(key => (values[key] ?? "") !== baseline.current[key]);
+    const next = Object.keys(baseline.current).some(key =>
+      (values[key] === undefined ? emptyValues[key] : values[key]) !== baseline.current[key]
+    );
     dirtyRef.current = next;
     setDirty(next);
-  }, [form]);
+  }, [form, emptyValues]);
 
   const initialize = useCallback((values: T) => {
     baseline.current = { ...values };

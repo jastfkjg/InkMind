@@ -3,6 +3,7 @@ import { AutoComplete, Button, Space } from "antd";
 import { useI18n } from "@/i18n";
 
 type Props = {
+  inputId?: string;
   value: string;
   models: string[];
   disabled?: boolean;
@@ -11,7 +12,7 @@ type Props = {
 };
 
 /** Presets are suggestions; arbitrary model IDs are committed explicitly. */
-export default function ModelInput({ value, models, disabled, onSave, onDirtyChange }: Props) {
+export default function ModelInput({ inputId, value, models, disabled, onSave, onDirtyChange }: Props) {
   const { t } = useI18n();
   const [draft, setDraft] = useState(value);
   const [open, setOpen] = useState(false);
@@ -28,6 +29,7 @@ export default function ModelInput({ value, models, disabled, onSave, onDirtyCha
   return (
     <Space.Compact style={{ width: "100%" }}>
       <AutoComplete
+        id={inputId}
         size="large"
         style={{ flex: 1, minWidth: 0 }}
         aria-label={t("ai_settings_model")}
@@ -42,7 +44,11 @@ export default function ModelInput({ value, models, disabled, onSave, onDirtyCha
         onChange={setDraft}
         onSelect={(model) => { void save(model); }}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && (!open || !hasMatches) && !event.nativeEvent.isComposing) void save();
+          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+            // A model commit must not submit unsaved preferences in the parent form.
+            event.preventDefault();
+            if (!open || !hasMatches) void save();
+          }
         }}
       />
       {draft.trim() !== value && <Button size="large" disabled={disabled || !draft.trim() || draft.trim() === value} onClick={() => void save()}>
