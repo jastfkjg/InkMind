@@ -8,7 +8,6 @@ import {
   Empty,
   Spin,
   Alert,
-  Tag,
   Tooltip,
   message,
   Modal,
@@ -30,6 +29,8 @@ import {
   PushpinFilled,
   InboxOutlined,
   UndoOutlined,
+  SearchOutlined,
+  ArrowRightOutlined,
 } from "@ant-design/icons";
 import {
   apiErrorMessage,
@@ -163,6 +164,8 @@ export default function Dashboard() {
       {messageContextHolder}
       <AppHeader
         showAssistant
+        height={60}
+        padding="0 1.5rem"
         leftContent={<div className="library-brand"><BookOutlined /><Title level={3}>{t("app_name")}</Title></div>}
         onLogout={logout}
       />
@@ -170,31 +173,33 @@ export default function Dashboard() {
         {err && <Alert message={t("operation_failed_title")} description={err} type="error" showIcon />}
         <QuotaWarning />
         <div className="library-heading">
-          <div><Title level={4}>{t("dashboard_title")}</Title><Text type="secondary">{t("library_count").replace("{count}", String(scope === "archived" ? archivedCount : activeNovels.length))}</Text></div>
+          <div><Title level={1}>{t("dashboard_title")}</Title><Text type="secondary">{t("library_count").replace("{count}", String(scope === "archived" ? archivedCount : activeNovels.length))}</Text></div>
           <Button type="primary" icon={<PlusOutlined />} onClick={onCreate} loading={creating}>{t("dashboard_create_novel")}</Button>
         </div>
         {!loading && scope === "active" && !query.trim() && recentNovel && (
           <section className="library-recent" aria-label={t("library_recent_continue")}>
-            <div className="library-recent__label"><EditOutlined aria-hidden="true" />{t("library_recent_continue")}</div>
             <div className="library-recent__main">
-              <Link to={writingEntry(recentNovel)}>{recentNovel.title || t("dashboard_untitled")}</Link>
-              <p>{recentNovel.last_chapter_title || t("write_chapter_title_placeholder")}<span aria-hidden="true"> · </span>{relativeEditTime(recentNovel.last_edited_at || recentNovel.updated_at, language)}</p>
+              <div className="library-recent__label"><EditOutlined aria-hidden="true" />{t("library_recent_continue")}</div>
+              <Link to={writingEntry(recentNovel)} title={recentNovel.title || t("dashboard_untitled")}>{recentNovel.title || t("dashboard_untitled")}</Link>
+              <p><span>{recentNovel.last_chapter_title || t("write_untitled_chapter")}</span><span aria-hidden="true"> · </span><time dateTime={recentNovel.last_edited_at || recentNovel.updated_at}>{relativeEditTime(recentNovel.last_edited_at || recentNovel.updated_at, language)}</time></p>
             </div>
-            <Button onClick={() => nav(writingEntry(recentNovel))}>{t(recentNovel.chapter_count ? "dashboard_write" : "library_start_writing")}</Button>
+            <Button icon={<ArrowRightOutlined />} iconPlacement="end" onClick={() => nav(writingEntry(recentNovel))}>{t("dashboard_write")}</Button>
           </section>
         )}
-        <div className="library-scope-tabs" role="group" aria-label={t("library_organization")}>
-          <Button type="text" aria-pressed={scope === "active"} onClick={() => setScope("active")}>{t("library_active")}<span>{activeNovels.length}</span></Button>
-          <Button type="text" aria-pressed={scope === "archived"} onClick={() => setScope("archived")}>{t("library_archived")}<span>{archivedCount}</span></Button>
-        </div>
-        <div className="dashboard-controls">
-          <Input.Search allowClear value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("dashboard_search")} aria-label={t("dashboard_search")} />
-          <Select value={sort} onChange={setSort} aria-label={t("dashboard_sort")} options={[
-            { value: "recent", label: t("dashboard_sort_recent") }, { value: "title", label: t("dashboard_sort_title") },
-          ]} />
-          <div className="library-view-switch" role="group" aria-label={t("library_view")}>
-            <Button icon={<AppstoreOutlined />} aria-label={t("library_grid")} aria-pressed={view === "grid"} type={view === "grid" ? "primary" : "text"} onClick={() => setView("grid")} />
-            <Button icon={<UnorderedListOutlined />} aria-label={t("library_list")} aria-pressed={view === "list"} type={view === "list" ? "primary" : "text"} onClick={() => setView("list")} />
+        <div className="library-toolbar">
+          <div className="library-scope-tabs" role="group" aria-label={t("library_organization")}>
+            <Button type="text" aria-pressed={scope === "active"} onClick={() => setScope("active")}>{t("library_active")}<span>{activeNovels.length}</span></Button>
+            <Button type="text" aria-pressed={scope === "archived"} onClick={() => setScope("archived")}>{t("library_archived")}<span>{archivedCount}</span></Button>
+          </div>
+          <div className="dashboard-controls">
+            <Input type="search" prefix={<SearchOutlined aria-hidden="true" />} allowClear value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("dashboard_search")} aria-label={t("dashboard_search")} />
+            <Select value={sort} onChange={setSort} aria-label={t("dashboard_sort")} options={[
+              { value: "recent", label: t("dashboard_sort_recent") }, { value: "title", label: t("dashboard_sort_title") },
+            ]} />
+            <div className="library-view-switch" role="group" aria-label={t("library_view")}>
+              <Tooltip title={t("library_grid")}><Button icon={<AppstoreOutlined />} aria-label={t("library_grid")} aria-pressed={view === "grid"} type="text" onClick={() => setView("grid")} /></Tooltip>
+              <Tooltip title={t("library_list")}><Button icon={<UnorderedListOutlined />} aria-label={t("library_list")} aria-pressed={view === "list"} type="text" onClick={() => setView("list")} /></Tooltip>
+            </div>
           </div>
         </div>
         {scope === "archived" && <p className="library-archive-hint"><InboxOutlined aria-hidden="true" />{t("library_archive_hint")}</p>}
@@ -216,26 +221,26 @@ export default function Dashboard() {
                 const edited = novel.last_edited_at || novel.updated_at;
                 return (
                   <Card key={novel.id} className="library-item" size="small">
+                    <div className="library-item__eyebrow">
+                      <span>{novel.genre || t("library_genre_unset")}</span>
+                      {novel.is_pinned && <Tooltip title={t("library_pinned")}><PushpinFilled role="img" aria-label={t("library_pinned")} className="library-item__pin" /></Tooltip>}
+                    </div>
                     <div className="library-item__main">
                       <div className="library-item__title">
-                        <Link to={entry}>{novel.title || t("dashboard_untitled")}</Link>
-                        <span className="library-item__flags">
-                          {novel.is_pinned && <Tooltip title={t("library_pinned")}><PushpinFilled role="img" aria-label={t("library_pinned")} className="library-item__pin" /></Tooltip>}
-                          {novel.genre && <Tag title={novel.genre}>{novel.genre}</Tag>}
-                        </span>
+                        <Link to={entry} title={novel.title || t("dashboard_untitled")}>{novel.title || t("dashboard_untitled")}</Link>
                       </div>
+                      <p className="library-item__description">{novel.background?.trim() || t("library_description_empty")}</p>
                       <div className="library-item__progress">
                         <span>{t("library_words").replace("{count}", (novel.total_words ?? 0).toLocaleString(language))}</span>
                         <span>{t("library_chapters").replace("{count}", String(novel.chapter_count ?? 0))}</span>
                       </div>
                       <p className="library-item__chapter" title={novel.last_chapter_title || undefined}>
-                        {novel.last_chapter_id ? novel.last_chapter_title || t("write_chapter_title_placeholder") : t("library_ready_to_write")}
-                        <span aria-hidden="true"> · </span>
-                        <Tooltip title={new Date(edited).toLocaleString(language)}><time dateTime={edited}>{relativeEditTime(edited, language)}</time></Tooltip>
+                        {novel.last_chapter_id ? t("library_last_chapter").replace("{title}", novel.last_chapter_title || t("write_untitled_chapter")) : t("library_ready_to_write")}
                       </p>
                     </div>
                     <div className="library-item__actions">
-                      <Link to={entry} className="library-continue"><EditOutlined />{t(novel.chapter_count ? "dashboard_write" : "library_start_writing")}</Link>
+                      <Tooltip title={new Date(edited).toLocaleString(language)}><time dateTime={edited}>{relativeEditTime(edited, language)}</time></Tooltip>
+                      <Link to={entry} className="library-continue">{t(novel.chapter_count ? "dashboard_write" : "library_start_writing")}<ArrowRightOutlined aria-hidden="true" /></Link>
                       <Dropdown trigger={["click"]} menu={{ items: [
                         { key: "pin", icon: novel.is_pinned ? <PushpinFilled /> : <PushpinOutlined />, label: t(novel.is_pinned ? "library_unpin" : "library_pin"), disabled: organizing.has(novel.id), onClick: () => organize(novel, { is_pinned: !novel.is_pinned }) },
                         { key: "archive", icon: novel.is_archived ? <UndoOutlined /> : <InboxOutlined />, label: t(novel.is_archived ? "library_restore" : "library_archive"), disabled: organizing.has(novel.id), onClick: () => organize(novel, { is_archived: !novel.is_archived }) },
@@ -244,7 +249,7 @@ export default function Dashboard() {
                         { key: "export", icon: <ExportOutlined />, label: t("dashboard_export_novel"), onClick: () => setExportNovel(novel) },
                         { key: "delete", icon: <DeleteOutlined />, label: t("dashboard_delete_novel"), danger: true, onClick: () => showDeleteConfirm(novel) },
                       ] }}>
-                        <Button type="text" icon={<MoreOutlined />} loading={organizing.has(novel.id)} disabled={organizing.has(novel.id)} aria-label={`${novel.title} · ${t("dashboard_more")}`} />
+                        <Button type="text" className="library-item__more" icon={<MoreOutlined />} loading={organizing.has(novel.id)} disabled={organizing.has(novel.id)} aria-label={`${novel.title} · ${t("dashboard_more")}`} />
                       </Dropdown>
                     </div>
                   </Card>

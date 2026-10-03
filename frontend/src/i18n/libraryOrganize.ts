@@ -1,6 +1,8 @@
 export const libraryOrganizeTranslations = {
   zh: {
-    library_recent_continue: "最近继续",
+    library_recent_continue: "最近写作",
+    library_genre_unset: "未设定类型",
+    library_description_empty: "尚未填写作品背景",
     library_organization: "作品分类",
     library_active: "创作中",
     library_archived: "已归档",
@@ -19,7 +21,9 @@ export const libraryOrganizeTranslations = {
     library_organized_restored: "作品已恢复到创作中",
   },
   en: {
-    library_recent_continue: "Pick up where you left off",
+    library_recent_continue: "Recent writing",
+    library_genre_unset: "No genre yet",
+    library_description_empty: "No story background yet",
     library_organization: "Library categories",
     library_active: "In progress",
     library_archived: "Archived",
