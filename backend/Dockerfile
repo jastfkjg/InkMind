@@ -22,7 +22,7 @@ RUN groupadd -g 1000 appuser && useradd -u 1000 -g appuser -d /app -s /sbin/nolo
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt
+RUN python -m pip install --no-cache-dir --index-url https://pypi.org/simple -r requirements.txt
 
 COPY . .
 
