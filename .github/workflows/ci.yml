@@ -1,0 +1,96 @@
+name: Container CI and build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: npm ci --prefix frontend
+      - run: npm test --prefix frontend
+      - run: npm run build --prefix frontend
+      - run: pip install -r backend/requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m unittest discover -s tests -v
+        working-directory: backend
+        env:
+          DATABASE_URL: sqlite://
+      - run: for script in deploy/cloud/*.sh; do bash -n "$script"; done
+      - name: Build and smoke-test PR containers without registry credentials
+        if: github.event_name == 'pull_request'
+        run: |
+          docker build --build-arg VCS_REF="$GITHUB_SHA" -t inkmind-backend:ci backend
+          docker build --build-arg VCS_REF="$GITHUB_SHA" -t inkmind-frontend:ci frontend
+          bash deploy/cloud/smoke-test.sh inkmind-backend:ci inkmind-frontend:ci "$GITHUB_SHA"
+  build:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ACR_REGISTRY: ${{ secrets.ACR_REGISTRY || vars.ACR_REGISTRY }}
+      ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE || vars.ACR_NAMESPACE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repositories
+        id: repository
+        run: python3 deploy/cloud/image_metadata.py repository
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.repository.outputs.registry }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      - uses: docker/build-push-action@v6
+        id: backend
+        with:
+          context: backend
+          platforms: linux/amd64
+          push: true
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ steps.repository.outputs.backend }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+      - uses: docker/build-push-action@v6
+        id: frontend
+        with:
+          context: frontend
+          platforms: linux/amd64
+          push: true
+          build-args: VCS_REF=${{ github.sha }}
+          tags: ${{ steps.repository.outputs.frontend }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max
+      - name: Verify published images and store matching digests
+        env:
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+          BACKEND_REPOSITORY: ${{ steps.repository.outputs.backend }}
+          FRONTEND_REPOSITORY: ${{ steps.repository.outputs.frontend }}
+        run: |
+          bash deploy/cloud/smoke-test.sh "$BACKEND_REPOSITORY@$BACKEND_DIGEST" "$FRONTEND_REPOSITORY@$FRONTEND_DIGEST" "$GITHUB_SHA"
+          python3 deploy/cloud/image_metadata.py create image-metadata/image.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkmind-images
+          path: image-metadata/image.json
+          retention-days: 90

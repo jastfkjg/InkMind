@@ -1,125 +1,90 @@
-name: Deploy
-
+name: Deploy tested images
 on:
-  # Automatic production deployment is disabled. Keep manual dispatch available
-  # in the source; GitHub's workflow is also disabled until explicitly re-enabled.
   workflow_dispatch:
-
+    inputs:
+      target:
+        description: Deployment environment (the existing Beijing ECS)
+        required: true
+        type: choice
+        options: [aliyun-prod]
+      build_run_id:
+        description: Successful Container CI and build run ID (copy from its summary)
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
 jobs:
-  deploy:
+  resolve:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-    env:
-      DOCKER_REGISTRY: ${{ secrets.ACR_REGISTRY }}
-      DOCKER_IMAGE_PREFIX: ${{ secrets.ACR_NAMESPACE }}/inkmind
-      DOCKER_IMAGE_TAG: ${{ github.sha }}
+    outputs:
+      revision: ${{ steps.run.outputs.revision }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Aliyun ACR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v4
+      - name: Verify successful build from this repository's main branch
+        id: run
+        uses: actions/github-script@v7
+        env:
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
         with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:${{ env.DOCKER_IMAGE_TAG }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-backend:latest
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
-
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: true
-          tags: |
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:${{ env.DOCKER_IMAGE_TAG }}
-            ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_IMAGE_PREFIX }}-frontend:latest
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,scope=frontend,mode=max
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          port: "22"
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          command_timeout: 10m
           script: |
-            DEPLOY_PATH="/opt/inkmind"
-            mkdir -p $DEPLOY_PATH
-            cd $DEPLOY_PATH
+            if (!/^[1-9][0-9]*$/.test(process.env.BUILD_RUN_ID)) throw new Error('Invalid build run ID');
+            const { owner, repo } = context.repo;
+            const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: Number(process.env.BUILD_RUN_ID) });
+            const { data: workflow } = await github.rest.actions.getWorkflow({ owner, repo, workflow_id: run.workflow_id });
+            if (workflow.path !== '.github/workflows/ci.yml' || run.head_branch !== 'main' ||
+                run.head_repository?.full_name !== `${owner}/${repo}` || run.status !== 'completed' ||
+                run.conclusion !== 'success' || !['push', 'workflow_dispatch'].includes(run.event) ||
+                !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('Select a successful main-branch Container CI and build run');
+            core.setOutput('revision', run.head_sha);
 
-            echo "=== [1/5] 拉取代码 ==="
-            if [ ! -d ".git" ]; then
-              rm -rf ${DEPLOY_PATH:?}/*
-              git config --global http.postBuffer 524288000
-              git config --global http.lowSpeedLimit 1000
-              git config --global http.lowSpeedTime 60
-              git clone --depth 1 https://github.com/${{ github.repository }}.git . || { echo "ERROR: git clone failed"; exit 1; }
-            fi
-            git config --global http.postBuffer 524288000
-            git fetch --depth 1 origin main || { echo "ERROR: git fetch failed"; exit 1; }
-            git reset --hard origin/main || { echo "ERROR: git reset failed"; exit 1; }
-            echo "代码版本: $(git log --oneline -1)"
-
-            echo "=== [2/5] 写入 .env ==="
-            cp deploy/env.production.template .env || { echo "ERROR: cp env template failed"; exit 1; }
-
-            sed -i "s|^DOCKER_REGISTRY=.*|DOCKER_REGISTRY=${{ env.DOCKER_REGISTRY }}|" .env
-            sed -i "s|^DOCKER_IMAGE_PREFIX=.*|DOCKER_IMAGE_PREFIX=${{ env.DOCKER_IMAGE_PREFIX }}|" .env
-            sed -i "s|^DOCKER_IMAGE_TAG=.*|DOCKER_IMAGE_TAG=${{ env.DOCKER_IMAGE_TAG }}|" .env
-            [ -n "${{ secrets.SECRET_KEY }}" ] && sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${{ secrets.SECRET_KEY }}|" .env
-            [ -n "${{ secrets.DATABASE_URL }}" ] && sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${{ secrets.DATABASE_URL }}|" .env
-            [ -n "${{ secrets.CORS_ORIGINS }}" ] && sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}|" .env
-            [ -n "${{ secrets.DEFAULT_LLM_PROVIDER }}" ] && sed -i "s|^DEFAULT_LLM_PROVIDER=.*|DEFAULT_LLM_PROVIDER=${{ secrets.DEFAULT_LLM_PROVIDER }}|" .env
-            [ -n "${{ secrets.QWEN_API_KEY }}" ] && sed -i "s|^QWEN_API_KEY=.*|QWEN_API_KEY=${{ secrets.QWEN_API_KEY }}|" .env
-            [ -n "${{ secrets.DEEPSEEK_API_KEY }}" ] && sed -i "s|^DEEPSEEK_API_KEY=.*|DEEPSEEK_API_KEY=${{ secrets.DEEPSEEK_API_KEY }}|" .env
-            [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ] && sed -i "s|^ANTHROPIC_API_KEY=.*|ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}|" .env
-            [ -n "${{ secrets.OPENAI_API_KEY }}" ] && sed -i "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}|" .env
-            [ -n "${{ secrets.MINIMAX_API_KEY }}" ] && sed -i "s|^MINIMAX_API_KEY=.*|MINIMAX_API_KEY=${{ secrets.MINIMAX_API_KEY }}|" .env
-            [ -n "${{ secrets.MOONSHOT_API_KEY }}" ] && sed -i "s|^MOONSHOT_API_KEY=.*|MOONSHOT_API_KEY=${{ secrets.MOONSHOT_API_KEY }}|" .env
-            [ -n "${{ secrets.AGENT_PERMISSION_MODE }}" ] && sed -i "s|^AGENT_PERMISSION_MODE=.*|AGENT_PERMISSION_MODE=${{ secrets.AGENT_PERMISSION_MODE }}|" .env
-            [ -n "${{ secrets.AGENT_MAX_TURNS }}" ] && sed -i "s|^AGENT_MAX_TURNS=.*|AGENT_MAX_TURNS=${{ secrets.AGENT_MAX_TURNS }}|" .env
-            echo ".env 已写入"
-
-            echo "=== [3/5] 拉取镜像 ==="
-            printf '%s' "${{ secrets.ACR_PASSWORD }}" | docker login "${{ env.DOCKER_REGISTRY }}" -u "${{ secrets.ACR_USERNAME }}" --password-stdin || { echo "ERROR: docker login failed"; exit 1; }
-            docker compose pull || { echo "ERROR: docker compose pull failed"; exit 1; }
-
-            echo "=== [4/5] 启动服务 ==="
-            docker compose up -d --remove-orphans --no-build || {
-              echo "ERROR: docker compose up failed，查看后端日志："
-              docker compose logs backend --tail=100 2>/dev/null || true
-              exit 1
-            }
-            docker image prune -f
-
-            echo "=== [5/5] 健康检查 ==="
-            for i in $(seq 1 30); do
-              if curl -sf http://127.0.0.1/health >/dev/null 2>&1; then
-                echo "部署成功！"
-                exit 0
-              fi
-              echo -n "."
-              sleep 3
-            done
-            echo ""
-            echo "健康检查失败，查看日志："
-            docker compose logs backend --tail=100 2>/dev/null || true
-            docker compose logs frontend --tail=50 2>/dev/null || true
-            exit 1
+  deploy:
+    needs: resolve
+    environment: ${{ inputs.target }}
+    concurrency:
+      group: inkmind-deploy-${{ inputs.target }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.revision }}
+      # Keep image references within this job. GitHub may suppress job outputs
+      # containing registry/namespace values that are configured as Secrets.
+      - uses: actions/download-artifact@v4
+        with:
+          name: inkmind-images
+          path: image-metadata
+          run-id: ${{ inputs.build_run_id }}
+          github-token: ${{ github.token }}
+      - name: Resolve immutable image
+        id: metadata
+        env:
+          EXPECTED_REVISION: ${{ needs.resolve.outputs.revision }}
+          EXPECTED_RUN_ID: ${{ inputs.build_run_id }}
+          ACR_REGISTRY: ${{ secrets.ACR_REGISTRY || vars.ACR_REGISTRY }}
+          ACR_NAMESPACE: ${{ secrets.ACR_NAMESPACE || vars.ACR_NAMESPACE }}
+        run: python3 deploy/cloud/image_metadata.py resolve image-metadata/image.json
+      - name: Deploy the tested image using its matching release scripts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST || secrets.ALIYUN_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER || secrets.ALIYUN_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY || secrets.ALIYUN_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS || secrets.ALIYUN_KNOWN_HOSTS }}
+          DEPLOY_TARGET: ${{ vars.DEPLOY_TARGET || 'aliyun-prod' }}
+          TARGET_ENVIRONMENT: ${{ inputs.target }}
+          BACKEND_IMAGE: ${{ steps.metadata.outputs.backend }}
+          FRONTEND_IMAGE: ${{ steps.metadata.outputs.frontend }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
+        run: bash deploy/cloud/publish.sh
+      - name: Record deployment
+        env:
+          TARGET: ${{ inputs.target }}
+          BACKEND_IMAGE: ${{ steps.metadata.outputs.backend }}
+          FRONTEND_IMAGE: ${{ steps.metadata.outputs.frontend }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
+        run: |
+          printf 'Target: `%s`\n\nBackend: `%s`\n\nFrontend: `%s`\n\nRevision: `%s`\n' "$TARGET" "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$REVISION" >> "$GITHUB_STEP_SUMMARY"

@@ -17,7 +17,7 @@ COPY --from=cli-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=cli-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe /usr/local/bin/claude
 
-RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
+RUN groupadd -g 1000 appuser && useradd -u 1000 -g appuser -d /app -s /sbin/nologin appuser
 
 WORKDIR /app
 
@@ -30,8 +30,11 @@ RUN mkdir -p /app/data && chown -R appuser:appuser /app/data && chown -R appuser
 
 USER appuser
 
+ARG VCS_REF=development
+ENV INKMIND_REVISION=$VCS_REF HOME=/app/data/home
+RUN mkdir -p /app/data/home
 VOLUME /app/data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

@@ -262,6 +262,8 @@ Common settings:
 
 ## Docker Deployment
 
+See [cloud deployment guide](docs/DEPLOYMENT.md) for manual releases and migration. Pushing main does not deploy production.
+
 Copy the project-level configuration:
 
 ```bash

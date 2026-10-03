@@ -1,13 +1,16 @@
 from contextlib import asynccontextmanager
+import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
 from app.config import settings
 from app.database import Base, engine
+from app.deployment import MaintenanceMiddleware
 from app.observability.otel_setup import setup_otel
 from app.routers import admin, agent, auth, background_tasks, chapters, characters, custom_llms, memos, meta, novels, usage, workflow
 
@@ -113,10 +116,7 @@ def _migrate_sqlite() -> None:
             if "characters" in table_names:
                 cols = {c["name"] for c in insp.get_columns("characters")}
                 if "relationships" in cols:
-                    try:
-                        conn.execute(text("ALTER TABLE characters DROP COLUMN relationships"))
-                    except Exception:
-                        pass
+                    conn.execute(text("ALTER TABLE characters DROP COLUMN relationships"))
             if "character_relationships" in table_names:
                 conn.execute(text("DROP TABLE IF EXISTS character_relationships"))
             if "llm_usage_events" in table_names:
@@ -124,12 +124,12 @@ def _migrate_sqlite() -> None:
                 if "source" not in cols_usage:
                     conn.execute(text("ALTER TABLE llm_usage_events ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'builtin'"))
     except Exception:
-        pass
+        logging.getLogger(__name__).exception("Database migration failed")
+        raise RuntimeError("数据库迁移失败，请检查服务日志并恢复备份后重试。") from None
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    import os
     if settings.database_url.startswith("sqlite:///./"):
         db_path = settings.database_url.replace("sqlite:///", "")
         db_dir = os.path.dirname(os.path.abspath(db_path))
@@ -172,12 +172,28 @@ app.include_router(workflow.router)
 app.include_router(agent.router)
 app.include_router(custom_llms.router)
 
+maintenance = MaintenanceMiddleware(app, os.getenv("INKMIND_MAINTENANCE_FILE", ""))
+# Wrap the ASGI app without BaseHTTPMiddleware so SSE stays counted until its stream closes.
+app.add_middleware(MaintenanceMiddleware, state=maintenance)
+
 setup_otel(app)
 
 
-@app.get("/health")
-def health() -> dict:
-    return {"status": "ok", "mode": "desktop" if settings.desktop_mode else "web"}
+@app.get("/health", response_model=None)
+def health() -> dict | JSONResponse:
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unavailable", "service": "inkmind"})
+    from app.agent.task_queue import get_task_queue
+    from app.services.task_manager import task_manager
+    return {
+        "status": "ok", "service": "inkmind", "revision": os.getenv("INKMIND_REVISION", "development"),
+        "mode": "desktop" if settings.desktop_mode else "web",
+        "maintenance": maintenance.enabled(), "active_requests": maintenance.active_requests,
+        "active_tasks": get_task_queue().active_count() + task_manager.active_count(),
+    }
 
 
 if settings.desktop_mode and settings.desktop_frontend_dir:

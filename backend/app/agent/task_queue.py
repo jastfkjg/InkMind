@@ -104,6 +104,9 @@ class AgentTaskQueue:
         self._running = False
         self._lock = asyncio.Lock()
 
+    def active_count(self) -> int:
+        return sum(task.status in (AgentTaskStatus.PENDING, AgentTaskStatus.RUNNING) for task in list(self._tasks.values()))
+
     def register_handler(self, task_type: str, handler: TaskHandler) -> None:
         self._handlers[task_type] = handler
 

@@ -56,6 +56,10 @@ class TaskManager:
         self._running_tasks: dict[int, RunningTask] = {}
         self._running_lock = threading.Lock()
 
+    def active_count(self) -> int:
+        with self._running_lock:
+            return sum(not task.future.done() for task in self._running_tasks.values())
+
     def submit_task(self, task_id: int, task_func: Callable, *args, **kwargs) -> None:
         """提交任务到线程池执行"""
         with self._running_lock:

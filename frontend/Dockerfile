@@ -3,7 +3,10 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --registry=https://registry.npmmirror.com
 COPY . .
+ENV VITE_API_URL=/api
 RUN npm run build
+ARG VCS_REF=development
+RUN node -e 'require("fs").writeFileSync("dist/frontend-health.json", JSON.stringify({status:"ok",service:"inkmind-frontend",revision:process.env.VCS_REF}))'
 
 FROM nginx:alpine
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories

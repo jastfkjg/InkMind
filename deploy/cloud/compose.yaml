@@ -1,0 +1,46 @@
+name: inkmind
+services:
+  backend:
+    image: ${INKMIND_BACKEND_IMAGE:?Set tested backend digest}
+    restart: unless-stopped
+    init: true
+    env_file: ${INKMIND_ROOT:-/opt/inkmind}/app.env
+    environment:
+      DATABASE_URL: sqlite:////app/data/inkmind.db
+      INKMIND_MAINTENANCE_FILE: /app/data/.deploy-maintenance
+      HOME: /app/data/home
+      DESKTOP_MODE: 'false'
+    volumes:
+      - ${INKMIND_ROOT:-/opt/inkmind}/data:/app/data
+    networks: [internal]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:8000/health]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  frontend:
+    image: ${INKMIND_FRONTEND_IMAGE:?Set tested frontend digest}
+    restart: unless-stopped
+    depends_on:
+      backend: {condition: service_healthy}
+    networks:
+      internal: {}
+      proxy: {aliases: [inkmind-upstream]}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/frontend-health]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    logging: *logging
+networks:
+  internal: {}
+  proxy:
+    external: true
+    name: inkmind_proxy

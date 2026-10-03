@@ -3,3 +3,8 @@ dist
 .git
 .gitignore
 .env
+
+.env.*
+.venv*
+*.sqlite*
+*.db-*

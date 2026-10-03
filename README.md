@@ -262,6 +262,8 @@ VITE_FRONTEND_PORT=5174 VITE_BACKEND_PORT=8001 ./start-dev.sh
 
 ## Docker 部署
 
+云端手动发布与迁移见 [部署指南](docs/DEPLOYMENT.md)。main 推送不会自动更新生产服务。
+
 复制项目级配置：
 
 ```bash
