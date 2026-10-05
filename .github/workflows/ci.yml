@@ -64,6 +64,9 @@ jobs:
           context: backend
           platforms: linux/amd64
           push: true
+          # ACR rejects the OCI empty config used by build attestations.
+          provenance: false
+          sbom: false
           build-args: VCS_REF=${{ github.sha }}
           tags: ${{ steps.repository.outputs.backend }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
@@ -75,6 +78,9 @@ jobs:
           context: frontend
           platforms: linux/amd64
           push: true
+          # Keep the frontend export compatible with the same ACR instance.
+          provenance: false
+          sbom: false
           build-args: VCS_REF=${{ github.sha }}
           tags: ${{ steps.repository.outputs.frontend }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
