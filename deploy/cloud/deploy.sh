@@ -33,7 +33,8 @@ compose() { bash "$release/compose.sh" "$@"; }
 compose config --format json | python3 "$release/validate_config.py"
 compose pull
 docker run --rm --network none -v "$app_root/data:/app/data:ro" --entrypoint python "$backend" -c 'from pathlib import Path; import sys; sys.exit("Maintenance already enabled; inspect previous deployment" if Path("/app/data/.deploy-maintenance").exists() else "Existing database is missing; provision or migrate data first" if not Path("/app/data/inkmind.db").is_file() else 0)'
-compose run --rm --no-deps -T frontend nginx -t
+# Syntax validation must also work before the first backend container exists.
+docker run --rm --network none --add-host backend:127.0.0.1 "$frontend" nginx -t
 # Checking /health through local TLS also verifies the selected hostname and gateway routing.
 health() {
     local expected=$1 path=$2 service=$3
@@ -54,6 +55,16 @@ snapshot="$app_root/backups/$(basename "$release").sqlite"
 rollback() {
     status=$?
     trap - EXIT INT TERM
+    if [[ "$status" != 0 ]]; then
+        # Capture the candidate failure before rollback replaces its containers.
+        compose ps -a >&2 || true
+        compose logs --no-color --tail=100 >&2 || true
+        local container
+        while IFS= read -r container; do
+            [[ -n "$container" ]] || continue
+            docker inspect --format '{{.Name}} health={{json .State.Health}}' "$container" >&2 || true
+        done < <(compose ps -aq)
+    fi
     if [[ "$status" != 0 && "$marker" == true ]]; then
         if [[ "$stopped" == true ]]; then
             echo 'Deployment failed; restoring pre-migration database and previous images.' >&2
@@ -82,7 +93,8 @@ rollback() {
 import os, sys
 from pathlib import Path
 root = Path(sys.argv[1]); temp = root / '.current-rollback'
-temp.unlink(missing_ok=True); temp.symlink_to(sys.argv[2]); os.replace(temp, root / 'current')
+if os.path.lexists(temp): temp.unlink()
+temp.symlink_to(sys.argv[2]); os.replace(temp, root / 'current')
 PYTHON
             else
                 rm -f "$app_root/current"
@@ -123,7 +135,7 @@ root, release, previous = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 for name, destination in [('previous', previous), ('current', release)]:
     if destination:
         temporary = root / ('.' + name + '-next')
-        temporary.unlink(missing_ok=True)
+        if os.path.lexists(temporary): temporary.unlink()
         temporary.symlink_to(destination)
         os.replace(temporary, root / name)
 PY

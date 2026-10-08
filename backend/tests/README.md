@@ -3,12 +3,14 @@
 From `backend/`, with the backend dependencies installed:
 
 ```bash
-DATABASE_URL=sqlite:// python -m unittest discover -s tests -v
+python -m pip install -r requirements-dev.txt
+DATABASE_URL=sqlite:// python -m pytest tests -q
 ```
 
 The suite creates an isolated in-memory SQLite database for each test and uses a
 fake LLM. It does not start the application lifespan, access the writing library,
-or send requests to a model provider. No extra test framework is required.
+or send requests to a model provider. Pytest runs both the unittest classes and
+the fixture-based billing tests.
 
 Coverage includes chapter-relative context for direct generation, ReAct/Flexible
 tools and workflows; append/insertion boundaries; Chinese/English character-name

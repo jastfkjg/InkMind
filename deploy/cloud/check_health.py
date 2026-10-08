@@ -1,5 +1,4 @@
 """Check exact revisions and admission state; input contains no credentials."""
-from __future__ import annotations
 import json
 import sys
 

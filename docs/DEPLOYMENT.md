@@ -6,6 +6,7 @@
 推送 main 只测试、构建并验证镜像。正式发布只能手动选择成功 CI 的 build_run_id；
 后端与前端以同一 SHA 的固定 digest 发布，服务器不拉取 main、不覆盖 app.env。
 原 Deploy workflow 已在 GitHub 禁用；新流程合入 main、配置完成后才手动重新启用。
+启用入口为 Actions → Deploy tested images → Enable workflow；禁用状态下无法手动发布。
 macOS Release 工作流独立，不受此流程影响。
 
 ## GitHub 配置
@@ -58,7 +59,14 @@ GitHub 的 `CORS_ORIGINS` 不再自动写入服务器；app.env 中明确使用�
 Compose 将数据库固定为 `/app/data/inkmind.db`，HOME 为 `/app/data/home`。
 数据目录对部署账号不可写也正常；发布使用 UID1000 容器备份、恢复和控制维护标记。
 新安装可由 UID1000 使用 `sqlite3.connect` 创建空数据库文件；现有部署必须迁移真实库，
-绝不可通过创建空文件掩盖缺失数据。Docker Compose 需要 2.24+，主机 Python 需要3.8+；完整依赖见 preflight.sh。
+绝不可通过创建空文件掩盖缺失数据。Docker Compose 需要 2.24+，主机 Python 需要3.6+；完整依赖见 preflight.sh。
+
+Alibaba Cloud Linux 3.2104 的系统 Python 3.6 可直接运行主机发布脚本，无需替换系统 Python；
+应用在容器内使用 Python 3.12。主机必须是 x86_64/amd64，使用 Docker Engine 与 Compose V2
+插件（`docker compose`，不是旧版 `docker-compose`）。已有主机不要执行旧的
+`deploy/setup-server.sh`：它针对旧的独立部署，会覆盖 Docker daemon 配置并重启 Docker，
+也不会准备本流程需要的共享网关、目标标记和数据目录。Docker 安装方式参考
+[阿里云官方文档](https://help.aliyun.com/zh/ecs/user-guide/install-and-use-docker)。
 
 ## 首次迁移旧 Docker 部署
 
@@ -125,7 +133,8 @@ sudo systemctl enable --now jastcraft-backup@inkmind.timer
 
 ```bash
 python3 -m unittest discover -s tests -v
-(cd backend && DATABASE_URL=sqlite:// .venv-desktop/bin/python -m unittest discover -s tests -v)
+(cd backend && .venv-desktop/bin/python -m pip install -r requirements-dev.txt)
+(cd backend && DATABASE_URL=sqlite:// .venv-desktop/bin/python -m pytest tests -q)
 npm --prefix frontend test
 npm --prefix frontend run build
 for script in deploy/cloud/*.sh; do bash -n "$script"; done
@@ -133,5 +142,10 @@ for script in deploy/cloud/*.sh; do bash -n "$script"; done
 
 CI 在独立临时 Compose project 中对真实镜像检查数据库启动、前后端版本、API 和 SPA
 路由；使用临时卷，清理时不触碰生产数据。Docker 构建明确设置 VITE_API_URL=/api，浏览器通过同源 HTTPS 访问 API。
+容器健康探针使用 `127.0.0.1`，避免 Alpine 的 `wget` 将 localhost 解析到 Nginx 未监听的 IPv6。
+首次发布的 Nginx 配置检查在隔离容器中用临时 hosts 映射完成，不依赖已有 backend 容器。
+冒烟测试及部署失败时，在清理或回滚前输出容器日志和健康探针结果；不输出容器环境变量。
+CI 另用 Python 3.6 检查主机脚本兼容性，后端使用 pytest 同时执行 unittest 与计费测试。
+同一 CI run 重跑会覆盖其镜像元数据 artifact，避免同名上传冲突；部署仍须选择最终成功的 run。
 北京目标只构建 linux/amd64，新增架构须扩展
 CI 并对每个发布架构执行相同检查。根目录 docker-compose.yml 继续用于本地独立运行。

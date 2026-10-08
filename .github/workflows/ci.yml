@@ -22,17 +22,21 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - run: npm ci --prefix frontend
       - run: npm test --prefix frontend
       - run: npm run build --prefix frontend
-      - run: pip install -r backend/requirements.txt
+      - run: python -m pip install -r backend/requirements-dev.txt
       - run: python -m unittest discover -s tests -v
-      - run: python -m unittest discover -s tests -v
+      - run: python -m pytest tests -q
         working-directory: backend
         env:
           DATABASE_URL: sqlite://
       - run: for script in deploy/cloud/*.sh; do bash -n "$script"; done
+      - name: Check deployment scripts on Alibaba Cloud Linux 3 host Python
+        run: docker run --rm --network none -v "$PWD:/workspace:ro" -w /workspace python:3.6-slim python -B -m unittest discover -s tests -p test_host_runtime.py -v
       - name: Build and smoke-test PR containers without registry credentials
         if: github.event_name == 'pull_request'
         run: |
@@ -99,4 +103,6 @@ jobs:
         with:
           name: inkmind-images
           path: image-metadata/image.json
+          if-no-files-found: error
+          overwrite: true
           retention-days: 90

@@ -41,8 +41,13 @@ state=base/'state';marker=root/'data/.deploy-maintenance'
 def health():
     return dict(status='ok',service='inkmind',revision=state.read_text(),mode='web',maintenance=marker.exists(),active_requests=0,active_tasks=1 if mode=='busy' else 0)
 if args[:2]==['compose','version']: print('2.25.0');sys.exit(0)
+if args[:2]==['info','--format']: print('aarch64' if mode=='architecture' else 'x86_64');sys.exit(0)
 if args[:2]==['ps','-aq']:
     if mode=='legacy': print('untracked')
+    sys.exit(0)
+if 'nginx' in args:
+    if mode=='nginx' or (not (root/'current').exists() and 'backend:127.0.0.1' not in args):
+        print('host not found in upstream backend', file=sys.stderr); sys.exit(1)
     sys.exit(0)
 if args and args[0]=='run':
     if '-c' in args:
@@ -59,7 +64,6 @@ if 'config' in args:
     frontend=dict(image=env['INKMIND_FRONTEND_IMAGE'],networks={'internal':{},'proxy':{}})
     print(json.dumps(dict(services=dict(backend=backend,frontend=frontend),networks=dict(proxy=dict(name='inkmind_proxy')))));sys.exit(0)
 if 'pull' in args and mode=='pull': sys.exit(1)
-if 'nginx' in args and mode=='nginx': sys.exit(1)
 if 'exec' in args:
     if 'curl' in args: print(json.dumps(health()));sys.exit(0)
     if '-c' in args:
@@ -132,6 +136,25 @@ print(json.dumps(dict(status='ok',service=service,revision=revision if mode!='re
         result=self.deploy('startup');self.assertNotEqual(result.returncode,0)
         self.assertEqual(self.content(),'原稿');self.assertFalse((self.root/'current').exists())
         self.assertFalse((self.root/'data/.deploy-maintenance').exists())
+
+    def test_first_release_checks_nginx_without_an_existing_backend(self):
+        (self.root/'current').unlink()
+        result=self.deploy(); self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual((self.root/'current').resolve(),self.release)
+        self.assertFalse((self.root/'data/.deploy-maintenance').exists())
+
+    def test_wrong_host_architecture_aborts_before_pulling_or_maintenance(self):
+        result=self.deploy('architecture'); self.assertNotEqual(result.returncode,0)
+        self.assertIn('amd64/x86_64',result.stderr)
+        self.assertFalse((self.release/'image.env').exists())
+        self.assertFalse((self.root/'data/.deploy-maintenance').exists())
+
+    def test_empty_app_environment_aborts_before_touching_docker(self):
+        (self.root/'app.env').write_text('')
+        result=self.deploy(); self.assertNotEqual(result.returncode,0)
+        self.assertIn('app.env is missing or empty',result.stderr)
+        self.assertFalse((self.base/'calls').exists())
+        self.assertEqual(self.content(),'原稿')
 
     def test_untracked_legacy_project_is_not_replaced(self):
         (self.root/'current').unlink()

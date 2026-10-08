@@ -15,7 +15,8 @@ done
 [[ -d "$app_root/releases" ]] || fail "Release directory is missing: $app_root/releases. Create it with the deployment user as owner."
 [[ -w "$app_root" ]] || fail "The SSH deployment user cannot write to $app_root. Check its owner and permissions."
 [[ -w "$app_root/releases" ]] || fail "The SSH deployment user cannot write to $app_root/releases. Check its owner and permissions."
-python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else "Host Python 3.8+ required")'
+python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 6) else "Host Python 3.6+ required")'
+[[ -s "$app_root/app.env" ]] || fail 'app.env is missing or empty; restore the existing application configuration before deployment.'
 python3 - "$app_root/app.env" <<'PY'
 import os, stat, sys
 info = os.stat(sys.argv[1])
@@ -23,6 +24,8 @@ if stat.S_IMODE(info.st_mode) & 0o077 or info.st_uid != os.getuid():
     sys.exit('app.env must be owned by the deployment user, mode 600')
 PY
 docker info >/dev/null || fail 'The SSH deployment user cannot access Docker. Check Docker Engine and account permissions.'
+architecture=$(docker info --format '{{.Architecture}}')
+[[ "$architecture" == x86_64 || "$architecture" == amd64 ]] || fail 'Published images require an amd64/x86_64 Docker host.'
 version=$(docker compose version --short)
 python3 - "$version" <<'PY'
 import re, sys
