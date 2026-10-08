@@ -33,7 +33,7 @@ def get_effective_token_quota_used(db: Session, user: User) -> int:
     event total as the source of truth unless the stored counter is higher.
     After an admin reset, only usage events after the reset point count.
     """
-    usage_query = db.query(func.coalesce(func.sum(LLMUsageEvent.total_tokens), 0)).filter(
+    usage_query = db.query(func.coalesce(func.sum(func.coalesce(LLMUsageEvent.billing_credits, LLMUsageEvent.total_tokens)), 0)).filter(
         LLMUsageEvent.user_id == user.id,
         LLMUsageEvent.source == "builtin",
     )
@@ -85,7 +85,7 @@ def get_user_quota_status(db: Session, user_id: int) -> dict:
     used = get_effective_token_quota_used(db, user)
     remaining = None
     if user.token_quota is not None:
-        remaining = max(0, user.token_quota - used)
+        remaining = max(0, user.token_quota - used - (user.token_quota_reserved or 0))
     
     return {
         "is_unlimited": user.token_quota is None,
@@ -93,6 +93,7 @@ def get_user_quota_status(db: Session, user_id: int) -> dict:
         "used": used,
         "remaining": remaining,
         "reset_at": user.token_quota_reset_at,
+        "reserved": user.token_quota_reserved or 0,
     }
 
 
@@ -154,6 +155,8 @@ def consume_token_quota(
     if user.token_quota is None:
         return
     
+    from app.services.billing import consume_paid_credits
+    consume_paid_credits(db, user, tokens)
     user.token_quota_used = get_effective_token_quota_used(db, user) + tokens
 
 
@@ -209,6 +212,8 @@ class LLMUsageAccumulator:
 
         total = self._input_tokens + self._output_tokens
         if self._source == "builtin" and u.token_quota is not None:
+            from app.services.billing import consume_paid_credits
+            consume_paid_credits(self._db, u, total)
             u.token_quota_used = get_effective_token_quota_used(self._db, u) + total
         
         evt = LLMUsageEvent(
@@ -263,6 +268,8 @@ def _record_usage(
 
     total = in_tokens + out_tokens
     if source == "builtin" and u.token_quota is not None:
+        from app.services.billing import consume_paid_credits
+        consume_paid_credits(db, u, total)
         u.token_quota_used = get_effective_token_quota_used(db, u) + total
     
     evt = LLMUsageEvent(
@@ -332,6 +339,20 @@ class MeteredLLM(LLMProvider):
         return self._inner.list_models()
 
     def test_model(self) -> tuple[int, int]:
+        if self._paid():
+            from app.services import billing
+            reservation = self._reserve("Reply OK.", "", 32)
+            try:
+                self._inner.last_usage = None
+                usage = self._inner.test_model()
+                trustworthy = getattr(self._inner, "last_usage", None)
+                if trustworthy is None:
+                    raise ValueError("供应商未返回可信用量，额度暂已预占，请联系管理员核对。")
+                billing.settle(self._db, reservation.id, *trustworthy)
+                return usage
+            except BaseException:
+                billing.interrupt_reservation(self._db, reservation.id)
+                raise
         if self._source == "builtin":
             check_token_quota(self._db, self._user_id, estimated_tokens=36)
         usage = self._inner.test_model()
@@ -344,6 +365,8 @@ class MeteredLLM(LLMProvider):
         self._inner.check_connection()
 
     def complete(self, system: str, user: str, *, max_tokens: int | None = None) -> str:
+        if self._paid():
+            return "".join(self._billed_stream(system, user, max_tokens=max_tokens)).strip()
         output_text = "".join(self._inner.stream_complete(system, user, max_tokens=max_tokens)).strip()
         try:
             _record_usage(
@@ -354,7 +377,7 @@ class MeteredLLM(LLMProvider):
                 input_text=f"{system}\n{user}",
                 output_text=output_text,
                 source=self._source,
-                accumulator=self._accumulator,
+                accumulator=self._accumulator if self._accumulator is None or self._accumulator._source == self._source else None,
             )
         except Exception:
             self._db.rollback()
@@ -362,6 +385,8 @@ class MeteredLLM(LLMProvider):
         return output_text
 
     def stream_complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+        if self._paid():
+            return self._billed_stream(system, user, max_tokens=max_tokens)
         def gen() -> Iterator[str]:
             out_parts: list[str] = []
             for chunk in self._inner.stream_complete(system, user, max_tokens=max_tokens):
@@ -376,10 +401,47 @@ class MeteredLLM(LLMProvider):
                     input_text=f"{system}\n{user}",
                     output_text="".join(out_parts),
                     source=self._source,
-                    accumulator=self._accumulator,
+                    accumulator=self._accumulator if self._accumulator is None or self._accumulator._source == self._source else None,
                 )
             except Exception:
                 self._db.rollback()
                 log.exception("record llm usage failed user_id=%s action=%s", self._user_id, self._action)
 
         return gen()
+
+    def _paid(self) -> bool:
+        from app.services.billing import enabled
+        return self._source == "builtin" and enabled()
+
+    def _reserve(self, system: str, user: str, output_limit: int):
+        from app.services import billing
+        if not getattr(self._inner, "supports_authoritative_usage", False):
+            raise ValueError("该模型无法提供可信用量，请使用已支持的平台模型或自带 API Key。")
+        model = getattr(self._inner, "_model", "")
+        rate = billing.model_rate(self._provider, model)
+        # UTF-8 byte count conservatively bounds ordinary text-token inputs.
+        upper_input = len(system.encode()) + len(user.encode()) + 1024
+        amount = billing.cost(upper_input, output_limit, rate.input_rate, rate.output_rate)
+        reservation = billing.reserve(self._db, self._user_id, self._provider, model, self._action, amount)
+        return reservation
+
+    def _billed_stream(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+        from app.services import billing
+        output_limit = max_tokens or 8192
+        if output_limit <= 0 or output_limit > 32768:
+            raise ValueError("单次生成 Token 上限须在 1–32768 之间。")
+        reservation = self._reserve(system, user, output_limit)
+        self._inner._billing_require_usage = True
+        self._inner.last_usage = None
+        try:
+            yield from self._inner.stream_complete(system, user, max_tokens=output_limit)
+            usage = self._inner.last_usage
+            if usage is None:
+                raise ValueError("供应商未返回可信用量，额度暂已预占，请联系管理员核对。")
+            billing.settle(self._db, reservation.id, *usage)
+        except BaseException:
+            self._db.rollback()
+            billing.interrupt_reservation(self._db, reservation.id)
+            raise
+        finally:
+            self._inner._billing_require_usage = False

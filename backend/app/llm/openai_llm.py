@@ -9,6 +9,7 @@ from app.llm.llm_errors import LLMRequestError, wrap_openai_error
 
 class OpenAICompatibleLLM(LLMProvider):
     """任意 OpenAI 兼容 Chat Completions API（官方 OpenAI、Azure、DeepSeek、DashScope 等）。"""
+    supports_authoritative_usage = True
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class OpenAICompatibleLLM(LLMProvider):
             model=self._model, messages=[{"role": "user", "content": "Reply OK."}], **{limit: 32},
         )
         usage = response.usage
+        self.last_usage = (usage.prompt_tokens, usage.completion_tokens) if usage else None
         if usage:
             return usage.prompt_tokens, usage.completion_tokens
         from app.llm.token_counter import count_tokens
@@ -51,6 +53,7 @@ class OpenAICompatibleLLM(LLMProvider):
         return 0.85
 
     def stream_complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+        self.last_usage = None
         payload: dict = {
             "model": self._model,
             "messages": [
@@ -62,8 +65,10 @@ class OpenAICompatibleLLM(LLMProvider):
         t = self._chat_temperature()
         if t is not None:
             payload["temperature"] = t
+        if getattr(self, "_billing_require_usage", False):
+            payload["stream_options"] = {"include_usage": True}
         if max_tokens is not None:
-            if self._model.lower().startswith(("o1", "o3", "o4")):
+            if self._model.lower().startswith(("o1", "o3", "o4", "gpt-5")):
                 payload["max_completion_tokens"] = max_tokens
             else:
                 payload["max_tokens"] = max_tokens
@@ -74,13 +79,15 @@ class OpenAICompatibleLLM(LLMProvider):
         except Exception as e:
             raise LLMRequestError(str(e) or "OpenAI 兼容接口请求失败") from e
 
-        for chunk in stream:
-            choice = chunk.choices[0] if chunk.choices else None
-            if not choice:
-                continue
-            delta = choice.delta.content
-            if delta:
-                yield delta
+        try:
+            for chunk in stream:
+                if chunk.usage:
+                    self.last_usage = (chunk.usage.prompt_tokens, chunk.usage.completion_tokens)
+                choice = chunk.choices[0] if chunk.choices else None
+                if choice and choice.delta.content:
+                    yield choice.delta.content
+        finally:
+            stream.close()
 
 
 class OpenAILLM(OpenAICompatibleLLM):

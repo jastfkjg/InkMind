@@ -212,6 +212,9 @@ def resolve_llm_for_user(
     action: str = "LLM调用",
     accumulator: LLMUsageAccumulator | None = None,
 ) -> LLMProvider:
+    from app.services import billing
+    if billing.enabled() and (user is None or db is None or getattr(user, "id", None) is None):
+        raise ValueError("收费模式的模型调用必须关联有效用户和额度事务。")
     provider_name = _normalize_provider_name(explicit_provider, user)
 
     if user is not None and db is not None:
@@ -239,6 +242,8 @@ def resolve_llm_for_user(
                         accumulator=accumulator,
                     )
                 return llm
+        if billing.enabled() and use_custom:
+            raise ValueError("自带 API Key 配置不可用，请重新选择模型连接。")
 
     user_model = None
     if user is not None:

@@ -243,6 +243,7 @@ export type TokenQuotaStatus = {
   token_quota_remaining: number | null;
   token_quota_reset_at: string | null;
   is_unlimited: boolean;
+  token_quota_reserved?: number;
 };
 
 export type AdminUser = {

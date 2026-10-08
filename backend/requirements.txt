@@ -24,3 +24,4 @@ opentelemetry-instrumentation-sqlalchemy==0.49b2
 opentelemetry-exporter-otlp-proto-http==1.28.2
 prometheus-client==0.20.0
 claude-agent-sdk>=0.1.76
+alipay-sdk-python==3.7.1160

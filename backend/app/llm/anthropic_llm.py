@@ -8,6 +8,7 @@ from app.llm.llm_errors import LLMRequestError, wrap_anthropic_error
 
 
 class AnthropicLLM(LLMProvider):
+    supports_authoritative_usage = True
     def __init__(
         self,
         *,
@@ -36,12 +37,16 @@ class AnthropicLLM(LLMProvider):
         response = self._client.with_options(timeout=30.0, max_retries=0).messages.create(
             model=self._model, max_tokens=32, messages=[{"role": "user", "content": "Reply OK."}],
         )
+        usage = response.usage
+        self.last_usage = (usage.input_tokens + (getattr(usage, "cache_read_input_tokens", 0) or 0)
+                           + (getattr(usage, "cache_creation_input_tokens", 0) or 0), usage.output_tokens)
         return response.usage.input_tokens, response.usage.output_tokens
 
     def check_connection(self) -> None:
         self._client.with_options(timeout=15.0, max_retries=0).models.list()
 
     def stream_complete(self, system: str, user: str, *, max_tokens: int | None = None) -> Iterator[str]:
+        self.last_usage = None
         effective_max = max_tokens or 8192
         try:
             with self._client.messages.stream(
@@ -53,6 +58,9 @@ class AnthropicLLM(LLMProvider):
                 for text in stream.text_stream:
                     if text:
                         yield text
+                usage = stream.get_final_message().usage
+                self.last_usage = (usage.input_tokens + (getattr(usage, "cache_read_input_tokens", 0) or 0)
+                                   + (getattr(usage, "cache_creation_input_tokens", 0) or 0), usage.output_tokens)
         except anthropic.APIError as e:
             raise wrap_anthropic_error(e) from e
         except Exception as e:

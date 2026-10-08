@@ -21,6 +21,7 @@ import {
 } from "@ant-design/icons";
 
 import AppHeader, { useHeaderTheme } from "@/components/AppHeader";
+import BillingPanel from "@/components/BillingPanel";
 import { useNavigation } from "@/context/NavigationContext";
 import { backDestinationKey } from "@/utils/backDestination";
 import "@/styles/workspace-polish.css";
@@ -329,9 +330,11 @@ export default function UsageDashboard() {
           {hasQuota && <div className="usage-quota">
             <div className="usage-quota__label"><span>{t("quota_remaining")} <strong>{fmtK(quotaRemaining)} / {fmtK(quota!.token_quota!)}</strong></span><span>{t("quota_used")}: {fmtK(quotaUsed)} · {Math.min(quotaPercent, 100).toFixed(1)}%</span></div>
             <Progress percent={Math.min(quotaPercent, 100)} size="small" showInfo={false} status={quotaIsExceeded ? "exception" : "normal"} strokeColor={quotaStatusColor} />
+            {!!quota?.token_quota_reserved && <p className="workspace-hint">{t("billing_reserved").replace("{count}", fmtNum(quota.token_quota_reserved))}</p>}
           </div>}
         </>}
         <p className="workspace-hint">{t("workspace_usage_scope")}</p>
+        <BillingPanel onPaymentChange={() => void load()} />
 
         <Card
           className="ops-panel"

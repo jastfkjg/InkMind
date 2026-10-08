@@ -91,6 +91,7 @@ class User(Base):
     token_quota: Mapped[int | None] = mapped_column(Integer, nullable=True, default=1000000)
     token_quota_used: Mapped[int] = mapped_column(Integer, default=0)
     token_quota_reset_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    token_quota_reserved: Mapped[int] = mapped_column(Integer, default=0)
 
     novels: Mapped[list["Novel"]] = relationship("Novel", back_populates="owner", cascade="all, delete-orphan")
     custom_llms: Mapped[list["UserCustomLLM"]] = relationship("UserCustomLLM", back_populates="owner", cascade="all, delete-orphan", foreign_keys="[UserCustomLLM.user_id]")
@@ -207,6 +208,8 @@ class LLMUsageEvent(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    billing_credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     user: Mapped["User"] = relationship("User", back_populates="llm_usage_events")
@@ -313,3 +316,63 @@ class AdminLog(Base):
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    out_trade_no: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    request_key: Mapped[str] = mapped_column(String(100), unique=True)
+    package_id: Mapped[str] = mapped_column(String(64))
+    subject: Mapped[str] = mapped_column(String(128))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    credits: Mapped[int] = mapped_column(Integer)
+    remaining_credits: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    trade_no: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    refund_no: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    refund_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    app_id: Mapped[str] = mapped_column(String(64))
+    seller_id: Mapped[str] = mapped_column(String(64))
+    sandbox: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class CreditLedger(Base):
+    __tablename__ = "credit_ledger"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_key: Mapped[str] = mapped_column(String(100), unique=True)
+    kind: Mapped[str] = mapped_column(String(32))
+    amount: Mapped[int] = mapped_column(Integer)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("payment_orders.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class PaymentNotification(Base):
+    __tablename__ = "payment_notifications"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("payment_orders.id"), index=True)
+    notify_id: Mapped[str] = mapped_column(String(128))
+    trade_no: Mapped[str] = mapped_column(String(64))
+    trade_status: Mapped[str] = mapped_column(String(32))
+    event_type: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class TokenReservation(Base):
+    __tablename__ = "token_reservations"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    provider: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(256))
+    action: Mapped[str] = mapped_column(String(128))
+    input_rate: Mapped[str] = mapped_column(String(32))
+    output_rate: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

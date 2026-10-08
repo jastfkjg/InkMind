@@ -339,12 +339,13 @@ def get_my_quota(user: CurrentUser, db: Annotated[Session, Depends(get_db)]):
     used = get_effective_token_quota_used(db, user)
     remaining = None
     if user.token_quota is not None:
-        remaining = max(0, user.token_quota - used)
+        remaining = max(0, user.token_quota - used - (user.token_quota_reserved or 0))
     
     return {
         "token_quota": user.token_quota,
         "token_quota_used": used,
         "token_quota_remaining": remaining,
         "token_quota_reset_at": user.token_quota_reset_at,
+        "token_quota_reserved": user.token_quota_reserved or 0,
         "is_unlimited": user.token_quota is None,
     }

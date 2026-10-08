@@ -89,6 +89,24 @@ class Settings(BaseSettings):
     desktop_session_token: str | None = None
     desktop_frontend_dir: str | None = None
 
+    # Opt-in web billing. Empty catalog never exposes a purchase entry.
+    billing_enabled: bool = False
+    billing_packages: list[dict] = Field(default_factory=list)
+    billing_models: list[dict] = Field(default_factory=list)
+    billing_terms_url: str = ""
+    billing_support_email: str = ""
+    alipay_app_id: str = ""
+    alipay_seller_id: str = ""
+    alipay_private_key_path: str = ""
+    alipay_public_key_path: str = ""
+    alipay_sandbox: bool = True
+    alipay_notify_url: str = ""
+    alipay_return_url: str = ""
+    # Actual public backend base URL (local development follows INSTALL.md).
+    alipay_api_base_url: str = "http://127.0.0.1:8000"
+    billing_frontend_url: str = "http://localhost:5173/usage"
+    billing_agent_proxy_base_url: str = "http://127.0.0.1:8000/billing/agent-proxy"
+
     # OpenTelemetry：AI 相关 Span + FastAPI/HTTPX 自动插桩（见 app.observability.otel_setup）
     otel_enabled: bool = Field(default=False, validation_alias="OTEL_ENABLED")
     otel_service_name: str = Field(default="inkmind-api", validation_alias="OTEL_SERVICE_NAME")
@@ -116,6 +134,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _moonshot_key_from_kimi_env(self) -> Self:
         if self.desktop_mode:
+            object.__setattr__(self, "billing_enabled", False)
             # Desktop has no server-provided credentials, including those loaded
             # from a developer's .env or inherited shell environment.
             for name, field in type(self).model_fields.items():

@@ -185,6 +185,8 @@ _cleanup_task: asyncio.Task | None = None
 
 
 async def _disconnect_session_client(session: OrchestratorSession) -> None:
+    from app.llm.agent_billing_proxy import unregister
+    unregister(session.session_id)
     if session.sdk_client is not None:
         try:
             await session.sdk_client.disconnect()
@@ -220,6 +222,8 @@ async def _cleanup_loop() -> None:
                 if s.is_expired() and s.pending_question is None
             ]
             for sid in expired:
+                from app.llm.agent_billing_proxy import unregister
+                unregister(sid)
                 session = _active_sessions.pop(sid, None)
                 if session and session.sdk_client is not None:
                     try:
@@ -558,6 +562,12 @@ def _build_agent_options(novel_id: int, session_id: str = "", user: User | None 
     finally:
         db.close()
 
+    from app.services.billing import enabled as billing_enabled
+    if billing_enabled() and agent_config.get("source") == "builtin":
+        from app.llm.agent_billing_proxy import register
+        if user is None:
+            raise ValueError("计费助手需要已登录用户。")
+        agent_config = register(session_id, user.id, agent_config)
     env_overrides = _build_claude_cli_env(agent_config)
 
     options_kwargs: dict[str, Any] = {
@@ -677,7 +687,12 @@ class ClaudeOrchestrator:
         provider = _orchestrator_usage_provider()
         db = self._db_session_factory()
         try:
-            accumulator = LLMUsageAccumulator(db, session.user_id, provider, "AI助手")
+            from app.llm.providers import resolve_agent_llm_for_user
+            from app.services.billing import enabled as billing_enabled
+            config = resolve_agent_llm_for_user(self._user, db)
+            if billing_enabled() and config.get("source") == "builtin":
+                return  # Every upstream SDK request is accounted by the guarded proxy.
+            accumulator = LLMUsageAccumulator(db, session.user_id, provider, "AI助手", source=config.get("source", "builtin"))
             accumulator.accumulate(
                 count_tokens(f"{_ORCHESTRATOR_SYSTEM_PROMPT}\n{user_message}", provider),
                 count_tokens(assistant_text, provider),
@@ -1056,6 +1071,8 @@ class ClaudeOrchestrator:
         except Exception as e:
             log.exception("ClaudeOrchestrator chat error")
             if isinstance(e, asyncio.TimeoutError):
+                from app.llm.agent_billing_proxy import unregister
+                unregister(session.session_id)
                 failed_client = session.sdk_client
                 session.sdk_client = None
                 yield builder.build_error("AI 助手等待响应超时，请检查助手模型连接后重试。")
@@ -1129,4 +1146,6 @@ def _evict_if_needed() -> None:
                 except Exception:
                     pass
             _active_sessions.pop(sid, None)
+            from app.llm.agent_billing_proxy import unregister
+            unregister(sid)
             log.info("Evicted oldest session: %s", sid)

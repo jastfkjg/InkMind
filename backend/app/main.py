@@ -12,7 +12,8 @@ from app.config import settings
 from app.database import Base, engine
 from app.deployment import MaintenanceMiddleware
 from app.observability.otel_setup import setup_otel
-from app.routers import admin, agent, auth, background_tasks, chapters, characters, custom_llms, memos, meta, novels, usage, workflow
+from app.llm.agent_billing_proxy import router as agent_billing_router
+from app.routers import admin, agent, auth, background_tasks, billing, chapters, characters, custom_llms, memos, meta, novels, usage, workflow
 
 
 def _migrate_sqlite() -> None:
@@ -77,6 +78,8 @@ def _migrate_sqlite() -> None:
                 conn.execute(text("ALTER TABLE users ADD COLUMN token_quota_used INTEGER NOT NULL DEFAULT 0"))
             if "token_quota_reset_at" not in cols_users:
                 conn.execute(text("ALTER TABLE users ADD COLUMN token_quota_reset_at DATETIME"))
+            if "token_quota_reserved" not in cols_users:
+                conn.execute(text("ALTER TABLE users ADD COLUMN token_quota_reserved INTEGER NOT NULL DEFAULT 0"))
             if "agent_api_key" not in cols_users:
                 conn.execute(text("ALTER TABLE users ADD COLUMN agent_api_key VARCHAR(512)"))
             if "agent_base_url" not in cols_users:
@@ -123,6 +126,12 @@ def _migrate_sqlite() -> None:
                 cols_usage = {c["name"] for c in insp.get_columns("llm_usage_events")}
                 if "source" not in cols_usage:
                     conn.execute(text("ALTER TABLE llm_usage_events ADD COLUMN source VARCHAR(16) NOT NULL DEFAULT 'builtin'"))
+                if "billing_credits" not in cols_usage:
+                    conn.execute(text("ALTER TABLE llm_usage_events ADD COLUMN billing_credits INTEGER"))
+            if "payment_orders" in table_names:
+                payment_columns = {c["name"] for c in insp.get_columns("payment_orders")}
+                if "refund_requested_at" not in payment_columns:
+                    conn.execute(text("ALTER TABLE payment_orders ADD COLUMN refund_requested_at DATETIME"))
     except Exception:
         logging.getLogger(__name__).exception("Database migration failed")
         raise RuntimeError("数据库迁移失败，请检查服务日志并恢复备份后重试。") from None
@@ -142,6 +151,12 @@ async def lifespan(_: FastAPI):
         else:
             raise
     _migrate_sqlite()
+    from app.services.billing import recover_reservations, validate_configuration
+    validate_configuration()
+    if settings.billing_enabled and not settings.desktop_mode:
+        from app.database import SessionLocal
+        with SessionLocal() as billing_db:
+            recover_reservations(billing_db)
     from app.agent.task_queue import get_task_queue
     queue = get_task_queue()
     await queue.start()
@@ -166,6 +181,8 @@ app.include_router(characters.router)
 app.include_router(memos.router)
 app.include_router(meta.router)
 app.include_router(usage.router)
+app.include_router(billing.router)
+app.include_router(agent_billing_router)
 app.include_router(background_tasks.router)
 app.include_router(admin.router)
 app.include_router(workflow.router)

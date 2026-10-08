@@ -188,9 +188,15 @@ class SubAgentExecutor:
     def _resolve_llm(self, explicit_provider: str | None, action: str) -> LLMProvider:
         provider = _resolve_sub_agent_provider(explicit_provider)
         if self._user_id is None:
+            from app.services import billing
+            if billing.enabled():
+                raise ValueError("收费后台任务必须关联用户。")
             return get_llm(provider)
         user = self._db.get(User, self._user_id)
         if user is None:
+            from app.services import billing
+            if billing.enabled():
+                raise ValueError("后台任务的用户不存在，无法核对额度。")
             return get_llm(provider)
         return resolve_llm_for_user(
             user,
