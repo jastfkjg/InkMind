@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
 
 class CreditPackage(BaseModel):
@@ -23,9 +23,17 @@ class BillingModel(BaseModel):
 
 
 class PaymentOrderCreate(BaseModel):
-    package_id: str = Field(min_length=1, max_length=64)
+    model_config = ConfigDict(extra="forbid")
+    package_id: str | None = Field(default=None, min_length=1, max_length=64)
+    amount_cents: int | None = Field(default=None, strict=True, ge=100, le=100000000)
     request_key: str = Field(pattern=r"^[a-zA-Z0-9_-]{16,64}$")
     accept_terms: Literal[True]
+
+    @model_validator(mode="after")
+    def one_purchase_option(self) -> "PaymentOrderCreate":
+        if (self.package_id is None) == (self.amount_cents is None):
+            raise ValueError("请选择套餐或自定义充值金额。")
+        return self
 
 
 class PaymentOrderResponse(BaseModel):

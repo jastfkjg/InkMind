@@ -8,4 +8,13 @@
 .billing-package > div { flex: 1; display: grid; gap: 4px; }
 .billing-package span { color: var(--muted); font-size: 14px; }
 .billing-package button { min-height: 44px; }
+.billing-custom { display: flex; align-items: center; gap: 20px; margin: 0 0 24px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; }
+.billing-custom-input { flex: 1; display: grid; gap: 8px; }
+.billing-custom-input label { font-weight: 600; }
+.billing-custom-input .ant-input-affix-wrapper { min-height: 44px; max-width: 280px; }
+.billing-custom-input .billing-description { margin: 0; font-size: 13px; }
+.billing-input-error { color: var(--error); font-size: 13px; line-height: 1.6; }
+.billing-custom-credits { font-size: 14px; color: var(--muted); }
+.billing-custom button { min-height: 44px; }
+@media (max-width: 600px) { .billing-custom { flex-wrap: wrap; gap: 12px; } .billing-custom-input { flex-basis: 100%; } .billing-custom-input .ant-input-affix-wrapper { max-width: none; } .billing-custom-credits { flex: 1; } }
 @media (max-width: 600px) { .billing-package { flex-wrap: wrap; gap: 12px; } .billing-package > div { min-width: 55%; } .billing-package button { width: 100%; } }

@@ -34,6 +34,8 @@ def fixture(monkeypatch):
                              query=lambda o: response, refund_query=lambda o: response,
                              close=lambda o: {"out_trade_no": o.out_trade_no}, checkout=lambda o: "<form></form>")
     monkeypatch.setattr(settings, "billing_enabled", True)
+    monkeypatch.setattr(settings, "billing_payment_test_user_ids", [])
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 0)
     monkeypatch.setattr(settings, "desktop_mode", False)
     monkeypatch.setattr(settings, "billing_packages", [{"id":"starter", "name":"Starter", "amount_cents":1, "credits":1000}])
     monkeypatch.setattr(billing, "load_payment_config", lambda: config)
@@ -69,6 +71,76 @@ def test_order_creation_is_idempotent_and_owned(fixture):
     assert client.post("/billing/orders", json={**body, "accept_terms":False}).status_code == 422
     order.user_id = other.id; db.commit()
     assert client.post(f"/billing/orders/{order.id}/query").status_code == 404
+
+
+@pytest.mark.parametrize("amount", [0, 1, 99, -100, 100000001, 100.5, "100", True, None])
+def test_custom_recharge_rejects_invalid_money(fixture, monkeypatch, amount):
+    client, db, user, _, _, _, _ = fixture
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 10000)
+    body = {"amount_cents":amount, "request_key":"custom-request-key", "accept_terms":True}
+    assert client.post("/billing/orders", json=body).status_code == 422
+    db.expire_all()
+    assert db.get(User, user.id).token_quota == 100
+
+
+def test_custom_recharge_is_server_priced_and_request_is_immutable(fixture, monkeypatch):
+    client, db, user, _, _, _, _ = fixture
+    body = {"amount_cents":123, "request_key":"custom-request-key", "accept_terms":True}
+    assert client.post("/billing/orders", json=body).status_code == 400
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 10000)
+    result = client.post("/billing/orders", json=body).json()
+    assert (result["package_id"], result["amount_cents"], result["credits"]) == ("custom", 123, 1230000)
+    assert client.post("/billing/orders", json=body).json()["id"] == result["id"]
+    assert client.post("/billing/orders", json={**body, "amount_cents":124}).status_code == 409
+    assert client.post("/billing/orders", json={**body, "package_id":"starter"}).status_code == 422
+    assert client.post("/billing/orders", json={**body, "credits":999999999}).status_code == 422
+    assert client.post("/billing/orders", json={**body, "accept_terms":False}).status_code == 422
+    assert client.post("/billing/orders", json={"package_id":"custom", "request_key":"another-request-key", "accept_terms":True}).status_code == 400
+    # A price change never rewrites a previously accepted order.
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 5000)
+    assert client.post("/billing/orders", json=body).json()["credits"] == 1230000
+    db.expire_all(); assert db.get(User, user.id).token_quota == 100
+
+
+def test_custom_recharge_paid_once_and_wholly_unused_refund(fixture, monkeypatch):
+    client, db, user, _, _, _, _ = fixture
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 10000)
+    result = client.post("/billing/orders", json={"amount_cents":100, "request_key":"custom-request-key", "accept_terms":True}).json()
+    notification = params(out_trade_no=result["out_trade_no"], total_amount="1.00")
+    for _ in range(2):
+        assert client.post("/billing/notify", data=notification).text == "success"
+    assert client.post(f'/billing/orders/{result["id"]}/query').json()["status"] == "paid"
+    db.expire_all(); assert db.get(User, user.id).token_quota == 1000100
+    assert db.scalar(select(func.count(CreditLedger.id)).where(CreditLedger.kind == "purchase")) == 1
+    custom_order = db.get(PaymentOrder, result["id"])
+    held = billing.prepare_refund(db, custom_order, user.id)
+    billing.finish_refund(db, held, {"refund_amount":"1.00", "out_trade_no":held.out_trade_no,
+                                  "trade_no":held.trade_no, "out_request_no":held.refund_no,
+                                  "refund_status":"REFUND_SUCCESS"})
+    db.expire_all(); assert db.get(User, user.id).token_quota == 100
+    assert db.get(PaymentOrder, result["id"]).status == "refunded"
+
+
+def test_payment_pilot_is_account_scoped_and_does_not_enable_ai_billing(fixture, monkeypatch):
+    client, _, user, other, order, _, _ = fixture
+    monkeypatch.setattr(settings, "billing_enabled", False)
+    monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 10000)
+    monkeypatch.setattr(settings, "billing_payment_test_user_ids", [user.id])
+    configuration = client.get("/billing/catalog").json()
+    assert configuration["enabled"] and configuration["can_purchase"]
+    assert configuration["custom_recharge"]["min_cents"] == 100
+    assert not configuration["metering_enabled"] and not billing.enabled()
+    assert not billing.purchase_enabled(other.id)
+    assert client.post(f"/billing/orders/{order.id}/checkout").status_code == 200
+    assert client.post("/billing/orders", json={"amount_cents":100, "request_key":"custom-request-key", "accept_terms":True}).status_code == 200
+    monkeypatch.setattr(settings, "billing_payment_test_user_ids", [other.id])
+    assert client.get("/billing/catalog").json()["custom_recharge"] is None
+    assert client.post(f"/billing/orders/{order.id}/checkout").status_code == 404
+    assert client.post("/billing/orders", json={"amount_cents":100, "request_key":"second-request-key", "accept_terms":True}).status_code == 404
+    # Existing orders remain queryable after access is withdrawn.
+    assert client.post(f"/billing/orders/{order.id}/query").status_code == 200
+    monkeypatch.setattr(settings, "desktop_mode", True)
+    assert not billing.purchase_enabled(other.id)
 
 
 @pytest.mark.parametrize("changes", [{"sign":"invalid"}, {"app_id":"other"}, {"seller_id":"other"}, {"total_amount":"0.02"}, {"out_trade_no":"other"}, {"notify_id":""}])

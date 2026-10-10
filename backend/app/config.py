@@ -91,6 +91,9 @@ class Settings(BaseSettings):
 
     # Opt-in web billing. Empty catalog never exposes a purchase entry.
     billing_enabled: bool = False
+    # Payment-only pilot: does not enable or change AI metering.
+    billing_payment_test_user_ids: list[int] = Field(default_factory=list)
+    billing_custom_credits_per_cent: int = Field(default=0, ge=0, le=1000000)
     billing_packages: list[dict] = Field(default_factory=list)
     billing_models: list[dict] = Field(default_factory=list)
     billing_terms_url: str = ""

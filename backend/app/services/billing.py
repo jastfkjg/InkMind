@@ -18,6 +18,15 @@ def enabled() -> bool:
     return settings.billing_enabled and not settings.desktop_mode
 
 
+def purchase_enabled(user_id: int) -> bool:
+    return not settings.desktop_mode and (enabled() or user_id in settings.billing_payment_test_user_ids)
+
+
+def custom_recharge() -> dict[str, int] | None:
+    rate = settings.billing_custom_credits_per_cent
+    return {"min_cents": 100, "max_cents": 100000000, "credits_per_cent": rate} if rate else None
+
+
 def packages() -> list[CreditPackage]:
     return [CreditPackage.model_validate(p) for p in settings.billing_packages]
 
@@ -27,9 +36,9 @@ def models() -> list[BillingModel]:
 
 
 def validate_configuration() -> None:
-    if not enabled():
+    if not enabled() and (settings.desktop_mode or not settings.billing_payment_test_user_ids):
         return
-    if not models():
+    if enabled() and not models():
         raise RuntimeError("启用收费前必须配置 BILLING_MODELS 及计费倍率。")
     if any(model.provider not in {"openai", "anthropic", "qwen", "deepseek", "minimax", "kimi", "glm"} for model in models()):
         raise RuntimeError("付费模型厂商必须使用受支持的用量适配器。")
@@ -37,7 +46,9 @@ def validate_configuration() -> None:
         identifiers = [keys(item) for item in items]
         if len(set(identifiers)) != len(identifiers):
             raise RuntimeError("收费配置中存在重复套餐或模型。")
-    if not packages():  # Allow metering rollout before opening the shop.
+    if any(p.id == "custom" for p in packages()):
+        raise RuntimeError("套餐 ID custom 保留给自定义充值。")
+    if not packages() and not custom_recharge():  # Allow metering rollout before opening the shop.
         return
     required = (settings.billing_terms_url,) if settings.alipay_sandbox else (settings.billing_terms_url, settings.billing_support_email)
     if not all(required):
@@ -56,6 +67,11 @@ def validate_configuration() -> None:
 
 def require_enabled() -> None:
     if not enabled():
+        raise HTTPException(404, "收款功能未启用。")
+
+
+def require_purchase_enabled(user_id: int) -> None:
+    if not purchase_enabled(user_id):
         raise HTTPException(404, "收款功能未启用。")
 
 
@@ -88,25 +104,44 @@ def effective_used(db: Session, user: User) -> int:
     return get_effective_token_quota_used(db, user)
 
 
-def create_order(db: Session, user_id: int, package_id: str, request_key: str) -> PaymentOrder:
+def create_order(db: Session, user_id: int, package_id: str | None, request_key: str,
+                 amount_cents: int | None = None) -> PaymentOrder:
+    require_purchase_enabled(user_id)
+    custom = amount_cents is not None
+    if custom:
+        if package_id is not None or type(amount_cents) is not int or not 100 <= amount_cents <= 100000000:
+            raise HTTPException(400, "自定义充值最低 1 元，金额必须精确到分。")
+        package_id = "custom"
+    elif not package_id or package_id == "custom":
+        raise HTTPException(400, "请选择套餐或自定义充值金额。")
     user = lock_user(db, user_id)
     if user.token_quota is None:
         raise HTTPException(409, "当前账号额度无限制，无需购买。")
     key = f"{user_id}:{request_key}"
     existing = db.scalar(select(PaymentOrder).where(PaymentOrder.request_key == key))
     if existing:
-        if existing.package_id != package_id:
+        if existing.package_id != package_id or (custom and existing.amount_cents != amount_cents):
             raise HTTPException(409, "购买请求与原订单不一致。")
         db.commit()
         return existing
-    package = next((p for p in packages() if p.id == package_id), None)
-    if package is None:
-        raise HTTPException(400, "额度包不存在或已下架。")
+    if custom:
+        configuration = custom_recharge()
+        if configuration is None:
+            raise HTTPException(400, "自定义充值尚未开放。")
+        assert amount_cents is not None
+        credits = amount_cents * configuration["credits_per_cent"]
+        subject = "InkMind 自定义 AI 额度充值"
+    else:
+        package = next((p for p in packages() if p.id == package_id), None)
+        if package is None:
+            raise HTTPException(400, "额度包不存在或已下架。")
+        amount_cents, credits = package.amount_cents, package.credits
+        subject = f"InkMind {package.name}"
     now = datetime.now(timezone.utc)
     config = load_payment_config()
-    order = PaymentOrder(user_id=user_id, request_key=key, package_id=package.id,
-                         out_trade_no=f"IM{uuid4().hex}", subject=f"InkMind {package.name}",
-                         amount_cents=package.amount_cents, credits=package.credits,
+    order = PaymentOrder(user_id=user_id, request_key=key, package_id=package_id,
+                         out_trade_no=f"IM{uuid4().hex}", subject=subject,
+                         amount_cents=amount_cents, credits=credits,
                          app_id=config.app_id, seller_id=config.seller_id,
                          sandbox=config.sandbox, expires_at=now + timedelta(minutes=15))
     db.add(order)

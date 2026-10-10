@@ -38,8 +38,10 @@ def gateway_failure(error: PaymentGatewayError) -> HTTPException:
 
 @router.get("/catalog")
 def catalog(user: CurrentUser) -> dict:
-    active = billing.enabled()
+    active = billing.purchase_enabled(user.id)
     return {"enabled": active, "sandbox": settings.alipay_sandbox,
+            "metering_enabled": billing.enabled(),
+            "custom_recharge": billing.custom_recharge() if active else None,
             "packages": [p.model_dump() for p in billing.packages()] if active else [],
             "models": [m.model_dump(include={"provider", "model", "input_rate", "output_rate"}) for m in billing.models()] if active else [],
             "terms_url": settings.billing_terms_url if active else "",
@@ -83,9 +85,9 @@ def reconcile(reservation_id: str, body: ReservationReconcile, admin: CurrentAdm
 
 @router.post("/orders", response_model=PaymentOrderResponse)
 def create_order(body: PaymentOrderCreate, user: CurrentUser, db: DB) -> PaymentOrder:
-    billing.require_enabled()
+    billing.require_purchase_enabled(user.id)
     try:
-        return billing.create_order(db, user.id, body.package_id, body.request_key)
+        return billing.create_order(db, user.id, body.package_id, body.request_key, body.amount_cents)
     except PaymentGatewayError as error:
         db.rollback()
         raise gateway_failure(error) from None
@@ -110,7 +112,7 @@ def query_order(order_id: int, user: CurrentUser, db: DB) -> PaymentOrder:
 
 @router.post("/orders/{order_id}/checkout")
 def checkout(order_id: int, user: CurrentUser, db: DB) -> dict[str, str]:
-    billing.require_enabled()
+    billing.require_purchase_enabled(user.id)
     try:
         # Reopen the same merchant order; Alipay rejects already-paid/closed trades.
         # Generating the signed cashier form needs no remote query and stays usable
