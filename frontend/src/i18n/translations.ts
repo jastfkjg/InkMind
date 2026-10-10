@@ -3,6 +3,7 @@ import { libraryOrganizeTranslations } from "./libraryOrganize";
 import { referenceFormsTranslations } from "./referenceForms";
 import { writingLayoutTranslations } from "./writingLayout";
 import { workspacePolishTranslations } from "./workspacePolish";
+import { termsTranslations } from "./terms";
 export type Language = "zh" | "en";
 
 export const translations: Record<Language, Record<string, string>> = {
@@ -42,6 +43,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ...referenceFormsTranslations.zh,
     ...writingLayoutTranslations.zh,
     ...workspacePolishTranslations.zh,
+    ...termsTranslations.zh,
 
     library_count: "共 {count} 部作品",
     library_view: "作品显示方式",
@@ -1461,6 +1463,7 @@ export const translations: Record<Language, Record<string, string>> = {
     ...referenceFormsTranslations.en,
     ...writingLayoutTranslations.en,
     ...workspacePolishTranslations.en,
+    ...termsTranslations.en,
 
     library_count: "{count} works",
     library_view: "Library view",

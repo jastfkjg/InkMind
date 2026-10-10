@@ -33,6 +33,43 @@ BILLING_SUPPORT_EMAIL=你的退款联系邮箱
 
 生产私钥与支付宝公钥用权限受限的绝对路径文件，使用官方工具输出的原始字符串，不增加 PEM 头尾。生产禁止回退到沙箱配置；金额、额度及收款身份均由服务端决定。生产必须配置并实际联调公网 HTTPS 异步通知，然后检查验签、金额和收款身份、重复通知、退款通知以及 `success` 回写。
 
+## inkmind.jastcraft.com 云端配置
+
+当前正式应用为 `InkMind小说写作助手`，App ID `2021007106622216`。域名及容器路径已写入 `deploy/cloud/app.env.example`，它是参考模板，不能覆盖服务器已有的 `/opt/inkmind/app.env`。保留原来的登录签名密钥、模型凭据、数据库和其他运行参数，只合并确认过的支付参数；保持 `BILLING_ENABLED=false`，直到配置及验收完成。
+
+公网地址与容器内路径的对应关系：
+
+| 用途 | 地址 / 路径 |
+| --- | --- |
+| 支付宝异步通知 | `https://inkmind.jastcraft.com/api/billing/notify` |
+| 支付完成回跳 | `https://inkmind.jastcraft.com/api/billing/return` |
+| 返回用量页 | `https://inkmind.jastcraft.com/usage` |
+| 主机上的应用私钥 | `/opt/inkmind/data/alipay/app-private.keytext` |
+| 主机上的支付宝公钥 | `/opt/inkmind/data/alipay/alipay-public.keytext` |
+| 容器内应用私钥 | `/app/data/alipay/app-private.keytext` |
+| 容器内支付宝公钥 | `/app/data/alipay/alipay-public.keytext` |
+
+现有 Compose 已将 `/opt/inkmind/data` 挂载到 `/app/data`，无需新增卷。由管理员在服务器创建目录：
+
+```bash
+install -d -o 1000 -g 1000 -m 700 /opt/inkmind/data/alipay
+```
+
+开发者自行使用 SFTP 上传与当前应用公钥配对的生产私钥，以及该应用对应的**支付宝公钥**到上述主机路径。不要上传应用公钥作为支付宝公钥，不要使用沙箱私钥，也不要在聊天、仓库或日志中粘贴私钥。两份文件使用官方工具提供的原始字符串，不加 PEM 头尾、空格或末尾换行。上传后由管理员设置容器账号可读且其他账号不可读：
+
+```bash
+chown 1000:1000 /opt/inkmind/data/alipay/app-private.keytext /opt/inkmind/data/alipay/alipay-public.keytext
+chmod 600 /opt/inkmind/data/alipay/app-private.keytext /opt/inkmind/data/alipay/alipay-public.keytext
+```
+
+`ALIPAY_SELLER_ID` 填收款账号的合作伙伴 ID（PID），不能填 App ID。还需要运营方确认正式额度包、模型计费倍率、服务条款 HTTPS 地址和退款联系邮箱；模板中的空值及空数组不代表已完成配置。更新服务端环境变量需要重建后端容器才会生效，按 `docs/DEPLOYMENT.md` 的维护、排空与备份流程安排，保留数据库和原有配置。仅修改 `app.env` 不会更新正在运行的容器。
+
+服务条款位于匿名可访问的前端 `/terms` 路由，中英文正文在 `frontend/src/i18n/terms.ts`，运营者署名为“周子龙（个人开发者）”，退款联系邮箱为 `zhou.zilong@qq.com`。运营者已于 2026-10-10 确认正文，正式页面版本日期为 2026-10-10。正式地址为 `https://inkmind.jastcraft.com/terms`，需要部署包含该路由的版本后才可访问；发布和支付验收完成前保持收款关闭。条款按现有计费行为说明未使用整包退款，并保留服务异常、计费争议及法定权益的人工处理途径。购买确认弹窗也显示退款要点，协议勾选保持默认关闭。
+
+起草参考：[支付宝网页支付接入指南](https://aipay.alipay.com/docs/vibe-pay/ai-web-app-payment-qianyi/ai-web-app-payment-integration-guide.html)及[消费者权益保护法](https://scjgj.beijing.gov.cn/cxfw/flfgcxfw/xfzqybhl/202006/t20200618_1928074.html)。正式套餐以服务器已有配置及运营方确认内容为准，不能用模板中的空数组覆盖已有套餐和模型倍率。
+
+验收时先确认 HTTPS 回跳页的返回按钮指向正式用量页、未签名通知返回 `fail`、匿名订单请求被拒绝；这些检查只能证明路由和基本拒绝行为。随后用受控支付订单核对真实支付宝通知验签、身份与金额、额度只到账一次、重复通知返回 `success`、交易查询补偿及未使用整包退款。真实交易通知尚未验证时，不宣称已可正式收款。
+
 ## 计费与核对
 
 普通生成、改写、评估、后台任务通过 `MeteredLLM` 逐次预占；内置助手的每次模型请求通过本机计费代理预占。付款后增加总额度，发起平台模型请求前从可用额度预占输入上限与输出上限，结束后按厂商返回的可信 usage 和请求时快照倍率结算并释放差额。缓存输入按厂商报告的输入口径计入。尚未配置价格或无法提供可信 usage 的平台模型不允许在收费模式使用，自带 Key 仍可使用。

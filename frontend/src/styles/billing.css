@@ -2,6 +2,7 @@
 .billing-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 12px; }
 .billing-heading .ant-typography { margin: 0; }
 .billing-description { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.billing-refund-summary { color: var(--ink); font-weight: 500; line-height: 1.65; }
 .billing-packages { display: grid; gap: 8px; margin: 16px 0 24px; }
 .billing-package { display: flex; align-items: center; gap: 20px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px; }
 .billing-package > div { flex: 1; display: grid; gap: 4px; }

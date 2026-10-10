@@ -63,6 +63,7 @@ export interface AppHeaderProps {
   leftContent: ReactNode;
   back?: { label: string; onClick: () => void };
   showAssistant?: boolean;
+  showAccountMenu?: boolean;
   extraActions?: ReactNode;
   disabledMenuItem?: "settings" | "usage" | "tasks";
   height?: number;
@@ -75,6 +76,7 @@ export default function AppHeader({
   leftContent,
   back,
   showAssistant = false,
+  showAccountMenu = true,
   extraActions,
   disabledMenuItem,
   height = 72,
@@ -203,7 +205,7 @@ export default function AppHeader({
           style={{ color: colors.textColor, transition: "color 0.3s ease" }}
         />
 
-        <Dropdown menu={{ items: [
+        {showAccountMenu && <Dropdown menu={{ items: [
           ...userMenuItems,
           { type: "divider" },
           { key: "language", icon: <GlobalOutlined />, label: t("nav_language"), children: languageMenuItems },
@@ -262,7 +264,7 @@ export default function AppHeader({
               </span>
             )}
           </button>
-        </Dropdown>
+        </Dropdown>}
       </Space>
     </Header>
   );

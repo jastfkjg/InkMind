@@ -109,6 +109,7 @@ export default function BillingPanel({ onPaymentChange }: { onPaymentChange: () 
     <Modal title={t("billing_confirm")} open={selected !== null} onCancel={() => { if (busy === null) setSelected(null); }} confirmLoading={busy === "purchase"} cancelButtonProps={{ disabled: busy !== null }} okButtonProps={{ disabled: !accepted }} okText={t("billing_pay")} onOk={() => { if (selected) void purchase(selected.id); }}>
       {selected && <p>{isZh ? selected.name : selected.name_en || selected.name} · {money(selected.amount_cents)} · {t("billing_credits").replace("{count}", selected.credits.toLocaleString())}</p>}
       <p>{t("billing_description")}</p>
+      <p className="billing-refund-summary">{t("billing_refund_summary")}</p>
       <Checkbox checked={accepted} onChange={event => setAccepted(event.target.checked)}>{t("billing_accept")} <a href={catalog.terms_url} target="_blank" rel="noopener noreferrer">{t("billing_terms")}</a></Checkbox>
       {catalog.sandbox && <p>{t("billing_sandbox_hint")}</p>}
     </Modal>

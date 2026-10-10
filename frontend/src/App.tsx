@@ -21,6 +21,7 @@ import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminUserDetail from "@/pages/admin/AdminUserDetail";
 import AdminLogs from "@/pages/admin/AdminLogs";
 import AiAssistantFloating from "@/components/AiAssistantFloating";
+import Terms from "@/pages/Terms";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -84,6 +85,7 @@ export default function App() {
   return (
     <>
       <Routes>
+        <Route path="/terms" element={<Terms />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
