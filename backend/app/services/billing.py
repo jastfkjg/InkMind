@@ -1,6 +1,7 @@
 """Opt-in billing, atomic credits and durable reservations (single-worker deployment)."""
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_CEILING
+import logging
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -13,13 +14,17 @@ from app.models import CreditLedger, LLMUsageEvent, PaymentOrder, TokenReservati
 from app.schemas.billing import BillingModel, CreditPackage
 from app.services.alipay_payment import get_gateway, load_payment_config, return_url, PaymentGatewayError
 
+log = logging.getLogger(__name__)
+_payment_test_ready = True
+
 
 def enabled() -> bool:
     return settings.billing_enabled and not settings.desktop_mode
 
 
 def purchase_enabled(user_id: int) -> bool:
-    return not settings.desktop_mode and (enabled() or user_id in settings.billing_payment_test_user_ids)
+    return not settings.desktop_mode and (enabled() or (
+        _payment_test_ready and user_id in settings.billing_payment_test_user_ids))
 
 
 def custom_recharge() -> dict[str, int] | None:
@@ -36,6 +41,20 @@ def models() -> list[BillingModel]:
 
 
 def validate_configuration() -> None:
+    global _payment_test_ready
+    _payment_test_ready = True
+    try:
+        _validate_configuration()
+    except (PaymentGatewayError, RuntimeError, ValueError):
+        if enabled():
+            raise
+        # An optional payment test must never prevent existing writing features
+        # from starting. Hide purchases until the configuration is corrected.
+        _payment_test_ready = False
+        log.error("Payment test disabled because its configuration is unavailable")
+
+
+def _validate_configuration() -> None:
     if not enabled() and (settings.desktop_mode or not settings.billing_payment_test_user_ids):
         return
     if enabled() and not models():

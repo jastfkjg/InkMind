@@ -38,7 +38,9 @@ def _raw_key(value: object) -> str:
 def _protected_file(path: Path) -> str:
     if not path.is_absolute() or path.is_symlink() or path.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise PaymentGatewayError("支付宝配置文件须使用绝对路径并限制为当前用户可读。")
-    return path.read_text(encoding="utf-8")
+    # Text editors commonly append a final newline. Keep the key body strict
+    # while accepting whitespace around the protected file's contents.
+    return path.read_text(encoding="utf-8").strip()
 
 
 def load_payment_config() -> PaymentConfig:

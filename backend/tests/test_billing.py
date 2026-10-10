@@ -16,7 +16,7 @@ from app.deps import get_current_user
 from app.models import CreditLedger, PaymentNotification, PaymentOrder, User
 from app.routers import billing as routes
 from app.services import billing
-from app.services.alipay_payment import PaymentGatewayError
+from app.services.alipay_payment import PaymentGatewayError, _protected_file, _raw_key
 
 
 @pytest.fixture
@@ -34,6 +34,7 @@ def fixture(monkeypatch):
                              query=lambda o: response, refund_query=lambda o: response,
                              close=lambda o: {"out_trade_no": o.out_trade_no}, checkout=lambda o: "<form></form>")
     monkeypatch.setattr(settings, "billing_enabled", True)
+    monkeypatch.setattr(billing, "_payment_test_ready", True)
     monkeypatch.setattr(settings, "billing_payment_test_user_ids", [])
     monkeypatch.setattr(settings, "billing_custom_credits_per_cent", 0)
     monkeypatch.setattr(settings, "desktop_mode", False)
@@ -244,3 +245,45 @@ def test_billing_requires_explicit_priced_models(monkeypatch):
     monkeypatch.setattr(settings, "billing_models", [])
     with pytest.raises(RuntimeError, match="BILLING_MODELS"):
         billing.validate_configuration()
+
+
+def test_payment_test_configuration_failure_preserves_service_and_can_recover(fixture, monkeypatch):
+    client, _, user, _, _, _, gateway = fixture
+    monkeypatch.setattr(settings, "billing_enabled", False)
+    monkeypatch.setattr(settings, "billing_payment_test_user_ids", [user.id])
+    monkeypatch.setattr(settings, "billing_models", [])
+    monkeypatch.setattr(settings, "alipay_sandbox", False)
+    monkeypatch.setattr(settings, "billing_terms_url", "https://example.com/terms")
+    monkeypatch.setattr(settings, "billing_support_email", "support@example.com")
+    monkeypatch.setattr(settings, "alipay_notify_url", "https://example.com/api/billing/notify")
+    monkeypatch.setattr(settings, "alipay_return_url", "https://example.com/api/billing/return")
+
+    def unavailable_gateway():
+        raise PaymentGatewayError("支付宝收款配置不可用，请联系管理员。")
+
+    monkeypatch.setattr(billing, "get_gateway", unavailable_gateway)
+    billing.validate_configuration()  # A pilot config failure must not abort startup.
+    assert not billing.enabled()
+    assert client.get("/billing/catalog").json()["enabled"] is False
+    assert client.post("/billing/orders", json={"package_id": "starter", "request_key": "pilot-request-key", "accept_terms": True}).status_code == 404
+
+    monkeypatch.setattr(billing, "get_gateway", lambda: gateway)
+    billing.validate_configuration()
+    assert client.get("/billing/catalog").json()["enabled"] is True
+
+    monkeypatch.setattr(billing, "get_gateway", unavailable_gateway)
+    monkeypatch.setattr(settings, "billing_enabled", True)
+    monkeypatch.setattr(settings, "billing_models", [{"provider": "deepseek", "model": "deepseek-flash", "input_rate": 3, "output_rate": 12}])
+    with pytest.raises(PaymentGatewayError):
+        billing.validate_configuration()  # Full billing still requires valid configuration.
+
+
+def test_protected_key_file_accepts_editor_newline_but_rejects_body_formatting(tmp_path):
+    path = tmp_path / "synthetic-key.txt"
+    path.write_text("syntheticRawKey\n")
+    path.chmod(0o600)
+    assert _raw_key(_protected_file(path)) == "syntheticRawKey"
+    for value in ("synthetic\nRawKey", "-----BEGIN RSA PRIVATE KEY-----\nsyntheticRawKey"):
+        path.write_text(value)
+        with pytest.raises(PaymentGatewayError):
+            _raw_key(_protected_file(path))
